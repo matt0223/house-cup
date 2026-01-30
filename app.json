@@ -1,28 +1,29 @@
 {
   "expo": {
-    "name": "rn-app",
-    "slug": "rn-app",
+    "name": "House Cup",
+    "slug": "house-cup",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "rnapp",
+    "scheme": "housecup",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#FAF8F5"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": false,
+      "bundleIdentifier": "com.kabusworks.housecup"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#FAF8F5"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "package": "com.kabusworks.housecup"
     },
     "web": {
       "bundler": "metro",
