@@ -88,7 +88,7 @@ const styles = StyleSheet.create({
   chipsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 8,
   },
 });
 

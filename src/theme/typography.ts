@@ -20,12 +20,12 @@ const fontFamily = Platform.select({
 });
 
 export const typography = {
-  /** Title - 28pt Bold. Usage: "House Cup" app header */
+  /** Title - 20pt Semibold. Usage: Screen headers */
   title: {
     fontFamily,
-    fontSize: 28,
-    fontWeight: '700',
-    lineHeight: 34,
+    fontSize: 20,
+    fontWeight: '600',
+    lineHeight: 26,
   } as TextStyle,
 
   /** Display - 48pt Bold. Usage: Large score numbers */

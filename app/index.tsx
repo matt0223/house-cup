@@ -292,7 +292,7 @@ export default function ChallengeScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <AppHeader
-        title="House Cup"
+        title={dateRange || 'This Week'}
         rightActions={[
           { icon: 'trending-up-outline', onPress: () => router.push('/history') },
           { icon: 'settings-outline', onPress: () => router.push('/settings') },
@@ -311,7 +311,6 @@ export default function ChallengeScreen() {
             competitorB={competitorB}
             scoreA={scoreA}
             scoreB={scoreB}
-            dateRange={dateRange}
             prize={household?.prize || 'Set a prize!'}
           />
         </View>

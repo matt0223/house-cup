@@ -14,19 +14,17 @@ export interface ScoreboardCardProps {
   scoreA: number;
   /** Score for second competitor */
   scoreB: number;
-  /** Date range text (e.g., "Jan 24 - Jan 30") */
-  dateRange: string;
   /** Prize text */
   prize: string;
 }
 
 /**
- * Card displaying the weekly scoreboard with both competitors' scores,
- * date range, and the current prize.
+ * Card displaying the weekly scoreboard with both competitors' scores
+ * and the current prize.
  *
  * Layout (3-column):
  * - Left column: Competitor A name + score (vertically centered)
- * - Center column: Date range, trophy, prize (tight vertical stack)
+ * - Center column: Trophy icon + prize name
  * - Right column: Competitor B name + score (vertically centered)
  */
 export function ScoreboardCard({
@@ -34,7 +32,6 @@ export function ScoreboardCard({
   competitorB,
   scoreA,
   scoreB,
-  dateRange,
   prize,
 }: ScoreboardCardProps) {
   const { colors, typography, spacing } = useTheme();
@@ -52,18 +49,19 @@ export function ScoreboardCard({
           </Text>
         </View>
 
-        {/* Center column: Date, Trophy, Prize */}
+        {/* Center column: Trophy + Prize */}
         <View style={styles.centerColumn}>
-          <Text style={[typography.callout, { color: colors.textSecondary }]}>
-            {dateRange}
-          </Text>
           <Ionicons
             name="trophy-outline"
             size={24}
             color={colors.prize}
-            style={{ marginVertical: spacing.xxxs }}
           />
-          <Text style={[typography.callout, { color: colors.textSecondary }]}>
+          <Text
+            style={[
+              typography.callout,
+              { color: colors.textSecondary, marginTop: spacing.xxxs },
+            ]}
+          >
             {prize}
           </Text>
         </View>
