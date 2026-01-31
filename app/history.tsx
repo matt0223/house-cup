@@ -1,19 +1,24 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../../src/theme/useTheme';
-import { AppHeader } from '../../src/components/ui';
+import { useTheme } from '../src/theme/useTheme';
+import { AppHeader } from '../src/components/ui';
 
 /**
  * History screen - Shows past challenges and winners.
  */
 export default function HistoryScreen() {
   const { colors, spacing, typography } = useTheme();
+  const router = useRouter();
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <AppHeader title="History" />
+      <AppHeader 
+        title="Stats & History" 
+        leftAction={{ icon: 'chevron-back', onPress: () => router.back() }}
+      />
 
       <View style={styles.emptyState}>
         <View style={[styles.illustration, { backgroundColor: colors.prize + '20' }]}>

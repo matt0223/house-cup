@@ -16,6 +16,8 @@ export interface HeaderAction {
 export interface AppHeaderProps {
   /** Header title */
   title: string;
+  /** Optional left action (e.g., back button) */
+  leftAction?: HeaderAction;
   /** Optional array of right-side actions */
   rightActions?: HeaderAction[];
   /** Additional style */
@@ -28,6 +30,7 @@ export interface AppHeaderProps {
  */
 export function AppHeader({
   title,
+  leftAction,
   rightActions = [],
   style,
 }: AppHeaderProps) {
@@ -35,9 +38,18 @@ export function AppHeader({
 
   return (
     <View style={[styles.container, { paddingHorizontal: spacing.sm }, style]}>
-      <Text style={[typography.appTitle, { color: colors.textPrimary }]}>
-        {title}
-      </Text>
+      <View style={styles.leftSection}>
+        {leftAction && (
+          <IconButton
+            icon={leftAction.icon}
+            onPress={leftAction.onPress}
+            accessibilityLabel={leftAction.accessibilityLabel}
+          />
+        )}
+        <Text style={[typography.appTitle, { color: colors.textPrimary }]}>
+          {title}
+        </Text>
+      </View>
 
       <View style={styles.actions}>
         {rightActions.map((action, index) => (
@@ -59,6 +71,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 12,
+  },
+  leftSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   actions: {
     flexDirection: 'row',

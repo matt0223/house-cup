@@ -38,6 +38,7 @@ export function Card({
     backgroundColor: colors.surface,
     borderRadius: radius.large,
     padding: PADDING_VALUES[padding],
+    overflow: 'hidden',
     ...(hasShadow ? shadows.card : {}),
   };
 

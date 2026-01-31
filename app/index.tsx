@@ -1,24 +1,26 @@
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, ScrollView, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../../src/theme/useTheme';
-import { AppHeader, DayStrip, AddTaskButton, TaskAddedToast } from '../../src/components/ui';
-import { ScoreboardCard, TaskList, AddTaskSheet, TaskChanges, ChangeScope } from '../../src/components/features';
-import { ConfirmationModal } from '../../src/components/ui';
+import { useTheme } from '../src/theme/useTheme';
+import { AppHeader, DayStrip, AddTaskButton, TaskAddedToast } from '../src/components/ui';
+import { ScoreboardCard, TaskList, AddTaskSheet, TaskChanges, ChangeScope } from '../src/components/features';
+import { ConfirmationModal } from '../src/components/ui';
 import {
   useHouseholdStore,
   useChallengeStore,
   useRecurringStore,
-} from '../../src/store';
-import { formatDayKeyRange, getTodayDayKey } from '../../src/domain/services';
-import { TaskInstance } from '../../src/domain/models/TaskInstance';
+} from '../src/store';
+import { formatDayKeyRange, getTodayDayKey } from '../src/domain/services';
+import { TaskInstance } from '../src/domain/models/TaskInstance';
 
 /**
  * Challenge screen - Main tab showing scoreboard, day strip, and task list.
  */
 export default function ChallengeScreen() {
   const { colors, spacing, typography } = useTheme();
+  const router = useRouter();
   const [isInitialized, setIsInitialized] = useState(false);
   const [isAddSheetVisible, setIsAddSheetVisible] = useState(false);
   const [showToast, setShowToast] = useState(false);
@@ -43,6 +45,7 @@ export default function ChallengeScreen() {
   const deleteTask = useChallengeStore((s) => s.deleteTask);
   const deleteTasksForTemplateFromDay = useChallengeStore((s) => s.deleteTasksForTemplateFromDay);
   const linkTaskToTemplate = useChallengeStore((s) => s.linkTaskToTemplate);
+  const seedFromTemplates = useChallengeStore((s) => s.seedFromTemplates);
   const getScores = useChallengeStore((s) => s.getScores);
 
   // Recurring store
@@ -74,6 +77,13 @@ export default function ChallengeScreen() {
       );
     }
   }, [household, challenge, templates]);
+
+  // Auto-seed tasks when templates change (idempotent - won't create duplicates)
+  useEffect(() => {
+    if (challenge && templates.length > 0) {
+      seedFromTemplates(templates);
+    }
+  }, [templates, challenge]);
 
   // Derived state
   const competitors = household?.competitors ?? [];
@@ -277,7 +287,7 @@ export default function ChallengeScreen() {
       <AppHeader
         title="House Cup"
         rightActions={[
-          { icon: 'notifications-outline', onPress: () => console.log('Notifications') },
+          { icon: 'trending-up-outline', onPress: () => router.push('/history') },
           { icon: 'settings-outline', onPress: () => console.log('Settings') },
         ]}
       />
