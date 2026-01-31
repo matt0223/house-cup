@@ -12,7 +12,7 @@ import {
   useChallengeStore,
   useRecurringStore,
 } from '../src/store';
-import { formatDayKeyRange, getTodayDayKey } from '../src/domain/services';
+import { formatDayKeyRange, getTodayDayKey, getCurrentWeekWindow } from '../src/domain/services';
 import { TaskInstance } from '../src/domain/models/TaskInstance';
 
 /**
@@ -101,10 +101,10 @@ export default function ChallengeScreen() {
   const scoreA = scores?.scores.find((s) => s.competitorId === competitorA?.id)?.total ?? 0;
   const scoreB = scores?.scores.find((s) => s.competitorId === competitorB?.id)?.total ?? 0;
 
-  // Get week day keys from challenge
-  const weekDayKeys = challenge
-    ? getDayKeysFromChallenge(challenge.startDayKey, challenge.endDayKey)
-    : getDefaultWeekDayKeys();
+  // Get week day keys using the canonical week window service
+  const weekDayKeys = household
+    ? getCurrentWeekWindow(household.timezone, household.weekStartDay).dayKeys
+    : [];
 
   // Use household timezone to determine "today"
   const timezone = household?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -396,35 +396,6 @@ export default function ChallengeScreen() {
       />
     </SafeAreaView>
   );
-}
-
-// Helper to get day keys from challenge
-function getDayKeysFromChallenge(startDayKey: string, endDayKey: string): string[] {
-  const dayKeys: string[] = [];
-  let current = startDayKey;
-
-  while (current <= endDayKey) {
-    dayKeys.push(current);
-    const date = new Date(current + 'T12:00:00Z');
-    date.setUTCDate(date.getUTCDate() + 1);
-    current = date.toISOString().split('T')[0];
-  }
-
-  return dayKeys;
-}
-
-// Default week day keys (current week starting Sunday)
-function getDefaultWeekDayKeys(): string[] {
-  const today = new Date();
-  const dayOfWeek = today.getDay();
-  const startOfWeek = new Date(today);
-  startOfWeek.setDate(today.getDate() - dayOfWeek);
-
-  return Array.from({ length: 7 }, (_, i) => {
-    const date = new Date(startOfWeek);
-    date.setDate(startOfWeek.getDate() + i);
-    return date.toISOString().split('T')[0];
-  });
 }
 
 // Simple placeholder illustration
