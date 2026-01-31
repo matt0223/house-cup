@@ -42,7 +42,7 @@ export function ScoreboardCard({
           <Text style={[typography.caption, { color: colors.textSecondary }]}>
             {competitorA.name}
           </Text>
-          <Text style={[typography.scoreNumber, { color: competitorA.color }]}>
+          <Text style={[typography.display, { color: competitorA.color }]}>
             {scoreA}
           </Text>
         </View>
@@ -70,7 +70,7 @@ export function ScoreboardCard({
           <Text style={[typography.caption, { color: colors.textSecondary }]}>
             {competitorB.name}
           </Text>
-          <Text style={[typography.scoreNumber, { color: competitorB.color }]}>
+          <Text style={[typography.display, { color: competitorB.color }]}>
             {scoreB}
           </Text>
         </View>
@@ -95,7 +95,7 @@ const styles = StyleSheet.create({
   prizeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 2,
+    marginTop: 6,
   },
 });
 

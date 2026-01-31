@@ -46,7 +46,7 @@ export function AppHeader({
             accessibilityLabel={leftAction.accessibilityLabel}
           />
         )}
-        <Text style={[typography.appTitle, { color: colors.textPrimary }]}>
+        <Text style={[typography.title, { color: colors.textPrimary }]}>
           {title}
         </Text>
       </View>

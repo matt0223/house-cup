@@ -101,7 +101,7 @@ export function Button({
   };
 
   const textStyle: TextStyle = {
-    ...typography.button,
+    ...typography.headline,
     color: getTextColor(),
   };
 

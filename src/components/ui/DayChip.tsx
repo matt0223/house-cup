@@ -60,7 +60,7 @@ export function DayChip({
       accessibilityLabel={`${label}${isToday ? ', today' : ''}${isSelected ? ', selected' : ''}`}
       accessibilityRole="button"
     >
-      <Text style={[typography.dayLetter, { color: textColor }]}>
+      <Text style={[typography.callout, { color: textColor, fontWeight: '500' }]}>
         {label}
       </Text>
     </TouchableOpacity>

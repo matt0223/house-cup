@@ -77,8 +77,8 @@ export function PointsChip({
       <View style={styles.content}>
         <Text
           style={[
-            typography.chipInitial,
-            { color: textColor, marginBottom: hasPoints ? 1 : 0 },
+            typography.caption,
+            { color: textColor, fontWeight: '600', marginBottom: hasPoints ? 1 : 0 },
           ]}
         >
           {initial}

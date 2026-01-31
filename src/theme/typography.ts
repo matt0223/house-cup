@@ -2,37 +2,41 @@ import { TextStyle, Platform } from 'react-native';
 
 /**
  * Typography tokens for House Cup design system.
- * Uses system fonts with rounded design for a friendly feel.
+ * 
+ * 6 core variants following iOS Human Interface Guidelines:
+ * - title: App branding
+ * - display: Large numbers (scores)
+ * - headline: Emphasis, buttons, section titles
+ * - body: Primary content
+ * - callout: Secondary content
+ * - caption: Smallest text, labels
  */
 
-// Font family - use system rounded fonts where available
+// Font family - use system fonts
 const fontFamily = Platform.select({
   ios: 'System',
   android: 'Roboto',
   default: 'System',
 });
 
-/**
- * Typography variants matching the design system
- */
 export const typography = {
-  /** App title - 28pt Bold. Usage: "House Cup" header */
-  appTitle: {
+  /** Title - 28pt Bold. Usage: "House Cup" app header */
+  title: {
     fontFamily,
     fontSize: 28,
     fontWeight: '700',
     lineHeight: 34,
   } as TextStyle,
 
-  /** Score number - 48pt Bold. Usage: Large score digits */
-  scoreNumber: {
+  /** Display - 48pt Bold. Usage: Large score numbers */
+  display: {
     fontFamily,
     fontSize: 48,
     fontWeight: '700',
     lineHeight: 56,
   } as TextStyle,
 
-  /** Headline - 17pt Semibold. Usage: Partner names, section titles */
+  /** Headline - 17pt Semibold. Usage: Section titles, buttons, emphasis */
   headline: {
     fontFamily,
     fontSize: 17,
@@ -48,7 +52,7 @@ export const typography = {
     lineHeight: 22,
   } as TextStyle,
 
-  /** Callout - 15pt Regular. Usage: Date range, prize text */
+  /** Callout - 15pt Regular. Usage: Secondary info, date ranges, day letters */
   callout: {
     fontFamily,
     fontSize: 15,
@@ -56,35 +60,11 @@ export const typography = {
     lineHeight: 20,
   } as TextStyle,
 
-  /** Caption - 13pt Regular. Usage: Tab labels, secondary info */
+  /** Caption - 13pt Regular. Usage: Labels, competitor names, smallest text */
   caption: {
     fontFamily,
     fontSize: 13,
     fontWeight: '400',
-    lineHeight: 18,
-  } as TextStyle,
-
-  /** Day letter - 15pt Medium. Usage: Day letters in strip */
-  dayLetter: {
-    fontFamily,
-    fontSize: 15,
-    fontWeight: '500',
-    lineHeight: 20,
-  } as TextStyle,
-
-  /** Button - 17pt Semibold. Usage: Primary button labels */
-  button: {
-    fontFamily,
-    fontSize: 17,
-    fontWeight: '600',
-    lineHeight: 22,
-  } as TextStyle,
-
-  /** Chip initial - 14pt Semibold. Usage: Competitor initial in chips */
-  chipInitial: {
-    fontFamily,
-    fontSize: 14,
-    fontWeight: '600',
     lineHeight: 18,
   } as TextStyle,
 } as const;
