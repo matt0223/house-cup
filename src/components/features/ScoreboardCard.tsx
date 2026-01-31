@@ -23,6 +23,11 @@ export interface ScoreboardCardProps {
 /**
  * Card displaying the weekly scoreboard with both competitors' scores,
  * date range, and the current prize.
+ *
+ * Layout (3-column):
+ * - Left column: Competitor A name + score (vertically centered)
+ * - Center column: Date range, trophy, prize (tight vertical stack)
+ * - Right column: Competitor B name + score (vertically centered)
  */
 export function ScoreboardCard({
   competitorA,
@@ -37,9 +42,9 @@ export function ScoreboardCard({
   return (
     <Card>
       <View style={styles.container}>
-        {/* Competitor A (left side) */}
-        <View style={styles.scoreSection}>
-          <Text style={[typography.caption, { color: colors.textSecondary }]}>
+        {/* Left column: Competitor A */}
+        <View style={styles.competitorColumn}>
+          <Text style={[typography.callout, { color: colors.textSecondary }]}>
             {competitorA.name}
           </Text>
           <Text style={[typography.display, { color: competitorA.color }]}>
@@ -47,27 +52,25 @@ export function ScoreboardCard({
           </Text>
         </View>
 
-        {/* Center info */}
-        <View style={styles.centerSection}>
+        {/* Center column: Date, Trophy, Prize */}
+        <View style={styles.centerColumn}>
           <Text style={[typography.callout, { color: colors.textSecondary }]}>
             {dateRange}
           </Text>
-          <View style={styles.prizeRow}>
-            <Ionicons name="trophy" size={14} color={colors.prize} />
-            <Text
-              style={[
-                typography.caption,
-                { color: colors.textSecondary, marginLeft: spacing.xxxs },
-              ]}
-            >
-              {prize}
-            </Text>
-          </View>
+          <Ionicons
+            name="trophy-outline"
+            size={24}
+            color={colors.prize}
+            style={{ marginVertical: spacing.xxxs }}
+          />
+          <Text style={[typography.callout, { color: colors.textSecondary }]}>
+            {prize}
+          </Text>
         </View>
 
-        {/* Competitor B (right side) */}
-        <View style={[styles.scoreSection, { alignItems: 'flex-end' }]}>
-          <Text style={[typography.caption, { color: colors.textSecondary }]}>
+        {/* Right column: Competitor B */}
+        <View style={[styles.competitorColumn, { alignItems: 'flex-end' }]}>
+          <Text style={[typography.callout, { color: colors.textSecondary }]}>
             {competitorB.name}
           </Text>
           <Text style={[typography.display, { color: competitorB.color }]}>
@@ -83,19 +86,15 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
   },
-  scoreSection: {
+  competitorColumn: {
     alignItems: 'flex-start',
-    minWidth: 50,
+    justifyContent: 'center',
   },
-  centerSection: {
+  centerColumn: {
+    flex: 1,
     alignItems: 'center',
-  },
-  prizeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 6,
+    justifyContent: 'center',
   },
 });
 

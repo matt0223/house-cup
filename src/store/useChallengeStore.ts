@@ -3,6 +3,7 @@ import { Challenge, getChallengeDayKeys } from '../domain/models/Challenge';
 import { TaskInstance, hasLocalEdits } from '../domain/models/TaskInstance';
 import { RecurringTemplate } from '../domain/models/RecurringTemplate';
 import { SkipRecord } from '../domain/models/SkipRecord';
+import { WeekStartDay } from '../domain/models/Household';
 import {
   DayKey,
   getTodayDayKey,
@@ -45,7 +46,7 @@ interface ChallengeActions {
   /** Initialize challenge for the current week */
   initializeChallenge: (
     timezone: string,
-    weekStartDay: 0 | 1,
+    weekStartDay: WeekStartDay,
     templates: RecurringTemplate[],
     existingSkipRecords: SkipRecord[]
   ) => void;

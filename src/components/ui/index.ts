@@ -19,3 +19,7 @@ export { TaskAddedToast, type TaskAddedToastProps } from './TaskAddedToast';
 export { RepeatDayPicker, type RepeatDayPickerProps } from './RepeatDayPicker';
 export { ConfirmationModal, type ConfirmationModalProps, type ConfirmationOption } from './ConfirmationModal';
 export { KebabButton, type KebabButtonProps } from './KebabButton';
+export { SettingsSection, type SettingsSectionProps } from './SettingsSection';
+export { SettingsRow, type SettingsRowProps } from './SettingsRow';
+export { ColorPicker, type ColorPickerProps } from './ColorPicker';
+export { CompetitorRow, type CompetitorRowProps } from './CompetitorRow';

@@ -23,6 +23,7 @@ import { KebabButton } from '../ui/KebabButton';
 import { ConfirmationModal } from '../ui/ConfirmationModal';
 import { Competitor } from '../../domain/models/Competitor';
 import { TaskInstance } from '../../domain/models/TaskInstance';
+import { WeekStartDay } from '../../domain/models/Household';
 import { formatRepeatDays } from '../../domain/services';
 
 /** Scope for applying changes to recurring tasks */
@@ -60,8 +61,8 @@ export interface AddTaskSheetProps {
   onDelete?: (taskId: string, scope: ChangeScope) => void;
   /** Competitors to show points chips for */
   competitors: Competitor[];
-  /** Day the week starts (0=Sunday, 1=Monday) */
-  weekStartDay?: 0 | 1;
+  /** Day the week starts (0-6) - determines day picker order */
+  weekStartDay?: WeekStartDay;
 }
 
 const OVERLAY_DURATION = 250;

@@ -146,7 +146,7 @@ export function getDayOfWeekLabel(dayOfWeek: number): string {
  */
 export function formatRepeatDays(
   days: number[],
-  weekStartDay: 0 | 1 = 0
+  weekStartDay: number = 0
 ): string {
   if (days.length === 0) {
     return 'Does not repeat';
@@ -183,10 +183,10 @@ export function formatRepeatDays(
 
 /**
  * Get days of week in order starting from weekStartDay.
- * @param weekStartDay - 0 for Sunday, 1 for Monday
+ * @param weekStartDay - 0 for Sunday through 6 for Saturday
  * @returns Array of day numbers in display order
  */
-export function getOrderedDays(weekStartDay: 0 | 1): number[] {
+export function getOrderedDays(weekStartDay: number): number[] {
   const days: number[] = [];
   for (let i = 0; i < 7; i++) {
     days.push((weekStartDay + i) % 7);

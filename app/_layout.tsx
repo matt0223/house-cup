@@ -1,11 +1,11 @@
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { DarkTheme, DefaultTheme, ThemeProvider as NavigationThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
-import { useColorScheme } from 'react-native';
 import 'react-native-reanimated';
+import { ThemeProvider, useThemeContext } from '../src/theme/ThemeContext';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -45,10 +45,18 @@ export default function RootLayout() {
 }
 
 function RootLayoutNav() {
-  const colorScheme = useColorScheme();
+  return (
+    <ThemeProvider>
+      <NavigationThemeWrapper />
+    </ThemeProvider>
+  );
+}
+
+function NavigationThemeWrapper() {
+  const { isDark } = useThemeContext();
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <NavigationThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
       <Stack>
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen 
@@ -58,8 +66,15 @@ function RootLayoutNav() {
             animation: 'slide_from_right',
           }} 
         />
+        <Stack.Screen 
+          name="settings" 
+          options={{ 
+            headerShown: false,
+            animation: 'slide_from_right',
+          }} 
+        />
         <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
       </Stack>
-    </ThemeProvider>
+    </NavigationThemeProvider>
   );
 }

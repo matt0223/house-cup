@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { Competitor } from '../domain/models/Competitor';
-import { Household, WeekStartDay, sampleHousehold } from '../domain/models/Household';
+import { Household, WeekStartDay, ThemePreference, sampleHousehold } from '../domain/models/Household';
 
 /**
  * Household store state
@@ -28,6 +28,7 @@ interface HouseholdActions {
     timezone?: string;
     weekStartDay?: WeekStartDay;
     prize?: string;
+    themePreference?: ThemePreference;
   }) => void;
 
   /** Update a competitor's details */
@@ -106,3 +107,6 @@ export const useTimezone = () =>
 
 export const useWeekStartDay = () =>
   useHouseholdStore((state) => state.household?.weekStartDay ?? 0);
+
+export const useThemePreference = () =>
+  useHouseholdStore((state) => state.household?.themePreference ?? 'system');

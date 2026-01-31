@@ -27,6 +27,8 @@ export default function ChallengeScreen() {
   const [toastKey, setToastKey] = useState(0);
   const [editingTask, setEditingTask] = useState<TaskInstance | null>(null);
   const [swipeDeleteTask, setSwipeDeleteTask] = useState<TaskInstance | null>(null);
+  // Track the weekStartDay used to create the current challenge
+  const [challengeWeekStartDay, setChallengeWeekStartDay] = useState<number | null>(null);
 
   // Household store
   const household = useHouseholdStore((s) => s.household);
@@ -66,17 +68,22 @@ export default function ChallengeScreen() {
     }
   }, [isInitialized]);
 
-  // Initialize challenge when household is ready
+  // Initialize challenge when household is ready, or reinitialize when weekStartDay changes
   useEffect(() => {
-    if (household && !challenge && templates.length > 0) {
-      initializeChallenge(
-        household.timezone,
-        household.weekStartDay,
-        templates,
-        skipRecords
-      );
+    if (household && templates.length > 0) {
+      // Initialize if no challenge, or reinitialize if weekStartDay changed
+      const needsInit = !challenge || challengeWeekStartDay !== household.weekStartDay;
+      if (needsInit) {
+        initializeChallenge(
+          household.timezone,
+          household.weekStartDay,
+          templates,
+          skipRecords
+        );
+        setChallengeWeekStartDay(household.weekStartDay);
+      }
     }
-  }, [household, challenge, templates]);
+  }, [household, challenge, templates, challengeWeekStartDay]);
 
   // Auto-seed tasks when templates change (idempotent - won't create duplicates)
   useEffect(() => {
@@ -288,7 +295,7 @@ export default function ChallengeScreen() {
         title="House Cup"
         rightActions={[
           { icon: 'trending-up-outline', onPress: () => router.push('/history') },
-          { icon: 'settings-outline', onPress: () => console.log('Settings') },
+          { icon: 'settings-outline', onPress: () => router.push('/settings') },
         ]}
       />
 
@@ -305,7 +312,7 @@ export default function ChallengeScreen() {
             scoreA={scoreA}
             scoreB={scoreB}
             dateRange={dateRange}
-            prize={challenge?.prize ?? 'Set a prize!'}
+            prize={household?.prize || 'Set a prize!'}
           />
         </View>
 
