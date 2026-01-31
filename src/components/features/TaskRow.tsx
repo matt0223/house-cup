@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
 import { PointsChip } from '../ui/PointsChip';
 import { TaskInstance } from '../../domain/models/TaskInstance';
@@ -27,6 +28,8 @@ export function TaskRow({
 }: TaskRowProps) {
   const { colors, typography, spacing } = useTheme();
 
+  const isRecurring = Boolean(task.templateId);
+
   const handlePointsTap = (competitor: Competitor) => {
     const currentPoints = task.points[competitor.id] ?? 0;
     const newPoints = (currentPoints + 1) % 4; // Cycle 0 → 1 → 2 → 3 → 0
@@ -40,12 +43,22 @@ export function TaskRow({
       activeOpacity={0.7}
       disabled={!onPress}
     >
-      <Text
-        style={[typography.body, { color: colors.textPrimary, flex: 1 }]}
-        numberOfLines={2}
-      >
-        {task.name}
-      </Text>
+      <View style={styles.nameContainer}>
+        <Text
+          style={[typography.body, { color: colors.textPrimary, flexShrink: 1 }]}
+          numberOfLines={1}
+        >
+          {task.name}
+        </Text>
+        {isRecurring && (
+          <Ionicons
+            name="repeat"
+            size={14}
+            color={colors.textSecondary}
+            style={{ marginLeft: 8 }}
+          />
+        )}
+      </View>
 
       <View style={styles.chipsContainer}>
         {competitors.map((competitor) => (
@@ -66,6 +79,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
+  },
+  nameContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   chipsContainer: {
     flexDirection: 'row',

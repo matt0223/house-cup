@@ -123,3 +123,73 @@ export function formatDayKeyRange(
 
   return `${formatter.format(start)} - ${formatter.format(end)}`;
 }
+
+/** Single-letter labels for each day of week (0=Sunday, 6=Saturday) */
+const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'] as const;
+
+/**
+ * Get single-letter label for a day of week number.
+ */
+export function getDayOfWeekLabel(dayOfWeek: number): string {
+  return DAY_LABELS[dayOfWeek];
+}
+
+/**
+ * Format an array of repeat days for display.
+ * E.g., [1, 2, 3, 4, 5] → "M, T, W, T, F"
+ * E.g., [0, 1, 2, 3, 4, 5, 6] → "Daily"
+ * E.g., [0, 6] → "Weekends"
+ * 
+ * @param days - Array of day numbers (0=Sunday, 6=Saturday)
+ * @param weekStartDay - Day the week starts (0=Sunday, 1=Monday) for ordering
+ * @returns Formatted string for display
+ */
+export function formatRepeatDays(
+  days: number[],
+  weekStartDay: 0 | 1 = 0
+): string {
+  if (days.length === 0) {
+    return 'Does not repeat';
+  }
+
+  if (days.length === 7) {
+    return 'Daily';
+  }
+
+  // Check for weekends (Saturday and Sunday only)
+  const sorted = [...days].sort((a, b) => a - b);
+  if (sorted.length === 2 && sorted[0] === 0 && sorted[1] === 6) {
+    return 'Weekends';
+  }
+
+  // Check for weekdays (Monday through Friday only)
+  if (
+    sorted.length === 5 &&
+    sorted[0] === 1 &&
+    sorted[1] === 2 &&
+    sorted[2] === 3 &&
+    sorted[3] === 4 &&
+    sorted[4] === 5
+  ) {
+    return 'Weekdays';
+  }
+
+  // Order days starting from weekStartDay
+  const orderedDays = getOrderedDays(weekStartDay);
+  const orderedSelected = orderedDays.filter((d) => days.includes(d));
+
+  return orderedSelected.map((d) => DAY_LABELS[d]).join(', ');
+}
+
+/**
+ * Get days of week in order starting from weekStartDay.
+ * @param weekStartDay - 0 for Sunday, 1 for Monday
+ * @returns Array of day numbers in display order
+ */
+export function getOrderedDays(weekStartDay: 0 | 1): number[] {
+  const days: number[] = [];
+  for (let i = 0; i < 7; i++) {
+    days.push((weekStartDay + i) % 7);
+  }
+  return days;
+}

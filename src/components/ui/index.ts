@@ -16,3 +16,6 @@ export { RepeatPill, type RepeatPillProps } from './RepeatPill';
 export { ActionBar, type ActionBarProps } from './ActionBar';
 export { AddTaskButton, type AddTaskButtonProps } from './AddTaskButton';
 export { TaskAddedToast, type TaskAddedToastProps } from './TaskAddedToast';
+export { RepeatDayPicker, type RepeatDayPickerProps } from './RepeatDayPicker';
+export { ConfirmationModal, type ConfirmationModalProps, type ConfirmationOption } from './ConfirmationModal';
+export { KebabButton, type KebabButtonProps } from './KebabButton';

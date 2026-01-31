@@ -53,8 +53,8 @@ interface ChallengeActions {
   /** Set the selected day */
   setSelectedDay: (dayKey: DayKey) => void;
 
-  /** Add a new task (one-off) */
-  addTask: (name: string, points: Record<string, number>) => void;
+  /** Add a new task (one-off), returns the task ID */
+  addTask: (name: string, points: Record<string, number>) => string;
 
   /** Update task name */
   updateTaskName: (
@@ -74,6 +74,21 @@ interface ChallengeActions {
 
   /** Delete a task */
   deleteTask: (taskId: string) => SkipRecord | null;
+
+  /** Delete all tasks for a template from a given day onwards */
+  deleteTasksForTemplateFromDay: (
+    templateId: string,
+    fromDayKey: DayKey
+  ) => void;
+
+  /** Link a one-off task to a template (for converting to recurring) */
+  linkTaskToTemplate: (taskId: string, templateId: string) => void;
+
+  /** Update task with full changes */
+  updateTask: (
+    taskId: string,
+    changes: { name?: string; points?: Record<string, number>; templateId?: string | null }
+  ) => void;
 
   /** Seed tasks from templates */
   seedFromTemplates: (templates: RecurringTemplate[]) => void;
@@ -155,7 +170,7 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
 
   addTask: (name, points) => {
     const { challenge, selectedDayKey, tasks } = get();
-    if (!challenge) return;
+    if (!challenge) return '';
 
     const now = new Date().toISOString();
     const newTask: TaskInstance = {
@@ -170,6 +185,7 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
     };
 
     set({ tasks: [...tasks, newTask] });
+    return newTask.id;
   },
 
   updateTaskName: (taskId, name, applyToAll, templates, onTemplateUpdate) => {
@@ -241,6 +257,73 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
     set({ tasks: updatedTasks, skipRecords: updatedSkipRecords });
 
     return newSkipRecord;
+  },
+
+  deleteTasksForTemplateFromDay: (templateId, fromDayKey) => {
+    const { tasks, skipRecords } = get();
+
+    // Find tasks to delete (template matches and dayKey >= fromDayKey)
+    const tasksToDelete = tasks.filter(
+      (t) => t.templateId === templateId && t.dayKey >= fromDayKey
+    );
+
+    // Create skip records for each
+    const newSkipRecords: SkipRecord[] = tasksToDelete
+      .map((t) => createSkipRecordForDelete(t))
+      .filter((sr): sr is SkipRecord => sr !== null);
+
+    // Filter out deleted tasks
+    const updatedTasks = tasks.filter(
+      (t) => !(t.templateId === templateId && t.dayKey >= fromDayKey)
+    );
+
+    // Add new skip records, avoiding duplicates
+    const existingKeys = new Set(
+      skipRecords.map((sr) => `${sr.templateId}-${sr.dayKey}`)
+    );
+    const uniqueNewSkipRecords = newSkipRecords.filter(
+      (sr) => !existingKeys.has(`${sr.templateId}-${sr.dayKey}`)
+    );
+
+    set({
+      tasks: updatedTasks,
+      skipRecords: [...skipRecords, ...uniqueNewSkipRecords],
+    });
+  },
+
+  linkTaskToTemplate: (taskId, templateId) => {
+    const { tasks } = get();
+
+    const updatedTasks = tasks.map((t) =>
+      t.id === taskId
+        ? {
+            ...t,
+            templateId,
+            originalName: t.name, // Set original name for rename detection
+            updatedAt: new Date().toISOString(),
+          }
+        : t
+    );
+
+    set({ tasks: updatedTasks });
+  },
+
+  updateTask: (taskId, changes) => {
+    const { tasks } = get();
+
+    const updatedTasks = tasks.map((t) => {
+      if (t.id !== taskId) return t;
+
+      return {
+        ...t,
+        ...(changes.name !== undefined && { name: changes.name }),
+        ...(changes.points !== undefined && { points: changes.points }),
+        ...(changes.templateId !== undefined && { templateId: changes.templateId }),
+        updatedAt: new Date().toISOString(),
+      };
+    });
+
+    set({ tasks: updatedTasks });
   },
 
   seedFromTemplates: (templates) => {

@@ -1,8 +1,9 @@
 import React from 'react';
 import { View, StyleSheet, FlatList } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useTheme } from '../../theme/useTheme';
 import { Card } from '../ui/Card';
-import { TaskRow } from './TaskRow';
+import { SwipeableTaskRow } from './SwipeableTaskRow';
 import { TaskInstance } from '../../domain/models/TaskInstance';
 import { Competitor } from '../../domain/models/Competitor';
 
@@ -15,6 +16,8 @@ export interface TaskListProps {
   onPointsChange: (taskId: string, competitorId: string, points: number) => void;
   /** Called when a task is pressed */
   onTaskPress?: (task: TaskInstance) => void;
+  /** Called when a task is deleted via swipe */
+  onTaskDelete?: (task: TaskInstance) => void;
 }
 
 /**
@@ -25,6 +28,7 @@ export function TaskList({
   competitors,
   onPointsChange,
   onTaskPress,
+  onTaskDelete,
 }: TaskListProps) {
   const { colors } = useTheme();
 
@@ -34,13 +38,14 @@ export function TaskList({
 
   const renderItem = ({ item, index }: { item: TaskInstance; index: number }) => (
     <View>
-      <TaskRow
+      <SwipeableTaskRow
         task={item}
         competitors={competitors}
         onPointsChange={(competitorId, points) =>
           onPointsChange(item.id, competitorId, points)
         }
         onPress={onTaskPress ? () => onTaskPress(item) : undefined}
+        onDelete={onTaskDelete ?? (() => {})}
       />
       {index < tasks.length - 1 && (
         <View
@@ -51,18 +56,23 @@ export function TaskList({
   );
 
   return (
-    <Card padding="none">
-      <FlatList
-        data={tasks}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.id}
-        scrollEnabled={false}
-      />
-    </Card>
+    <GestureHandlerRootView style={styles.gestureRoot}>
+      <Card padding="none">
+        <FlatList
+          data={tasks}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.id}
+          scrollEnabled={false}
+        />
+      </Card>
+    </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
+  gestureRoot: {
+    flex: 1,
+  },
   divider: {
     height: 1,
     marginHorizontal: 16,

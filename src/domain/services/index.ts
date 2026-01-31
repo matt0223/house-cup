@@ -17,6 +17,9 @@ export {
   getDayKeysInRange,
   getDayLabel,
   formatDayKeyRange,
+  getDayOfWeekLabel,
+  formatRepeatDays,
+  getOrderedDays,
 } from './dayKey';
 
 // Week window calculations

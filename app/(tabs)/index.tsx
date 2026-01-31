@@ -4,13 +4,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/theme/useTheme';
 import { AppHeader, DayStrip, AddTaskButton, TaskAddedToast } from '../../src/components/ui';
-import { ScoreboardCard, TaskList, AddTaskSheet } from '../../src/components/features';
+import { ScoreboardCard, TaskList, AddTaskSheet, TaskChanges, ChangeScope } from '../../src/components/features';
+import { ConfirmationModal } from '../../src/components/ui';
 import {
   useHouseholdStore,
   useChallengeStore,
   useRecurringStore,
 } from '../../src/store';
 import { formatDayKeyRange, getTodayDayKey } from '../../src/domain/services';
+import { TaskInstance } from '../../src/domain/models/TaskInstance';
 
 /**
  * Challenge screen - Main tab showing scoreboard, day strip, and task list.
@@ -21,6 +23,8 @@ export default function ChallengeScreen() {
   const [isAddSheetVisible, setIsAddSheetVisible] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [toastKey, setToastKey] = useState(0);
+  const [editingTask, setEditingTask] = useState<TaskInstance | null>(null);
+  const [swipeDeleteTask, setSwipeDeleteTask] = useState<TaskInstance | null>(null);
 
   // Household store
   const household = useHouseholdStore((s) => s.household);
@@ -34,12 +38,20 @@ export default function ChallengeScreen() {
   const setSelectedDay = useChallengeStore((s) => s.setSelectedDay);
   const addTask = useChallengeStore((s) => s.addTask);
   const updateTaskPoints = useChallengeStore((s) => s.updateTaskPoints);
+  const updateTaskName = useChallengeStore((s) => s.updateTaskName);
+  const updateTask = useChallengeStore((s) => s.updateTask);
+  const deleteTask = useChallengeStore((s) => s.deleteTask);
+  const deleteTasksForTemplateFromDay = useChallengeStore((s) => s.deleteTasksForTemplateFromDay);
+  const linkTaskToTemplate = useChallengeStore((s) => s.linkTaskToTemplate);
   const getScores = useChallengeStore((s) => s.getScores);
 
   // Recurring store
   const templates = useRecurringStore((s) => s.templates);
   const skipRecords = useRecurringStore((s) => s.skipRecords);
   const loadRecurringSample = useRecurringStore((s) => s.loadSampleData);
+  const addTemplate = useRecurringStore((s) => s.addTemplate);
+  const updateTemplate = useRecurringStore((s) => s.updateTemplate);
+  const deleteTemplate = useRecurringStore((s) => s.deleteTemplate);
 
   // Initialize on mount
   useEffect(() => {
@@ -81,17 +93,153 @@ export default function ChallengeScreen() {
   const timezone = household?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
   const todayKey = getTodayDayKey(timezone);
 
+  // Get repeat days for the task being edited (from its template)
+  const editingTaskRepeatDays = editingTask?.templateId
+    ? templates.find((t) => t.id === editingTask.templateId)?.repeatDays ?? []
+    : [];
+
   // Handle adding a task from the sheet
   const handleAddTaskSubmit = (
     name: string,
     points: Record<string, number>,
-    _repeatDays: number[] | null
+    repeatDays: number[] | null
   ) => {
-    addTask(name, points);
+    // Create the task for today
+    const taskId = addTask(name, points);
+    
+    // If repeat days are set, create template and link task to it
+    if (repeatDays && repeatDays.length > 0 && taskId) {
+      const template = addTemplate(name, repeatDays);
+      linkTaskToTemplate(taskId, template.id);
+    }
     
     // Show toast (increment key to force new instance if already visible)
     setToastKey((k) => k + 1);
     setShowToast(true);
+  };
+
+  // Handle updating a task from the sheet (edit mode)
+  const handleUpdateTask = (
+    taskId: string,
+    changes: TaskChanges,
+    scope: ChangeScope
+  ) => {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return;
+
+    const isRecurring = task.templateId !== null;
+
+    // Handle name change
+    if (changes.name !== undefined && changes.name !== task.name) {
+      if (isRecurring && task.templateId) {
+        if (scope === 'future') {
+          // Update template name + all linked instances
+          updateTaskName(taskId, changes.name, true, templates, (templateId, newName) => {
+            updateTemplate(templateId, { name: newName });
+          });
+        } else {
+          // Detach and update just this instance
+          updateTaskName(taskId, changes.name, false, templates);
+        }
+      } else {
+        // One-off task - just update
+        updateTask(taskId, { name: changes.name });
+      }
+    }
+
+    // Handle points change (always applies to instance)
+    if (changes.points !== undefined) {
+      updateTask(taskId, { points: changes.points });
+    }
+
+    // Handle schedule change
+    if (changes.repeatDays !== undefined && isRecurring && task.templateId) {
+      if (changes.repeatDays.length === 0) {
+        // Converting recurring to one-off: delete template and detach task
+        deleteTemplate(task.templateId);
+        updateTask(taskId, { templateId: null });
+      } else {
+        // Just update the template's days
+        updateTemplate(task.templateId, { repeatDays: changes.repeatDays });
+      }
+    }
+
+    // Handle converting one-off to recurring
+    if (
+      changes.repeatDays !== undefined &&
+      changes.repeatDays.length > 0 &&
+      !isRecurring
+    ) {
+      const newTemplate = addTemplate(task.name, changes.repeatDays);
+      linkTaskToTemplate(taskId, newTemplate.id);
+    }
+
+    // Show toast
+    setToastKey((k) => k + 1);
+    setShowToast(true);
+
+    // Close sheet
+    setEditingTask(null);
+    setIsAddSheetVisible(false);
+  };
+
+  // Handle deleting a task from the sheet (edit mode)
+  const handleDeleteTask = (taskId: string, scope: ChangeScope) => {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return;
+
+    if (scope === 'future' && task.templateId) {
+      // Delete template and all remaining instances
+      deleteTasksForTemplateFromDay(task.templateId, task.dayKey);
+      deleteTemplate(task.templateId);
+    } else {
+      // Delete just this instance
+      deleteTask(taskId);
+    }
+
+    // Close sheet
+    setEditingTask(null);
+    setIsAddSheetVisible(false);
+  };
+
+  // Handle swipe delete from task list
+  const handleSwipeDelete = (task: TaskInstance) => {
+    const isRecurring = Boolean(task.templateId);
+    if (isRecurring) {
+      // Show confirmation modal for recurring tasks
+      setSwipeDeleteTask(task);
+    } else {
+      // Delete one-off task directly
+      deleteTask(task.id);
+    }
+  };
+
+  // Handle swipe delete confirmation selection
+  const handleSwipeDeleteConfirm = (optionId: string) => {
+    if (!swipeDeleteTask) return;
+
+    if (optionId === 'today') {
+      // Delete just this instance
+      deleteTask(swipeDeleteTask.id);
+    } else if (optionId === 'future' && swipeDeleteTask.templateId) {
+      // Delete template and all remaining instances
+      deleteTasksForTemplateFromDay(swipeDeleteTask.templateId, swipeDeleteTask.dayKey);
+      deleteTemplate(swipeDeleteTask.templateId);
+    }
+
+    setSwipeDeleteTask(null);
+  };
+
+  // Handle task press - open edit sheet
+  const handleTaskPress = (task: TaskInstance) => {
+    setEditingTask(task);
+    setIsAddSheetVisible(true);
+  };
+
+  // Handle sheet close
+  const handleSheetClose = () => {
+    setIsAddSheetVisible(false);
+    setEditingTask(null);
   };
 
   const handleToastHidden = () => {
@@ -168,6 +316,8 @@ export default function ChallengeScreen() {
               tasks={tasksForDay}
               competitors={competitors}
               onPointsChange={handlePointsChange}
+              onTaskPress={handleTaskPress}
+              onTaskDelete={handleSwipeDelete}
             />
           </View>
         ) : (
@@ -196,12 +346,17 @@ export default function ChallengeScreen() {
       {/* Floating Add Task Button */}
       <AddTaskButton onPress={() => setIsAddSheetVisible(true)} />
 
-      {/* Add Task Sheet */}
+      {/* Add/Edit Task Sheet */}
       <AddTaskSheet
         isVisible={isAddSheetVisible}
-        onClose={() => setIsAddSheetVisible(false)}
+        onClose={handleSheetClose}
         onSubmit={handleAddTaskSubmit}
+        editingTask={editingTask}
+        initialRepeatDays={editingTaskRepeatDays}
+        onUpdate={handleUpdateTask}
+        onDelete={handleDeleteTask}
         competitors={competitors}
+        weekStartDay={household?.weekStartDay ?? 0}
       />
 
       {/* Task Added Toast */}
@@ -209,6 +364,18 @@ export default function ChallengeScreen() {
         key={toastKey}
         visible={showToast}
         onHidden={handleToastHidden}
+      />
+
+      {/* Swipe Delete Confirmation Modal */}
+      <ConfirmationModal
+        visible={swipeDeleteTask !== null}
+        title="Delete this task?"
+        options={[
+          { id: 'today', label: 'Today only' },
+          { id: 'future', label: 'Today and future instances', isDestructive: true },
+        ]}
+        onSelect={handleSwipeDeleteConfirm}
+        onCancel={() => setSwipeDeleteTask(null)}
       />
     </SafeAreaView>
   );
