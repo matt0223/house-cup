@@ -12,7 +12,7 @@ A React Native mobile app for iOS that gamifies household chores between two par
 - **TypeScript 5.9** - Language
 - **Expo Router 6** - File-based navigation
 - **Zustand 5** - State management (3 stores: household, challenge, recurring)
-- **Firebase/Firestore** - Real-time sync and persistence
+- **Firebase JS SDK** - Real-time sync and persistence (web SDK, works with Expo Go)
 - **Firebase Auth** - Anonymous authentication
 - **Ionicons** - Icon library (use `@expo/vector-icons`)
 
@@ -110,7 +110,7 @@ export { MyNewComponent } from './MyNewComponent';
 - Optimistic UI updates with background sync
 
 ### In Progress
-- Testing Firebase integration
+- Firebase integration using JS SDK (switched from native SDK due to iOS 26 compatibility)
 
 ### Planned
 - Stats & History screen
@@ -123,8 +123,8 @@ export { MyNewComponent } from './MyNewComponent';
 2. **weekStartDay is internally 0-6** - UI shows "Week ends on" but converts
 3. **Templates seed idempotently** - Safe to call seedFromTemplates() anytime
 4. **Skip records prevent re-seeding** - Deleted recurring tasks stay deleted
-5. **Firebase requires dev client** - Can't use Expo Go with Firebase, must build with `expo run:ios`
-6. **Offline mode** - Without Firebase config files, app runs locally with sample data
+5. **Firebase JS SDK** - Works with Expo Go, no native build required. Set env vars in `.env.local`
+6. **Offline mode** - Without Firebase env vars, app runs locally with sample data
 7. **Optimistic updates** - Stores update immediately, then sync to Firestore in background
 8. **syncEnabled flag** - Each store has a `syncEnabled` flag that controls Firestore writes
 

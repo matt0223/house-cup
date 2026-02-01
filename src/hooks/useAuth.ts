@@ -1,21 +1,21 @@
 /**
- * Auth Hook
+ * Auth Hook (JS SDK)
  *
  * Manages Firebase authentication state and provides auth-related actions.
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { FirebaseAuthTypes } from '@react-native-firebase/auth';
+import { User } from 'firebase/auth';
 import {
   subscribeToAuthState,
   ensureAuthenticated,
   signOut as firebaseSignOut,
-  isFirebaseConfigured,
 } from '../services/firebase';
+import { isFirebaseConfigured } from '../services/firebase/firebaseConfig';
 
 interface UseAuthResult {
   /** Current authenticated user */
-  user: FirebaseAuthTypes.User | null;
+  user: User | null;
   /** User's ID (null if not authenticated) */
   userId: string | null;
   /** Whether auth is still initializing */
@@ -42,7 +42,7 @@ interface UseAuthResult {
  * ```
  */
 export function useAuth(): UseAuthResult {
-  const [user, setUser] = useState<FirebaseAuthTypes.User | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 

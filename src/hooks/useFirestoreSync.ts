@@ -1,23 +1,21 @@
 /**
  * Firestore Sync Hook
  *
- * Subscribes to Firestore collections and pushes updates to Zustand stores.
- * This is the bridge between Firebase real-time data and local UI state.
+ * Manages real-time synchronization between Firestore and Zustand stores.
+ * Subscribes to Firestore collections and updates local state when data changes.
  */
 
-import { useEffect, useRef, useCallback } from 'react';
-import { useHouseholdStore } from '../store/useHouseholdStore';
-import { useChallengeStore } from '../store/useChallengeStore';
-import { useRecurringStore } from '../store/useRecurringStore';
+import { useEffect, useState, useRef } from 'react';
 import {
   subscribeToHousehold,
   subscribeToCurrentChallenge,
   subscribeToTasks,
   subscribeToTemplates,
   subscribeToSkipRecords,
-  isFirebaseConfigured,
-  enableOfflinePersistence,
 } from '../services/firebase';
+import { useHouseholdStore } from '../store/useHouseholdStore';
+import { useChallengeStore } from '../store/useChallengeStore';
+import { useRecurringStore } from '../store/useRecurringStore';
 import { Household } from '../domain/models/Household';
 import { Challenge } from '../domain/models/Challenge';
 import { TaskInstance } from '../domain/models/TaskInstance';
@@ -25,28 +23,29 @@ import { RecurringTemplate } from '../domain/models/RecurringTemplate';
 import { SkipRecord } from '../domain/models/SkipRecord';
 
 interface UseFirestoreSyncOptions {
-  /** The household ID to sync (required for data access) */
+  /** Household ID to sync */
   householdId: string | null;
   /** Whether sync is enabled */
   enabled?: boolean;
 }
 
 interface UseFirestoreSyncResult {
-  /** Whether Firebase is configured and ready */
-  isConfigured: boolean;
-  /** Whether we're currently syncing */
+  /** Whether sync is active */
   isSyncing: boolean;
   /** Any sync errors */
   error: string | null;
 }
 
 /**
- * Hook to sync Firestore data with Zustand stores.
+ * Hook to manage Firestore real-time sync with Zustand stores.
+ *
+ * When enabled, subscribes to all relevant Firestore collections and
+ * updates the corresponding Zustand stores when data changes.
  *
  * Usage:
  * ```tsx
- * const { isConfigured, isSyncing, error } = useFirestoreSync({
- *   householdId: currentHouseholdId,
+ * const { isSyncing, error } = useFirestoreSync({
+ *   householdId: 'abc123',
  *   enabled: true,
  * });
  * ```
@@ -55,144 +54,122 @@ export function useFirestoreSync({
   householdId,
   enabled = true,
 }: UseFirestoreSyncOptions): UseFirestoreSyncResult {
-  const isSyncingRef = useRef(false);
-  const errorRef = useRef<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Track current challenge ID for task subscription
+  const currentChallengeIdRef = useRef<string | null>(null);
 
   // Store setters
   const setHousehold = useHouseholdStore((s) => s.setHousehold);
-  
-  // For challenge store, we need to set data directly
-  // We'll use a custom approach since we can't set state directly
-  const challengeStore = useChallengeStore.getState;
-  
-  // For recurring store
-  const recurringStore = useRecurringStore.getState;
-
-  // Check if Firebase is configured
-  const isConfigured = isFirebaseConfigured();
-
-  // Initialize offline persistence once
-  useEffect(() => {
-    if (isConfigured) {
-      enableOfflinePersistence().catch(console.warn);
-    }
-  }, [isConfigured]);
+  const setChallenge = useChallengeStore((s) => s.setChallenge);
+  const setTasks = useChallengeStore((s) => s.setTasks);
+  const setTemplates = useRecurringStore((s) => s.setTemplates);
+  const setSkipRecords = useRecurringStore((s) => s.setSkipRecords);
 
   // Subscribe to Firestore collections
   useEffect(() => {
-    if (!enabled || !householdId || !isConfigured) {
+    if (!enabled || !householdId) {
+      setIsSyncing(false);
       return;
     }
 
-    isSyncingRef.current = true;
-    errorRef.current = null;
+    setIsSyncing(true);
+    setError(null);
 
     const unsubscribers: (() => void)[] = [];
 
-    // Track current challenge ID for task subscription
-    let currentChallengeId: string | null = null;
-    let taskUnsubscribe: (() => void) | null = null;
+    // Handle errors consistently
+    const handleError = (context: string) => (err: Error) => {
+      console.error(`${context} error:`, err);
+      setError(`${context}: ${err.message}`);
+    };
 
     // 1. Subscribe to household
-    const householdUnsub = subscribeToHousehold(
+    const unsubHousehold = subscribeToHousehold(
       householdId,
       (household: Household | null) => {
         if (household) {
           setHousehold(household);
         }
       },
-      (error) => {
-        errorRef.current = `Household sync error: ${error.message}`;
-        console.error('Household sync error:', error);
-      }
+      handleError('Household sync')
     );
-    unsubscribers.push(householdUnsub);
+    unsubscribers.push(unsubHousehold);
 
     // 2. Subscribe to current challenge
-    const challengeUnsub = subscribeToCurrentChallenge(
+    const unsubChallenge = subscribeToCurrentChallenge(
       householdId,
       (challenge: Challenge | null) => {
-        // Update challenge in store
-        useChallengeStore.setState({ challenge });
-
-        // If challenge changed, update task subscription
-        if (challenge?.id !== currentChallengeId) {
-          // Unsubscribe from old tasks
-          if (taskUnsubscribe) {
-            taskUnsubscribe();
-            taskUnsubscribe = null;
-          }
-
-          currentChallengeId = challenge?.id ?? null;
-
-          // Subscribe to new challenge's tasks
-          if (challenge) {
-            taskUnsubscribe = subscribeToTasks(
-              householdId,
-              challenge.id,
-              (tasks: TaskInstance[]) => {
-                useChallengeStore.setState({ tasks });
-              },
-              (error) => {
-                errorRef.current = `Tasks sync error: ${error.message}`;
-                console.error('Tasks sync error:', error);
-              }
-            );
-          } else {
-            // No challenge, clear tasks
-            useChallengeStore.setState({ tasks: [] });
-          }
+        if (challenge) {
+          setChallenge(challenge);
+          currentChallengeIdRef.current = challenge.id;
         }
       },
-      (error) => {
-        errorRef.current = `Challenge sync error: ${error.message}`;
-        console.error('Challenge sync error:', error);
-      }
+      handleError('Challenge sync')
     );
-    unsubscribers.push(challengeUnsub);
+    unsubscribers.push(unsubChallenge);
 
     // 3. Subscribe to templates
-    const templatesUnsub = subscribeToTemplates(
+    const unsubTemplates = subscribeToTemplates(
       householdId,
       (templates: RecurringTemplate[]) => {
-        useRecurringStore.setState({ templates });
+        setTemplates(templates);
       },
-      (error) => {
-        errorRef.current = `Templates sync error: ${error.message}`;
-        console.error('Templates sync error:', error);
-      }
+      handleError('Templates sync')
     );
-    unsubscribers.push(templatesUnsub);
+    unsubscribers.push(unsubTemplates);
 
     // 4. Subscribe to skip records
-    const skipRecordsUnsub = subscribeToSkipRecords(
+    const unsubSkipRecords = subscribeToSkipRecords(
       householdId,
       (skipRecords: SkipRecord[]) => {
-        useRecurringStore.setState({ skipRecords });
-        // Also update challenge store's skip records for seeding
-        useChallengeStore.setState({ skipRecords });
+        setSkipRecords(skipRecords);
       },
-      (error) => {
-        errorRef.current = `SkipRecords sync error: ${error.message}`;
-        console.error('SkipRecords sync error:', error);
-      }
+      handleError('Skip records sync')
     );
-    unsubscribers.push(skipRecordsUnsub);
+    unsubscribers.push(unsubSkipRecords);
 
     // Cleanup
     return () => {
-      isSyncingRef.current = false;
       unsubscribers.forEach((unsub) => unsub());
-      if (taskUnsubscribe) {
-        taskUnsubscribe();
-      }
+      setIsSyncing(false);
     };
-  }, [enabled, householdId, isConfigured, setHousehold]);
+  }, [enabled, householdId, setHousehold, setChallenge, setTemplates, setSkipRecords]);
+
+  // Separate effect for tasks (depends on challenge ID)
+  useEffect(() => {
+    if (!enabled || !householdId) {
+      return;
+    }
+
+    // Get the current challenge ID from the store
+    const challenge = useChallengeStore.getState().challenge;
+    const challengeId = challenge?.id;
+
+    if (!challengeId) {
+      return;
+    }
+
+    // Subscribe to tasks for the current challenge
+    const unsubTasks = subscribeToTasks(
+      householdId,
+      challengeId,
+      (tasks: TaskInstance[]) => {
+        setTasks(tasks);
+      },
+      (err) => {
+        console.error('Tasks sync error:', err);
+        setError(`Tasks sync: ${err.message}`);
+      }
+    );
+
+    return unsubTasks;
+  }, [enabled, householdId, setTasks]);
 
   return {
-    isConfigured,
-    isSyncing: isSyncingRef.current,
-    error: errorRef.current,
+    isSyncing,
+    error,
   };
 }
 

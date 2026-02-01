@@ -117,6 +117,12 @@ interface ChallengeActions {
 
   /** Enable/disable Firebase sync */
   setSyncEnabled: (enabled: boolean, householdId: string | null) => void;
+
+  /** Set challenge (for Firestore sync) */
+  setChallenge: (challenge: Challenge) => void;
+
+  /** Set all tasks (for Firestore sync) */
+  setTasks: (tasks: TaskInstance[]) => void;
 }
 
 type ChallengeStore = ChallengeState & ChallengeActions;
@@ -446,6 +452,14 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
 
   setSyncEnabled: (enabled, householdId) => {
     set({ syncEnabled: enabled, householdId });
+  },
+
+  setChallenge: (challenge) => {
+    set({ challenge });
+  },
+
+  setTasks: (tasks) => {
+    set({ tasks });
   },
 }));
 

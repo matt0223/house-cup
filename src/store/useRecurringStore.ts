@@ -63,6 +63,12 @@ interface RecurringActions {
 
   /** Enable/disable Firebase sync */
   setSyncEnabled: (enabled: boolean, householdId: string | null) => void;
+
+  /** Set all templates (for Firestore sync) */
+  setTemplates: (templates: RecurringTemplate[]) => void;
+
+  /** Set all skip records (for Firestore sync) */
+  setSkipRecords: (skipRecords: SkipRecord[]) => void;
 }
 
 type RecurringStore = RecurringState & RecurringActions;
@@ -286,6 +292,14 @@ export const useRecurringStore = create<RecurringStore>((set, get) => ({
 
   setSyncEnabled: (enabled, householdId) => {
     set({ syncEnabled: enabled, householdId });
+  },
+
+  setTemplates: (templates) => {
+    set({ templates });
+  },
+
+  setSkipRecords: (skipRecords) => {
+    set({ skipRecords });
   },
 }));
 

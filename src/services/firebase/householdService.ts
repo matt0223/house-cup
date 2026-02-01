@@ -1,10 +1,25 @@
 /**
- * Firestore service for Household documents
+ * Firestore service for Household documents (JS SDK)
  */
 
-import firestore, {
-  FirebaseFirestoreTypes,
-} from '@react-native-firebase/firestore';
+import {
+  collection,
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  query,
+  where,
+  limit,
+  getDocs,
+  onSnapshot,
+  serverTimestamp,
+  arrayUnion,
+  DocumentReference,
+  DocumentSnapshot,
+  Unsubscribe,
+} from 'firebase/firestore';
+import { getDb } from './firebaseConfig';
 import { Household, ThemePreference, WeekStartDay } from '../../domain/models/Household';
 import { Competitor } from '../../domain/models/Competitor';
 
@@ -15,23 +30,25 @@ const COLLECTION = 'households';
  */
 export function getHouseholdRef(
   householdId: string
-): FirebaseFirestoreTypes.DocumentReference {
-  return firestore().collection(COLLECTION).doc(householdId);
+): DocumentReference | null {
+  const db = getDb();
+  if (!db) return null;
+  return doc(db, COLLECTION, householdId);
 }
 
 /**
  * Convert Firestore document to Household
  */
 function docToHousehold(
-  doc: FirebaseFirestoreTypes.DocumentSnapshot
+  docSnap: DocumentSnapshot
 ): Household | null {
-  if (!doc.exists) return null;
+  if (!docSnap.exists()) return null;
 
-  const data = doc.data();
+  const data = docSnap.data();
   if (!data) return null;
 
   return {
-    id: doc.id,
+    id: docSnap.id,
     competitors: data.competitors as [Competitor, Competitor],
     timezone: data.timezone,
     weekStartDay: data.weekStartDay as WeekStartDay,
@@ -48,8 +65,11 @@ function docToHousehold(
 export async function getHousehold(
   householdId: string
 ): Promise<Household | null> {
-  const doc = await getHouseholdRef(householdId).get();
-  return docToHousehold(doc);
+  const ref = getHouseholdRef(householdId);
+  if (!ref) return null;
+  
+  const docSnap = await getDoc(ref);
+  return docToHousehold(docSnap);
 }
 
 /**
@@ -58,15 +78,20 @@ export async function getHousehold(
 export async function createHousehold(
   household: Omit<Household, 'id' | 'createdAt'> & { memberIds: string[] }
 ): Promise<Household> {
-  const ref = firestore().collection(COLLECTION).doc();
-  const now = firestore.FieldValue.serverTimestamp();
+  const db = getDb();
+  if (!db) {
+    throw new Error('Firestore is not configured');
+  }
+
+  const ref = doc(collection(db, COLLECTION));
+  const now = serverTimestamp();
 
   const data = {
     ...household,
     createdAt: now,
   };
 
-  await ref.set(data);
+  await setDoc(ref, data);
 
   return {
     ...household,
@@ -84,7 +109,11 @@ export async function updateHousehold(
     Pick<Household, 'timezone' | 'weekStartDay' | 'prize' | 'themePreference'>
   >
 ): Promise<void> {
-  await getHouseholdRef(householdId).update(updates);
+  const ref = getHouseholdRef(householdId);
+  if (!ref) {
+    throw new Error('Firestore is not configured');
+  }
+  await updateDoc(ref, updates);
 }
 
 /**
@@ -95,8 +124,13 @@ export async function updateCompetitor(
   competitorIndex: 0 | 1,
   updates: Partial<Pick<Competitor, 'name' | 'color'>>
 ): Promise<void> {
-  const doc = await getHouseholdRef(householdId).get();
-  const data = doc.data();
+  const ref = getHouseholdRef(householdId);
+  if (!ref) {
+    throw new Error('Firestore is not configured');
+  }
+
+  const docSnap = await getDoc(ref);
+  const data = docSnap.data();
 
   if (!data?.competitors) {
     throw new Error('Household not found or has no competitors');
@@ -108,7 +142,7 @@ export async function updateCompetitor(
     ...updates,
   };
 
-  await getHouseholdRef(householdId).update({ competitors });
+  await updateDoc(ref, { competitors });
 }
 
 /**
@@ -118,8 +152,12 @@ export async function addMemberToHousehold(
   householdId: string,
   userId: string
 ): Promise<void> {
-  await getHouseholdRef(householdId).update({
-    memberIds: firestore.FieldValue.arrayUnion(userId),
+  const ref = getHouseholdRef(householdId);
+  if (!ref) {
+    throw new Error('Firestore is not configured');
+  }
+  await updateDoc(ref, {
+    memberIds: arrayUnion(userId),
   });
 }
 
@@ -129,11 +167,16 @@ export async function addMemberToHousehold(
 export async function findHouseholdByJoinCode(
   joinCode: string
 ): Promise<Household | null> {
-  const snapshot = await firestore()
-    .collection(COLLECTION)
-    .where('joinCode', '==', joinCode)
-    .limit(1)
-    .get();
+  const db = getDb();
+  if (!db) return null;
+
+  const q = query(
+    collection(db, COLLECTION),
+    where('joinCode', '==', joinCode),
+    limit(1)
+  );
+
+  const snapshot = await getDocs(q);
 
   if (snapshot.empty) return null;
   return docToHousehold(snapshot.docs[0]);
@@ -146,10 +189,17 @@ export function subscribeToHousehold(
   householdId: string,
   onData: (household: Household | null) => void,
   onError?: (error: Error) => void
-): () => void {
-  return getHouseholdRef(householdId).onSnapshot(
-    (doc) => {
-      onData(docToHousehold(doc));
+): Unsubscribe {
+  const ref = getHouseholdRef(householdId);
+  if (!ref) {
+    // Return a no-op unsubscribe if Firestore is not configured
+    return () => {};
+  }
+
+  return onSnapshot(
+    ref,
+    (docSnap) => {
+      onData(docToHousehold(docSnap));
     },
     (error) => {
       console.error('Household subscription error:', error);

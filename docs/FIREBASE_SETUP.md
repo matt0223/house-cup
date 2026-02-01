@@ -1,77 +1,97 @@
 # Firebase Setup Guide
 
-This guide walks through setting up Firebase for the House Cup app.
+This guide walks you through setting up Firebase for the House Cup app.
 
-## Prerequisites
+## Overview
 
-- A Google account
-- Access to [Firebase Console](https://console.firebase.google.com/)
+House Cup uses the **Firebase JS SDK** (web SDK) which works with Expo Go and doesn't require native builds. This makes development faster and easier.
 
-## Step 1: Create Firebase Project
+## Step 1: Create a Firebase Project
 
 1. Go to [Firebase Console](https://console.firebase.google.com/)
-2. Click "Create a project" (or "Add project")
-3. Name it "House Cup" (or similar)
-4. Disable Google Analytics (not needed for this app)
-5. Click "Create project"
+2. Click **"Create a project"**
+3. Enter a project name (e.g., "House Cup")
+4. Disable Google Analytics (optional for this app)
+5. Click **Create Project**
 
-## Step 2: Add iOS App
+## Step 2: Add a Web App
 
-1. In your Firebase project, click the iOS icon to add an iOS app
-2. Enter the bundle ID: `com.kabusworks.housecup`
-3. Enter app nickname: "House Cup iOS"
-4. Skip the App Store ID for now
-5. Click "Register app"
-6. Download `GoogleService-Info.plist`
-7. Place the file at: `rn-app/GoogleService-Info.plist`
+1. In the Firebase Console, click the gear icon → **Project settings**
+2. Scroll down to "Your apps" section
+3. Click the **Web** icon (</>) to add a web app
+4. Enter an app nickname (e.g., "House Cup Web")
+5. Don't check "Firebase Hosting"
+6. Click **Register app**
+7. **Copy the firebaseConfig object** - you'll need these values
 
-## Step 3: Add Android App
+The config looks like:
+```javascript
+const firebaseConfig = {
+  apiKey: "AIza...",
+  authDomain: "your-project.firebaseapp.com",
+  projectId: "your-project-id",
+  storageBucket: "your-project.appspot.com",
+  messagingSenderId: "123456789",
+  appId: "1:123456789:web:abc123"
+};
+```
 
-1. Click "Add app" and select Android
-2. Enter the package name: `com.kabusworks.housecup`
-3. Enter app nickname: "House Cup Android"
-4. Skip the SHA-1 for now (can add later for production)
-5. Click "Register app"
-6. Download `google-services.json`
-7. Place the file at: `rn-app/google-services.json`
+## Step 3: Configure Environment Variables
 
-## Step 4: Enable Firestore
+1. Copy `.env.example` to `.env.local`:
+   ```bash
+   cp .env.example .env.local
+   ```
 
-1. In Firebase Console, go to "Build" → "Firestore Database"
-2. Click "Create database"
-3. Select "Start in test mode" (we'll add security rules later)
-4. Choose a location close to your users (e.g., `us-central`)
-5. Click "Enable"
+2. Fill in the values from your Firebase config:
+   ```env
+   EXPO_PUBLIC_FIREBASE_API_KEY=AIza...
+   EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+   EXPO_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
+   EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
+   EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=123456789
+   EXPO_PUBLIC_FIREBASE_APP_ID=1:123456789:web:abc123
+   ```
 
-## Step 5: Enable Anonymous Authentication
+## Step 4: Enable Authentication
 
-1. Go to "Build" → "Authentication"
-2. Click "Get started"
-3. Go to "Sign-in method" tab
-4. Click "Anonymous" 
-5. Toggle "Enable" and click "Save"
+1. In Firebase Console, go to **Build** → **Authentication**
+2. Click **Get started**
+3. In the "Sign-in method" tab, enable **Anonymous**
+4. Click **Save**
+
+## Step 5: Create Firestore Database
+
+1. In Firebase Console, go to **Build** → **Firestore Database**
+2. Click **Create database**
+3. Choose **Start in test mode** (for development)
+4. Select a region close to your users
+5. Click **Enable**
 
 ## Step 6: Set Up Security Rules
 
-1. Go to "Firestore Database" → "Rules" tab
-2. Replace the rules with:
+For development, the test mode rules work fine. For production, use these rules:
+
+1. Go to **Firestore Database** → **Rules** tab
+2. Replace with:
 
 ```javascript
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Households - users can only access their own household
+    // Households collection
     match /households/{householdId} {
+      // Allow read/write if user is a member
       allow read, write: if request.auth != null 
         && request.auth.uid in resource.data.memberIds;
       
-      // Allow creating a household if authenticated
-      allow create: if request.auth != null
+      // Allow creation if user will be a member
+      allow create: if request.auth != null 
         && request.auth.uid in request.resource.data.memberIds;
       
-      // All subcollections inherit household access
+      // Subcollections inherit parent access
       match /{subcollection}/{docId} {
-        allow read, write: if request.auth != null
+        allow read, write: if request.auth != null 
           && request.auth.uid in get(/databases/$(database)/documents/households/$(householdId)).data.memberIds;
       }
     }
@@ -79,48 +99,90 @@ service cloud.firestore {
 }
 ```
 
-3. Click "Publish"
+3. Click **Publish**
 
-## Step 7: Build the Dev Client
-
-After adding the config files, build the development client:
+## Step 7: Run the App
 
 ```bash
-# For iOS simulator
-npx expo run:ios
-
-# For Android emulator
-npx expo run:android
+npx expo start
 ```
 
-This creates a custom dev client with Firebase native modules.
-
-## File Structure
-
-After setup, you should have:
-
-```
-rn-app/
-├── GoogleService-Info.plist  # iOS config
-├── google-services.json      # Android config
-├── app.json                  # Already configured with plugins
-└── src/services/firebase/    # Firebase service layer
-```
+The app will work in **offline mode** (local data only) if Firebase isn't configured. Once you add your `.env.local` file with Firebase credentials, sync will be enabled automatically.
 
 ## Troubleshooting
 
-### "No Firebase App" error
-Make sure the config files are in the root `rn-app/` directory and rebuild the app.
+### "Firebase is not configured"
+- Make sure `.env.local` exists and has all required variables
+- Restart the Expo development server after adding `.env.local`
 
 ### "Permission denied" errors
-Check that:
-1. Anonymous auth is enabled
-2. The user's UID is in the household's `memberIds` array
-3. Security rules are published
+- Check that Anonymous Auth is enabled
+- Check that Firestore security rules allow access
 
-### App crashes on launch
-Rebuild the dev client after adding/changing Firebase config:
-```bash
-npx expo prebuild --clean
-npx expo run:ios  # or run:android
+### Data not syncing
+- Check the console for error messages
+- Verify your Firebase project is set up correctly
+- Make sure you're using a valid project ID
+
+## Data Structure
+
+The app uses this Firestore structure:
+
 ```
+households/
+  {householdId}/
+    - competitors: [Competitor, Competitor]
+    - timezone: string
+    - weekStartDay: number
+    - prize: string
+    - memberIds: string[]
+    - joinCode: string
+    - createdAt: timestamp
+    
+    challenges/
+      {challengeId}/
+        - householdId: string
+        - startDayKey: string
+        - endDayKey: string
+        - prize: string
+        - isCompleted: boolean
+        - createdAt: timestamp
+    
+    tasks/
+      {taskId}/
+        - challengeId: string
+        - dayKey: string
+        - name: string
+        - templateId: string | null
+        - points: { [competitorId]: number }
+        - createdAt: timestamp
+        - updatedAt: timestamp
+    
+    templates/
+      {templateId}/
+        - householdId: string
+        - name: string
+        - repeatDays: number[]
+        - createdAt: timestamp
+        - updatedAt: timestamp
+    
+    skipRecords/
+      {templateId:dayKey}/
+        - templateId: string
+        - dayKey: string
+```
+
+## Switching to Native SDK (Future)
+
+When Firebase updates their native SDK for iOS 26 compatibility, you can switch to the native SDK for better performance:
+
+1. Install native packages:
+   ```bash
+   npm install @react-native-firebase/app @react-native-firebase/auth @react-native-firebase/firestore expo-dev-client
+   ```
+
+2. Add config files (GoogleService-Info.plist, google-services.json)
+
+3. Update service files to use native SDK imports
+
+4. Build with `npx expo run:ios`

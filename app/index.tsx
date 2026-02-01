@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ScrollView, Text } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, StyleSheet, ScrollView, Text, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../src/theme/useTheme';
 import { AppHeader, DayStrip, AddTaskButton, TaskAddedToast } from '../src/components/ui';
@@ -12,6 +12,7 @@ import {
   useChallengeStore,
   useRecurringStore,
 } from '../src/store';
+import { useFirebase } from '../src/providers/FirebaseProvider';
 import { formatDayKeyRange, getTodayDayKey, getCurrentWeekWindow } from '../src/domain/services';
 import { TaskInstance } from '../src/domain/models/TaskInstance';
 
@@ -21,20 +22,21 @@ import { TaskInstance } from '../src/domain/models/TaskInstance';
 export default function ChallengeScreen() {
   const { colors, spacing, typography } = useTheme();
   const router = useRouter();
-  const [isInitialized, setIsInitialized] = useState(false);
-  const [isAddSheetVisible, setIsAddSheetVisible] = useState(false);
-  const [showToast, setShowToast] = useState(false);
-  const [toastKey, setToastKey] = useState(0);
-  const [editingTask, setEditingTask] = useState<TaskInstance | null>(null);
-  const [swipeDeleteTask, setSwipeDeleteTask] = useState<TaskInstance | null>(null);
+  const [isAddSheetVisible, setIsAddSheetVisible] = React.useState(false);
+  const [showToast, setShowToast] = React.useState(false);
+  const [toastKey, setToastKey] = React.useState(0);
+  const [editingTask, setEditingTask] = React.useState<TaskInstance | null>(null);
+  const [swipeDeleteTask, setSwipeDeleteTask] = React.useState<TaskInstance | null>(null);
   // Track the weekStartDay used to create the current challenge
-  const [challengeWeekStartDay, setChallengeWeekStartDay] = useState<number | null>(null);
+  const [challengeWeekStartDay, setChallengeWeekStartDay] = React.useState<number | null>(null);
+
+  // Firebase context for onboarding redirect
+  const { isConfigured, isAuthLoading, householdId } = useFirebase();
 
   // Household store
   const household = useHouseholdStore((s) => s.household);
-  const loadHouseholdSample = useHouseholdStore((s) => s.loadSampleData);
 
-  // Challenge store
+  // Challenge store - ALL hooks must be called before any conditional returns
   const challenge = useChallengeStore((s) => s.challenge);
   const tasks = useChallengeStore((s) => s.tasks);
   const selectedDayKey = useChallengeStore((s) => s.selectedDayKey);
@@ -53,20 +55,13 @@ export default function ChallengeScreen() {
   // Recurring store
   const templates = useRecurringStore((s) => s.templates);
   const skipRecords = useRecurringStore((s) => s.skipRecords);
-  const loadRecurringSample = useRecurringStore((s) => s.loadSampleData);
   const addTemplate = useRecurringStore((s) => s.addTemplate);
   const updateTemplate = useRecurringStore((s) => s.updateTemplate);
   const deleteTemplate = useRecurringStore((s) => s.deleteTemplate);
 
-  // Initialize on mount
-  useEffect(() => {
-    if (!isInitialized) {
-      // Load sample data for development
-      loadHouseholdSample();
-      loadRecurringSample();
-      setIsInitialized(true);
-    }
-  }, [isInitialized]);
+  // Note: Sample data loading is handled by FirebaseProvider
+  // When Firebase is configured, data comes from Firestore
+  // When offline, FirebaseProvider loads sample data
 
   // Initialize challenge when household is ready, or reinitialize when weekStartDay changes
   useEffect(() => {
@@ -91,6 +86,22 @@ export default function ChallengeScreen() {
       seedFromTemplates(templates);
     }
   }, [templates, challenge]);
+
+  // Redirect to onboarding if Firebase is configured but no household exists
+  if (isConfigured && !isAuthLoading && !householdId) {
+    return <Redirect href="/onboarding" />;
+  }
+
+  // Show loading while auth is initializing
+  if (isConfigured && isAuthLoading) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.loading}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   // Derived state
   const competitors = household?.competitors ?? [];

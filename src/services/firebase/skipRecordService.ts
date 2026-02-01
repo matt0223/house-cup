@@ -1,10 +1,24 @@
 /**
- * Firestore service for SkipRecord documents
+ * Firestore service for SkipRecord documents (JS SDK)
  */
 
-import firestore, {
-  FirebaseFirestoreTypes,
-} from '@react-native-firebase/firestore';
+import {
+  collection,
+  doc,
+  getDoc,
+  setDoc,
+  deleteDoc,
+  query,
+  where,
+  getDocs,
+  onSnapshot,
+  writeBatch,
+  CollectionReference,
+  DocumentReference,
+  DocumentSnapshot,
+  Unsubscribe,
+} from 'firebase/firestore';
+import { getDb } from './firebaseConfig';
 import { SkipRecord, getSkipRecordKey } from '../../domain/models/SkipRecord';
 
 const SUBCOLLECTION = 'skipRecords';
@@ -14,11 +28,10 @@ const SUBCOLLECTION = 'skipRecords';
  */
 function getSkipRecordsRef(
   householdId: string
-): FirebaseFirestoreTypes.CollectionReference {
-  return firestore()
-    .collection('households')
-    .doc(householdId)
-    .collection(SUBCOLLECTION);
+): CollectionReference | null {
+  const db = getDb();
+  if (!db) return null;
+  return collection(db, 'households', householdId, SUBCOLLECTION);
 }
 
 /**
@@ -29,20 +42,22 @@ function getSkipRecordRef(
   householdId: string,
   templateId: string,
   dayKey: string
-): FirebaseFirestoreTypes.DocumentReference {
+): DocumentReference | null {
+  const db = getDb();
+  if (!db) return null;
   const docId = getSkipRecordKey(templateId, dayKey);
-  return getSkipRecordsRef(householdId).doc(docId);
+  return doc(db, 'households', householdId, SUBCOLLECTION, docId);
 }
 
 /**
  * Convert Firestore document to SkipRecord
  */
 function docToSkipRecord(
-  doc: FirebaseFirestoreTypes.DocumentSnapshot
+  docSnap: DocumentSnapshot
 ): SkipRecord | null {
-  if (!doc.exists) return null;
+  if (!docSnap.exists()) return null;
 
-  const data = doc.data();
+  const data = docSnap.data();
   if (!data) return null;
 
   return {
@@ -57,7 +72,10 @@ function docToSkipRecord(
 export async function getSkipRecords(
   householdId: string
 ): Promise<SkipRecord[]> {
-  const snapshot = await getSkipRecordsRef(householdId).get();
+  const ref = getSkipRecordsRef(householdId);
+  if (!ref) return [];
+
+  const snapshot = await getDocs(ref);
 
   return snapshot.docs
     .map(docToSkipRecord)
@@ -71,9 +89,11 @@ export async function getSkipRecordsForTemplate(
   householdId: string,
   templateId: string
 ): Promise<SkipRecord[]> {
-  const snapshot = await getSkipRecordsRef(householdId)
-    .where('templateId', '==', templateId)
-    .get();
+  const ref = getSkipRecordsRef(householdId);
+  if (!ref) return [];
+
+  const q = query(ref, where('templateId', '==', templateId));
+  const snapshot = await getDocs(q);
 
   return snapshot.docs
     .map(docToSkipRecord)
@@ -87,11 +107,15 @@ export async function addSkipRecord(
   householdId: string,
   skipRecord: SkipRecord
 ): Promise<void> {
-  await getSkipRecordRef(
+  const ref = getSkipRecordRef(
     householdId,
     skipRecord.templateId,
     skipRecord.dayKey
-  ).set(skipRecord);
+  );
+  if (!ref) {
+    throw new Error('Firestore is not configured');
+  }
+  await setDoc(ref, skipRecord);
 }
 
 /**
@@ -103,11 +127,18 @@ export async function addSkipRecordsBatch(
 ): Promise<void> {
   if (skipRecords.length === 0) return;
 
-  const batch = firestore().batch();
+  const db = getDb();
+  if (!db) {
+    throw new Error('Firestore is not configured');
+  }
+
+  const batch = writeBatch(db);
 
   for (const sr of skipRecords) {
     const ref = getSkipRecordRef(householdId, sr.templateId, sr.dayKey);
-    batch.set(ref, sr);
+    if (ref) {
+      batch.set(ref, sr);
+    }
   }
 
   await batch.commit();
@@ -121,7 +152,11 @@ export async function removeSkipRecord(
   templateId: string,
   dayKey: string
 ): Promise<void> {
-  await getSkipRecordRef(householdId, templateId, dayKey).delete();
+  const ref = getSkipRecordRef(householdId, templateId, dayKey);
+  if (!ref) {
+    throw new Error('Firestore is not configured');
+  }
+  await deleteDoc(ref);
 }
 
 /**
@@ -131,15 +166,20 @@ export async function removeSkipRecordsForTemplate(
   householdId: string,
   templateId: string
 ): Promise<void> {
-  const snapshot = await getSkipRecordsRef(householdId)
-    .where('templateId', '==', templateId)
-    .get();
+  const db = getDb();
+  const ref = getSkipRecordsRef(householdId);
+  if (!db || !ref) {
+    throw new Error('Firestore is not configured');
+  }
+
+  const q = query(ref, where('templateId', '==', templateId));
+  const snapshot = await getDocs(q);
 
   if (snapshot.empty) return;
 
-  const batch = firestore().batch();
-  for (const doc of snapshot.docs) {
-    batch.delete(doc.ref);
+  const batch = writeBatch(db);
+  for (const docSnap of snapshot.docs) {
+    batch.delete(docSnap.ref);
   }
 
   await batch.commit();
@@ -153,8 +193,11 @@ export async function hasSkipRecord(
   templateId: string,
   dayKey: string
 ): Promise<boolean> {
-  const doc = await getSkipRecordRef(householdId, templateId, dayKey).get();
-  return doc.exists;
+  const ref = getSkipRecordRef(householdId, templateId, dayKey);
+  if (!ref) return false;
+
+  const docSnap = await getDoc(ref);
+  return docSnap.exists();
 }
 
 /**
@@ -164,8 +207,14 @@ export function subscribeToSkipRecords(
   householdId: string,
   onData: (skipRecords: SkipRecord[]) => void,
   onError?: (error: Error) => void
-): () => void {
-  return getSkipRecordsRef(householdId).onSnapshot(
+): Unsubscribe {
+  const ref = getSkipRecordsRef(householdId);
+  if (!ref) {
+    return () => {};
+  }
+
+  return onSnapshot(
+    ref,
     (snapshot) => {
       const skipRecords = snapshot.docs
         .map(docToSkipRecord)

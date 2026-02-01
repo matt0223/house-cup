@@ -1,10 +1,26 @@
 /**
- * Firestore service for TaskInstance documents
+ * Firestore service for TaskInstance documents (JS SDK)
  */
 
-import firestore, {
-  FirebaseFirestoreTypes,
-} from '@react-native-firebase/firestore';
+import {
+  collection,
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  query,
+  where,
+  getDocs,
+  onSnapshot,
+  serverTimestamp,
+  writeBatch,
+  CollectionReference,
+  DocumentReference,
+  DocumentSnapshot,
+  Unsubscribe,
+} from 'firebase/firestore';
+import { getDb } from './firebaseConfig';
 import { TaskInstance } from '../../domain/models/TaskInstance';
 
 const SUBCOLLECTION = 'tasks';
@@ -14,11 +30,10 @@ const SUBCOLLECTION = 'tasks';
  */
 function getTasksRef(
   householdId: string
-): FirebaseFirestoreTypes.CollectionReference {
-  return firestore()
-    .collection('households')
-    .doc(householdId)
-    .collection(SUBCOLLECTION);
+): CollectionReference | null {
+  const db = getDb();
+  if (!db) return null;
+  return collection(db, 'households', householdId, SUBCOLLECTION);
 }
 
 /**
@@ -27,23 +42,25 @@ function getTasksRef(
 function getTaskRef(
   householdId: string,
   taskId: string
-): FirebaseFirestoreTypes.DocumentReference {
-  return getTasksRef(householdId).doc(taskId);
+): DocumentReference | null {
+  const db = getDb();
+  if (!db) return null;
+  return doc(db, 'households', householdId, SUBCOLLECTION, taskId);
 }
 
 /**
  * Convert Firestore document to TaskInstance
  */
 function docToTask(
-  doc: FirebaseFirestoreTypes.DocumentSnapshot
+  docSnap: DocumentSnapshot
 ): TaskInstance | null {
-  if (!doc.exists) return null;
+  if (!docSnap.exists()) return null;
 
-  const data = doc.data();
+  const data = docSnap.data();
   if (!data) return null;
 
   return {
-    id: doc.id,
+    id: docSnap.id,
     challengeId: data.challengeId,
     dayKey: data.dayKey,
     name: data.name,
@@ -62,9 +79,11 @@ export async function getTasksForChallenge(
   householdId: string,
   challengeId: string
 ): Promise<TaskInstance[]> {
-  const snapshot = await getTasksRef(householdId)
-    .where('challengeId', '==', challengeId)
-    .get();
+  const ref = getTasksRef(householdId);
+  if (!ref) return [];
+
+  const q = query(ref, where('challengeId', '==', challengeId));
+  const snapshot = await getDocs(q);
 
   return snapshot.docs
     .map(docToTask)
@@ -79,10 +98,15 @@ export async function getTasksForDay(
   challengeId: string,
   dayKey: string
 ): Promise<TaskInstance[]> {
-  const snapshot = await getTasksRef(householdId)
-    .where('challengeId', '==', challengeId)
-    .where('dayKey', '==', dayKey)
-    .get();
+  const ref = getTasksRef(householdId);
+  if (!ref) return [];
+
+  const q = query(
+    ref,
+    where('challengeId', '==', challengeId),
+    where('dayKey', '==', dayKey)
+  );
+  const snapshot = await getDocs(q);
 
   return snapshot.docs
     .map(docToTask)
@@ -96,8 +120,13 @@ export async function createTask(
   householdId: string,
   task: Omit<TaskInstance, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<TaskInstance> {
-  const ref = getTasksRef(householdId).doc();
-  const now = firestore.FieldValue.serverTimestamp();
+  const ref = getTasksRef(householdId);
+  if (!ref) {
+    throw new Error('Firestore is not configured');
+  }
+
+  const newDocRef = doc(ref);
+  const now = serverTimestamp();
 
   const data = {
     ...task,
@@ -105,12 +134,12 @@ export async function createTask(
     updatedAt: now,
   };
 
-  await ref.set(data);
+  await setDoc(newDocRef, data);
 
   const nowIso = new Date().toISOString();
   return {
     ...task,
-    id: ref.id,
+    id: newDocRef.id,
     createdAt: nowIso,
     updatedAt: nowIso,
   };
@@ -125,22 +154,31 @@ export async function createTasksBatch(
 ): Promise<TaskInstance[]> {
   if (tasks.length === 0) return [];
 
-  const batch = firestore().batch();
-  const now = firestore.FieldValue.serverTimestamp();
+  const db = getDb();
+  if (!db) {
+    throw new Error('Firestore is not configured');
+  }
+
+  const batch = writeBatch(db);
+  const now = serverTimestamp();
   const nowIso = new Date().toISOString();
 
   const results: TaskInstance[] = [];
+  const ref = getTasksRef(householdId);
+  if (!ref) {
+    throw new Error('Firestore is not configured');
+  }
 
   for (const task of tasks) {
-    const ref = getTasksRef(householdId).doc();
-    batch.set(ref, {
+    const newDocRef = doc(ref);
+    batch.set(newDocRef, {
       ...task,
       createdAt: now,
       updatedAt: now,
     });
     results.push({
       ...task,
-      id: ref.id,
+      id: newDocRef.id,
       createdAt: nowIso,
       updatedAt: nowIso,
     });
@@ -158,9 +196,13 @@ export async function updateTask(
   taskId: string,
   updates: Partial<Pick<TaskInstance, 'name' | 'points' | 'templateId' | 'originalName'>>
 ): Promise<void> {
-  await getTaskRef(householdId, taskId).update({
+  const ref = getTaskRef(householdId, taskId);
+  if (!ref) {
+    throw new Error('Firestore is not configured');
+  }
+  await updateDoc(ref, {
     ...updates,
-    updatedAt: firestore.FieldValue.serverTimestamp(),
+    updatedAt: serverTimestamp(),
   });
 }
 
@@ -173,9 +215,13 @@ export async function updateTaskPoints(
   competitorId: string,
   points: number
 ): Promise<void> {
-  await getTaskRef(householdId, taskId).update({
+  const ref = getTaskRef(householdId, taskId);
+  if (!ref) {
+    throw new Error('Firestore is not configured');
+  }
+  await updateDoc(ref, {
     [`points.${competitorId}`]: points,
-    updatedAt: firestore.FieldValue.serverTimestamp(),
+    updatedAt: serverTimestamp(),
   });
 }
 
@@ -186,7 +232,11 @@ export async function deleteTask(
   householdId: string,
   taskId: string
 ): Promise<void> {
-  await getTaskRef(householdId, taskId).delete();
+  const ref = getTaskRef(householdId, taskId);
+  if (!ref) {
+    throw new Error('Firestore is not configured');
+  }
+  await deleteDoc(ref);
 }
 
 /**
@@ -198,20 +248,29 @@ export async function deleteTasksByTemplateFromDay(
   templateId: string,
   fromDayKey: string
 ): Promise<string[]> {
-  const snapshot = await getTasksRef(householdId)
-    .where('challengeId', '==', challengeId)
-    .where('templateId', '==', templateId)
-    .where('dayKey', '>=', fromDayKey)
-    .get();
+  const db = getDb();
+  const ref = getTasksRef(householdId);
+  if (!db || !ref) {
+    throw new Error('Firestore is not configured');
+  }
+
+  const q = query(
+    ref,
+    where('challengeId', '==', challengeId),
+    where('templateId', '==', templateId),
+    where('dayKey', '>=', fromDayKey)
+  );
+
+  const snapshot = await getDocs(q);
 
   if (snapshot.empty) return [];
 
-  const batch = firestore().batch();
+  const batch = writeBatch(db);
   const deletedIds: string[] = [];
 
-  for (const doc of snapshot.docs) {
-    batch.delete(doc.ref);
-    deletedIds.push(doc.id);
+  for (const docSnap of snapshot.docs) {
+    batch.delete(docSnap.ref);
+    deletedIds.push(docSnap.id);
   }
 
   await batch.commit();
@@ -226,19 +285,25 @@ export function subscribeToTasks(
   challengeId: string,
   onData: (tasks: TaskInstance[]) => void,
   onError?: (error: Error) => void
-): () => void {
-  return getTasksRef(householdId)
-    .where('challengeId', '==', challengeId)
-    .onSnapshot(
-      (snapshot) => {
-        const tasks = snapshot.docs
-          .map(docToTask)
-          .filter((t): t is TaskInstance => t !== null);
-        onData(tasks);
-      },
-      (error) => {
-        console.error('Tasks subscription error:', error);
-        onError?.(error);
-      }
-    );
+): Unsubscribe {
+  const ref = getTasksRef(householdId);
+  if (!ref) {
+    return () => {};
+  }
+
+  const q = query(ref, where('challengeId', '==', challengeId));
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const tasks = snapshot.docs
+        .map(docToTask)
+        .filter((t): t is TaskInstance => t !== null);
+      onData(tasks);
+    },
+    (error) => {
+      console.error('Tasks subscription error:', error);
+      onError?.(error);
+    }
+  );
 }

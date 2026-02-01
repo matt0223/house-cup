@@ -1,10 +1,23 @@
 /**
- * Firestore service for RecurringTemplate documents
+ * Firestore service for RecurringTemplate documents (JS SDK)
  */
 
-import firestore, {
-  FirebaseFirestoreTypes,
-} from '@react-native-firebase/firestore';
+import {
+  collection,
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  getDocs,
+  onSnapshot,
+  serverTimestamp,
+  CollectionReference,
+  DocumentReference,
+  DocumentSnapshot,
+  Unsubscribe,
+} from 'firebase/firestore';
+import { getDb } from './firebaseConfig';
 import { RecurringTemplate } from '../../domain/models/RecurringTemplate';
 
 const SUBCOLLECTION = 'templates';
@@ -14,11 +27,10 @@ const SUBCOLLECTION = 'templates';
  */
 function getTemplatesRef(
   householdId: string
-): FirebaseFirestoreTypes.CollectionReference {
-  return firestore()
-    .collection('households')
-    .doc(householdId)
-    .collection(SUBCOLLECTION);
+): CollectionReference | null {
+  const db = getDb();
+  if (!db) return null;
+  return collection(db, 'households', householdId, SUBCOLLECTION);
 }
 
 /**
@@ -27,23 +39,25 @@ function getTemplatesRef(
 function getTemplateRef(
   householdId: string,
   templateId: string
-): FirebaseFirestoreTypes.DocumentReference {
-  return getTemplatesRef(householdId).doc(templateId);
+): DocumentReference | null {
+  const db = getDb();
+  if (!db) return null;
+  return doc(db, 'households', householdId, SUBCOLLECTION, templateId);
 }
 
 /**
  * Convert Firestore document to RecurringTemplate
  */
 function docToTemplate(
-  doc: FirebaseFirestoreTypes.DocumentSnapshot
+  docSnap: DocumentSnapshot
 ): RecurringTemplate | null {
-  if (!doc.exists) return null;
+  if (!docSnap.exists()) return null;
 
-  const data = doc.data();
+  const data = docSnap.data();
   if (!data) return null;
 
   return {
-    id: doc.id,
+    id: docSnap.id,
     householdId: data.householdId,
     name: data.name,
     repeatDays: data.repeatDays ?? [],
@@ -58,7 +72,10 @@ function docToTemplate(
 export async function getTemplates(
   householdId: string
 ): Promise<RecurringTemplate[]> {
-  const snapshot = await getTemplatesRef(householdId).get();
+  const ref = getTemplatesRef(householdId);
+  if (!ref) return [];
+
+  const snapshot = await getDocs(ref);
 
   return snapshot.docs
     .map(docToTemplate)
@@ -72,8 +89,11 @@ export async function getTemplate(
   householdId: string,
   templateId: string
 ): Promise<RecurringTemplate | null> {
-  const doc = await getTemplateRef(householdId, templateId).get();
-  return docToTemplate(doc);
+  const ref = getTemplateRef(householdId, templateId);
+  if (!ref) return null;
+
+  const docSnap = await getDoc(ref);
+  return docToTemplate(docSnap);
 }
 
 /**
@@ -83,8 +103,13 @@ export async function createTemplate(
   householdId: string,
   template: Pick<RecurringTemplate, 'name' | 'repeatDays'>
 ): Promise<RecurringTemplate> {
-  const ref = getTemplatesRef(householdId).doc();
-  const now = firestore.FieldValue.serverTimestamp();
+  const ref = getTemplatesRef(householdId);
+  if (!ref) {
+    throw new Error('Firestore is not configured');
+  }
+
+  const newDocRef = doc(ref);
+  const now = serverTimestamp();
 
   const data = {
     householdId,
@@ -94,11 +119,11 @@ export async function createTemplate(
     updatedAt: now,
   };
 
-  await ref.set(data);
+  await setDoc(newDocRef, data);
 
   const nowIso = new Date().toISOString();
   return {
-    id: ref.id,
+    id: newDocRef.id,
     householdId,
     name: template.name,
     repeatDays: template.repeatDays,
@@ -115,9 +140,13 @@ export async function updateTemplate(
   templateId: string,
   updates: Partial<Pick<RecurringTemplate, 'name' | 'repeatDays'>>
 ): Promise<void> {
-  await getTemplateRef(householdId, templateId).update({
+  const ref = getTemplateRef(householdId, templateId);
+  if (!ref) {
+    throw new Error('Firestore is not configured');
+  }
+  await updateDoc(ref, {
     ...updates,
-    updatedAt: firestore.FieldValue.serverTimestamp(),
+    updatedAt: serverTimestamp(),
   });
 }
 
@@ -128,7 +157,11 @@ export async function deleteTemplate(
   householdId: string,
   templateId: string
 ): Promise<void> {
-  await getTemplateRef(householdId, templateId).delete();
+  const ref = getTemplateRef(householdId, templateId);
+  if (!ref) {
+    throw new Error('Firestore is not configured');
+  }
+  await deleteDoc(ref);
 }
 
 /**
@@ -138,8 +171,14 @@ export function subscribeToTemplates(
   householdId: string,
   onData: (templates: RecurringTemplate[]) => void,
   onError?: (error: Error) => void
-): () => void {
-  return getTemplatesRef(householdId).onSnapshot(
+): Unsubscribe {
+  const ref = getTemplatesRef(householdId);
+  if (!ref) {
+    return () => {};
+  }
+
+  return onSnapshot(
+    ref,
     (snapshot) => {
       const templates = snapshot.docs
         .map(docToTemplate)
