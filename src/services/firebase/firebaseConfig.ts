@@ -13,6 +13,8 @@ import {
   Firestore,
   enableIndexedDbPersistence,
   connectFirestoreEmulator,
+  collection,
+  doc,
 } from 'firebase/firestore';
 import {
   getAuth,
@@ -166,10 +168,26 @@ export function connectToEmulators(
   }
 }
 
+/**
+ * Generate a Firestore-compatible document ID.
+ * This can be used to pre-generate IDs for optimistic updates
+ * so the local and Firestore IDs match.
+ */
+export function generateFirestoreId(): string {
+  const db = getDb();
+  if (!db) {
+    // Fallback to local ID generation if Firestore not available
+    return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  }
+  // Create a reference to a temp collection and get its auto-generated ID
+  return doc(collection(db, '_temp')).id;
+}
+
 export default {
   getDb,
   getFirebaseAuth,
   isFirebaseConfigured,
   enableOfflinePersistence,
   connectToEmulators,
+  generateFirestoreId,
 };

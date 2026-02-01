@@ -3,6 +3,7 @@ import { RecurringTemplate } from '../domain/models/RecurringTemplate';
 import { SkipRecord } from '../domain/models/SkipRecord';
 import * as templateService from '../services/firebase/templateService';
 import * as skipRecordService from '../services/firebase/skipRecordService';
+import { generateFirestoreId } from '../services/firebase/firebaseConfig';
 
 /**
  * Recurring store state
@@ -96,8 +97,12 @@ export const useRecurringStore = create<RecurringStore>((set, get) => ({
   addTemplate: (name, repeatDays) => {
     const { syncEnabled, householdId } = get();
     const now = new Date().toISOString();
+    
+    // Pre-generate Firestore-compatible ID so local and synced IDs match
+    const templateId = syncEnabled ? generateFirestoreId() : generateId();
+    
     const template: RecurringTemplate = {
-      id: generateId(),
+      id: templateId,
       householdId: householdId || 'household-1',
       name,
       repeatDays,
@@ -110,18 +115,10 @@ export const useRecurringStore = create<RecurringStore>((set, get) => ({
       templates: [...state.templates, template],
     }));
 
-    // Persist to Firestore
+    // Persist to Firestore with the same ID
     if (syncEnabled && householdId) {
       templateService
-        .createTemplate(householdId, { name, repeatDays })
-        .then((createdTemplate) => {
-          // Update with Firestore-generated ID
-          set((state) => ({
-            templates: state.templates.map((t) =>
-              t.id === template.id ? { ...t, id: createdTemplate.id } : t
-            ),
-          }));
-        })
+        .createTemplate(householdId, { name, repeatDays }, templateId)
         .catch((error) => {
           console.error('Failed to sync template creation:', error);
           set({ error: `Sync failed: ${error.message}` });

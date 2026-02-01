@@ -132,14 +132,16 @@ export default function ChallengeScreen() {
     points: Record<string, number>,
     repeatDays: number[] | null
   ) => {
-    // Create the task for today
-    const taskId = addTask(name, points);
+    let templateId: string | null = null;
     
-    // If repeat days are set, create template and link task to it
-    if (repeatDays && repeatDays.length > 0 && taskId) {
+    // Create template first if recurring (so task is created with templateId)
+    if (repeatDays && repeatDays.length > 0) {
       const template = addTemplate(name, repeatDays);
-      linkTaskToTemplate(taskId, template.id);
+      templateId = template.id;
     }
+    
+    // Create the task for today with templateId already set
+    addTask(name, points, templateId);
     
     // Show toast (increment key to force new instance if already visible)
     setToastKey((k) => k + 1);
