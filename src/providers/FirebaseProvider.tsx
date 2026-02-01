@@ -17,8 +17,10 @@ import {
   createHousehold as createHouseholdInFirestore,
   findHouseholdByJoinCode,
   addMemberToHousehold,
+  createChallenge,
 } from '../services/firebase';
 import { Competitor } from '../domain/models/Competitor';
+import { getCurrentWeekWindow, getTodayDayKey } from '../domain/services';
 
 const HOUSEHOLD_ID_KEY = '@housecup/householdId';
 
@@ -118,10 +120,17 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
     }
   }, []);
 
+  // Handle household not found (deleted from Firestore)
+  const handleHouseholdNotFound = useCallback(() => {
+    console.log('Household not found, clearing local state');
+    setHouseholdId(null);
+  }, [setHouseholdId]);
+
   // Firestore sync (only active when we have a householdId)
   const { isSyncing, error: syncError } = useFirestoreSync({
     householdId,
     enabled: isConfigured && !!householdId,
+    onHouseholdNotFound: handleHouseholdNotFound,
   });
 
   // Store setters
@@ -188,13 +197,21 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
       setHouseholdInStore(newHousehold);
       setHouseholdId(newHousehold.id);
 
-      // Initialize challenge for the current week
-      useChallengeStore.getState().initializeChallenge(
-        newHousehold.timezone,
-        newHousehold.weekStartDay,
-        [], // No templates yet
-        []  // No skip records yet
-      );
+      // Create initial challenge in Firestore
+      const weekWindow = getCurrentWeekWindow(timezone, newHousehold.weekStartDay);
+      const initialChallenge = await createChallenge(newHousehold.id, {
+        householdId: newHousehold.id,
+        startDayKey: weekWindow.startDayKey,
+        endDayKey: weekWindow.endDayKey,
+        prize: prize || 'Winner picks dinner!',
+        winnerId: null,
+        isTie: false,
+        isCompleted: false,
+      });
+
+      // Set challenge in store (with Firestore ID)
+      useChallengeStore.getState().setChallenge(initialChallenge);
+      useChallengeStore.getState().setSelectedDay(getTodayDayKey(timezone));
     },
     [userId, setHouseholdInStore]
   );
@@ -219,12 +236,10 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
       setHouseholdInStore(foundHousehold);
       setHouseholdId(foundHousehold.id);
 
-      // Initialize challenge for the current week
-      useChallengeStore.getState().initializeChallenge(
-        foundHousehold.timezone,
-        foundHousehold.weekStartDay,
-        [], // Templates will be synced via Firestore
-        []  // Skip records will be synced via Firestore
+      // Challenge will be synced automatically via subscribeToCurrentChallenge
+      // Set selected day to today
+      useChallengeStore.getState().setSelectedDay(
+        getTodayDayKey(foundHousehold.timezone)
       );
     },
     [userId, setHouseholdInStore]

@@ -101,14 +101,16 @@ export async function getTemplate(
  */
 export async function createTemplate(
   householdId: string,
-  template: Pick<RecurringTemplate, 'name' | 'repeatDays'>
+  template: Pick<RecurringTemplate, 'name' | 'repeatDays'>,
+  templateId?: string
 ): Promise<RecurringTemplate> {
   const ref = getTemplatesRef(householdId);
   if (!ref) {
     throw new Error('Firestore is not configured');
   }
 
-  const newDocRef = doc(ref);
+  // Use provided ID or generate a new one
+  const newDocRef = templateId ? doc(ref, templateId) : doc(ref);
   const now = serverTimestamp();
 
   const data = {

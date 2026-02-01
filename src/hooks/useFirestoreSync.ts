@@ -27,6 +27,8 @@ interface UseFirestoreSyncOptions {
   householdId: string | null;
   /** Whether sync is enabled */
   enabled?: boolean;
+  /** Called when household is not found (deleted from Firestore) */
+  onHouseholdNotFound?: () => void;
 }
 
 interface UseFirestoreSyncResult {
@@ -53,6 +55,7 @@ interface UseFirestoreSyncResult {
 export function useFirestoreSync({
   householdId,
   enabled = true,
+  onHouseholdNotFound,
 }: UseFirestoreSyncOptions): UseFirestoreSyncResult {
   const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -91,6 +94,9 @@ export function useFirestoreSync({
       (household: Household | null) => {
         if (household) {
           setHousehold(household);
+        } else {
+          // Household was deleted or doesn't exist
+          onHouseholdNotFound?.();
         }
       },
       handleError('Household sync')
@@ -135,7 +141,7 @@ export function useFirestoreSync({
       unsubscribers.forEach((unsub) => unsub());
       setIsSyncing(false);
     };
-  }, [enabled, householdId, setHousehold, setChallenge, setTemplates, setSkipRecords]);
+  }, [enabled, householdId, setHousehold, setChallenge, setTemplates, setSkipRecords, onHouseholdNotFound]);
 
   // Separate effect for tasks (depends on challenge ID)
   useEffect(() => {

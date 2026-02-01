@@ -115,17 +115,22 @@ export async function getTasksForDay(
 
 /**
  * Create a new task
+ * @param householdId - The household to create the task in
+ * @param task - Task data without id/timestamps
+ * @param taskId - Optional pre-generated ID (for consistent local/remote IDs)
  */
 export async function createTask(
   householdId: string,
-  task: Omit<TaskInstance, 'id' | 'createdAt' | 'updatedAt'>
+  task: Omit<TaskInstance, 'id' | 'createdAt' | 'updatedAt'>,
+  taskId?: string
 ): Promise<TaskInstance> {
   const ref = getTasksRef(householdId);
   if (!ref) {
     throw new Error('Firestore is not configured');
   }
 
-  const newDocRef = doc(ref);
+  // Use provided ID or generate a new one
+  const newDocRef = taskId ? doc(ref, taskId) : doc(ref);
   const now = serverTimestamp();
 
   const data = {

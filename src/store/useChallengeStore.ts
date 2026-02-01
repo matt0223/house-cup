@@ -18,6 +18,7 @@ import { Competitor } from '../domain/models/Competitor';
 import * as taskService from '../services/firebase/taskService';
 import * as challengeService from '../services/firebase/challengeService';
 import * as skipRecordService from '../services/firebase/skipRecordService';
+import { generateFirestoreId } from '../services/firebase/firebaseConfig';
 
 /**
  * Challenge store state
@@ -63,8 +64,8 @@ interface ChallengeActions {
   /** Set the selected day */
   setSelectedDay: (dayKey: DayKey) => void;
 
-  /** Add a new task (one-off), returns the task ID */
-  addTask: (name: string, points: Record<string, number>) => string;
+  /** Add a new task, returns the task ID */
+  addTask: (name: string, points: Record<string, number>, templateId?: string | null) => string;
 
   /** Update task name */
   updateTaskName: (
@@ -189,17 +190,21 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
     set({ selectedDayKey: dayKey });
   },
 
-  addTask: (name, points) => {
+  addTask: (name, points, templateId = null) => {
     const { challenge, selectedDayKey, tasks, syncEnabled, householdId } = get();
     if (!challenge) return '';
 
     const now = new Date().toISOString();
+    // Pre-generate Firestore-compatible ID so local and synced IDs match
+    const taskId = syncEnabled ? generateFirestoreId() : generateId();
+    
     const newTask: TaskInstance = {
-      id: generateId(),
+      id: taskId,
       challengeId: challenge.id,
       dayKey: selectedDayKey,
       name,
-      templateId: null, // One-off task
+      templateId, // Use passed templateId (null for one-off, set for recurring)
+      originalName: templateId ? name : undefined, // Set originalName for recurring tasks
       points,
       createdAt: now,
       updatedAt: now,
@@ -208,31 +213,27 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
     // Optimistic update
     set({ tasks: [...tasks, newTask] });
 
-    // Persist to Firestore
+    // Persist to Firestore with the same ID
     if (syncEnabled && householdId) {
       taskService
-        .createTask(householdId, {
-          challengeId: challenge.id,
-          dayKey: selectedDayKey,
-          name,
-          templateId: null,
-          points,
-        })
-        .then((createdTask) => {
-          // Update with Firestore-generated ID
-          set((state) => ({
-            tasks: state.tasks.map((t) =>
-              t.id === newTask.id ? { ...t, id: createdTask.id } : t
-            ),
-          }));
-        })
+        .createTask(
+          householdId,
+          {
+            challengeId: challenge.id,
+            dayKey: selectedDayKey,
+            name,
+            templateId,
+            points,
+          },
+          taskId // Pass the pre-generated ID
+        )
         .catch((error) => {
           console.error('Failed to sync task creation:', error);
           set({ error: `Sync failed: ${error.message}` });
         });
     }
 
-    return newTask.id;
+    return taskId;
   },
 
   updateTaskName: (taskId, name, applyToAll, templates, onTemplateUpdate) => {
