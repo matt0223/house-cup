@@ -15,6 +15,9 @@ import {
   ChallengeScores,
 } from '../domain/services';
 import { Competitor } from '../domain/models/Competitor';
+import * as taskService from '../services/firebase/taskService';
+import * as challengeService from '../services/firebase/challengeService';
+import * as skipRecordService from '../services/firebase/skipRecordService';
 
 /**
  * Challenge store state
@@ -37,6 +40,12 @@ interface ChallengeState {
 
   /** Error message if any */
   error: string | null;
+
+  /** Whether Firebase sync is enabled */
+  syncEnabled: boolean;
+
+  /** Current household ID for Firestore operations */
+  householdId: string | null;
 }
 
 /**
@@ -105,6 +114,15 @@ interface ChallengeActions {
 
   /** Clear all data */
   reset: () => void;
+
+  /** Enable/disable Firebase sync */
+  setSyncEnabled: (enabled: boolean, householdId: string | null) => void;
+
+  /** Set challenge (for Firestore sync) */
+  setChallenge: (challenge: Challenge) => void;
+
+  /** Set all tasks (for Firestore sync) */
+  setTasks: (tasks: TaskInstance[]) => void;
 }
 
 type ChallengeStore = ChallengeState & ChallengeActions;
@@ -128,6 +146,8 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
   skipRecords: [],
   isLoading: false,
   error: null,
+  syncEnabled: false,
+  householdId: null,
 
   // Actions
   initializeChallenge: (timezone, weekStartDay, templates, existingSkipRecords) => {
@@ -170,7 +190,7 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
   },
 
   addTask: (name, points) => {
-    const { challenge, selectedDayKey, tasks } = get();
+    const { challenge, selectedDayKey, tasks, syncEnabled, householdId } = get();
     if (!challenge) return '';
 
     const now = new Date().toISOString();
@@ -185,7 +205,33 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
       updatedAt: now,
     };
 
+    // Optimistic update
     set({ tasks: [...tasks, newTask] });
+
+    // Persist to Firestore
+    if (syncEnabled && householdId) {
+      taskService
+        .createTask(householdId, {
+          challengeId: challenge.id,
+          dayKey: selectedDayKey,
+          name,
+          templateId: null,
+          points,
+        })
+        .then((createdTask) => {
+          // Update with Firestore-generated ID
+          set((state) => ({
+            tasks: state.tasks.map((t) =>
+              t.id === newTask.id ? { ...t, id: createdTask.id } : t
+            ),
+          }));
+        })
+        .catch((error) => {
+          console.error('Failed to sync task creation:', error);
+          set({ error: `Sync failed: ${error.message}` });
+        });
+    }
+
     return newTask.id;
   },
 
@@ -226,7 +272,7 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
   },
 
   updateTaskPoints: (taskId, competitorId, points) => {
-    const { tasks } = get();
+    const { tasks, syncEnabled, householdId } = get();
     const clampedPoints = Math.max(0, Math.min(3, points));
 
     const updatedTasks = tasks.map((t) =>
@@ -239,11 +285,22 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
         : t
     );
 
+    // Optimistic update
     set({ tasks: updatedTasks });
+
+    // Persist to Firestore
+    if (syncEnabled && householdId) {
+      taskService
+        .updateTaskPoints(householdId, taskId, competitorId, clampedPoints)
+        .catch((error) => {
+          console.error('Failed to sync points update:', error);
+          set({ error: `Sync failed: ${error.message}` });
+        });
+    }
   },
 
   deleteTask: (taskId) => {
-    const { tasks, skipRecords } = get();
+    const { tasks, skipRecords, syncEnabled, householdId } = get();
     const task = tasks.find((t) => t.id === taskId);
     if (!task) return null;
 
@@ -255,7 +312,26 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
       ? [...skipRecords, newSkipRecord]
       : skipRecords;
 
+    // Optimistic update
     set({ tasks: updatedTasks, skipRecords: updatedSkipRecords });
+
+    // Persist to Firestore
+    if (syncEnabled && householdId) {
+      // Delete task
+      taskService.deleteTask(householdId, taskId).catch((error) => {
+        console.error('Failed to sync task deletion:', error);
+        set({ error: `Sync failed: ${error.message}` });
+      });
+
+      // Add skip record if needed
+      if (newSkipRecord) {
+        skipRecordService
+          .addSkipRecord(householdId, newSkipRecord)
+          .catch((error) => {
+            console.error('Failed to sync skip record:', error);
+          });
+      }
+    }
 
     return newSkipRecord;
   },
@@ -372,6 +448,18 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
       skipRecords: [],
       error: null,
     });
+  },
+
+  setSyncEnabled: (enabled, householdId) => {
+    set({ syncEnabled: enabled, householdId });
+  },
+
+  setChallenge: (challenge) => {
+    set({ challenge });
+  },
+
+  setTasks: (tasks) => {
+    set({ tasks });
   },
 }));
 

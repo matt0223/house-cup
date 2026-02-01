@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { Competitor } from '../domain/models/Competitor';
 import { Household, WeekStartDay, ThemePreference, sampleHousehold } from '../domain/models/Household';
+import * as householdService from '../services/firebase/householdService';
 
 /**
  * Household store state
@@ -14,6 +15,9 @@ interface HouseholdState {
 
   /** Error message if any */
   error: string | null;
+
+  /** Whether Firebase sync is enabled */
+  syncEnabled: boolean;
 }
 
 /**
@@ -42,6 +46,9 @@ interface HouseholdActions {
 
   /** Load sample data for development */
   loadSampleData: () => void;
+
+  /** Enable/disable Firebase sync */
+  setSyncEnabled: (enabled: boolean) => void;
 }
 
 type HouseholdStore = HouseholdState & HouseholdActions;
@@ -49,12 +56,15 @@ type HouseholdStore = HouseholdState & HouseholdActions;
 /**
  * Zustand store for household data.
  * Contains competitors, timezone, and week configuration.
+ *
+ * When syncEnabled is true, mutations are persisted to Firestore.
  */
 export const useHouseholdStore = create<HouseholdStore>((set, get) => ({
   // Initial state
   household: null,
   isLoading: false,
   error: null,
+  syncEnabled: false,
 
   // Actions
   setHousehold: (household) => {
@@ -62,31 +72,56 @@ export const useHouseholdStore = create<HouseholdStore>((set, get) => ({
   },
 
   updateSettings: (updates) => {
-    const { household } = get();
+    const { household, syncEnabled } = get();
     if (!household) return;
 
+    // Optimistic update
     set({
       household: {
         ...household,
         ...updates,
       },
     });
+
+    // Persist to Firestore
+    if (syncEnabled) {
+      householdService.updateHousehold(household.id, updates).catch((error) => {
+        console.error('Failed to sync settings update:', error);
+        set({ error: `Sync failed: ${error.message}` });
+      });
+    }
   },
 
   updateCompetitor: (competitorId, updates) => {
-    const { household } = get();
+    const { household, syncEnabled } = get();
     if (!household) return;
+
+    const competitorIndex = household.competitors.findIndex(
+      (c) => c.id === competitorId
+    );
+    if (competitorIndex === -1) return;
 
     const updatedCompetitors = household.competitors.map((c) =>
       c.id === competitorId ? { ...c, ...updates } : c
     ) as [Competitor, Competitor];
 
+    // Optimistic update
     set({
       household: {
         ...household,
         competitors: updatedCompetitors,
       },
     });
+
+    // Persist to Firestore
+    if (syncEnabled) {
+      householdService
+        .updateCompetitor(household.id, competitorIndex as 0 | 1, updates)
+        .catch((error) => {
+          console.error('Failed to sync competitor update:', error);
+          set({ error: `Sync failed: ${error.message}` });
+        });
+    }
   },
 
   clearHousehold: () => {
@@ -95,6 +130,10 @@ export const useHouseholdStore = create<HouseholdStore>((set, get) => ({
 
   loadSampleData: () => {
     set({ household: sampleHousehold, error: null });
+  },
+
+  setSyncEnabled: (enabled) => {
+    set({ syncEnabled: enabled });
   },
 }));
 

@@ -127,8 +127,8 @@ export default function SettingsScreen() {
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
         >
-        {/* Competitors Section */}
-        <SettingsSection title="Competitors">
+        {/* Housemates Section */}
+        <SettingsSection title="Housemates">
           {competitorA && (
             <CompetitorRow
               competitor={competitorA}

@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { RecurringTemplate } from '../domain/models/RecurringTemplate';
 import { SkipRecord } from '../domain/models/SkipRecord';
+import * as templateService from '../services/firebase/templateService';
+import * as skipRecordService from '../services/firebase/skipRecordService';
 
 /**
  * Recurring store state
@@ -17,6 +19,12 @@ interface RecurringState {
 
   /** Error message if any */
   error: string | null;
+
+  /** Whether Firebase sync is enabled */
+  syncEnabled: boolean;
+
+  /** Current household ID for Firestore operations */
+  householdId: string | null;
 }
 
 /**
@@ -52,6 +60,15 @@ interface RecurringActions {
 
   /** Clear all data */
   reset: () => void;
+
+  /** Enable/disable Firebase sync */
+  setSyncEnabled: (enabled: boolean, householdId: string | null) => void;
+
+  /** Set all templates (for Firestore sync) */
+  setTemplates: (templates: RecurringTemplate[]) => void;
+
+  /** Set all skip records (for Firestore sync) */
+  setSkipRecords: (skipRecords: SkipRecord[]) => void;
 }
 
 type RecurringStore = RecurringState & RecurringActions;
@@ -72,27 +89,52 @@ export const useRecurringStore = create<RecurringStore>((set, get) => ({
   skipRecords: [],
   isLoading: false,
   error: null,
+  syncEnabled: false,
+  householdId: null,
 
   // Actions
   addTemplate: (name, repeatDays) => {
+    const { syncEnabled, householdId } = get();
     const now = new Date().toISOString();
     const template: RecurringTemplate = {
       id: generateId(),
-      householdId: 'household-1', // Will come from household store
+      householdId: householdId || 'household-1',
       name,
       repeatDays,
       createdAt: now,
       updatedAt: now,
     };
 
+    // Optimistic update
     set((state) => ({
       templates: [...state.templates, template],
     }));
+
+    // Persist to Firestore
+    if (syncEnabled && householdId) {
+      templateService
+        .createTemplate(householdId, { name, repeatDays })
+        .then((createdTemplate) => {
+          // Update with Firestore-generated ID
+          set((state) => ({
+            templates: state.templates.map((t) =>
+              t.id === template.id ? { ...t, id: createdTemplate.id } : t
+            ),
+          }));
+        })
+        .catch((error) => {
+          console.error('Failed to sync template creation:', error);
+          set({ error: `Sync failed: ${error.message}` });
+        });
+    }
 
     return template;
   },
 
   updateTemplate: (templateId, updates) => {
+    const { syncEnabled, householdId } = get();
+
+    // Optimistic update
     set((state) => ({
       templates: state.templates.map((t) =>
         t.id === templateId
@@ -100,17 +142,40 @@ export const useRecurringStore = create<RecurringStore>((set, get) => ({
           : t
       ),
     }));
+
+    // Persist to Firestore
+    if (syncEnabled && householdId) {
+      templateService
+        .updateTemplate(householdId, templateId, updates)
+        .catch((error) => {
+          console.error('Failed to sync template update:', error);
+          set({ error: `Sync failed: ${error.message}` });
+        });
+    }
   },
 
   deleteTemplate: (templateId) => {
+    const { syncEnabled, householdId } = get();
+
+    // Optimistic update
     set((state) => ({
       templates: state.templates.filter((t) => t.id !== templateId),
       // Keep skip records for historical data
     }));
+
+    // Persist to Firestore
+    if (syncEnabled && householdId) {
+      templateService
+        .deleteTemplate(householdId, templateId)
+        .catch((error) => {
+          console.error('Failed to sync template deletion:', error);
+          set({ error: `Sync failed: ${error.message}` });
+        });
+    }
   },
 
   addSkipRecord: (skipRecord) => {
-    const { skipRecords } = get();
+    const { skipRecords, syncEnabled, householdId } = get();
     // Check if already exists
     const exists = skipRecords.some(
       (sr) =>
@@ -119,12 +184,22 @@ export const useRecurringStore = create<RecurringStore>((set, get) => ({
     );
 
     if (!exists) {
+      // Optimistic update
       set({ skipRecords: [...skipRecords, skipRecord] });
+
+      // Persist to Firestore
+      if (syncEnabled && householdId) {
+        skipRecordService
+          .addSkipRecord(householdId, skipRecord)
+          .catch((error) => {
+            console.error('Failed to sync skip record:', error);
+          });
+      }
     }
   },
 
   addSkipRecords: (newSkipRecords) => {
-    const { skipRecords } = get();
+    const { skipRecords, syncEnabled, householdId } = get();
     const uniqueNew = newSkipRecords.filter(
       (newSr) =>
         !skipRecords.some(
@@ -134,16 +209,38 @@ export const useRecurringStore = create<RecurringStore>((set, get) => ({
     );
 
     if (uniqueNew.length > 0) {
+      // Optimistic update
       set({ skipRecords: [...skipRecords, ...uniqueNew] });
+
+      // Persist to Firestore
+      if (syncEnabled && householdId) {
+        skipRecordService
+          .addSkipRecordsBatch(householdId, uniqueNew)
+          .catch((error) => {
+            console.error('Failed to sync skip records:', error);
+          });
+      }
     }
   },
 
   removeSkipRecordsForTemplate: (templateId) => {
+    const { syncEnabled, householdId } = get();
+
+    // Optimistic update
     set((state) => ({
       skipRecords: state.skipRecords.filter(
         (sr) => sr.templateId !== templateId
       ),
     }));
+
+    // Persist to Firestore
+    if (syncEnabled && householdId) {
+      skipRecordService
+        .removeSkipRecordsForTemplate(householdId, templateId)
+        .catch((error) => {
+          console.error('Failed to sync skip records removal:', error);
+        });
+    }
   },
 
   hasSkipRecord: (templateId, dayKey) => {
@@ -191,6 +288,18 @@ export const useRecurringStore = create<RecurringStore>((set, get) => ({
       skipRecords: [],
       error: null,
     });
+  },
+
+  setSyncEnabled: (enabled, householdId) => {
+    set({ syncEnabled: enabled, householdId });
+  },
+
+  setTemplates: (templates) => {
+    set({ templates });
+  },
+
+  setSkipRecords: (skipRecords) => {
+    set({ skipRecords });
   },
 }));
 

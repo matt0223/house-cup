@@ -6,6 +6,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
 import { ThemeProvider, useThemeContext } from '../src/theme/ThemeContext';
+import { FirebaseProvider } from '../src/providers';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -46,9 +47,11 @@ export default function RootLayout() {
 
 function RootLayoutNav() {
   return (
-    <ThemeProvider>
-      <NavigationThemeWrapper />
-    </ThemeProvider>
+    <FirebaseProvider>
+      <ThemeProvider>
+        <NavigationThemeWrapper />
+      </ThemeProvider>
+    </FirebaseProvider>
   );
 }
 
@@ -59,6 +62,13 @@ function NavigationThemeWrapper() {
     <NavigationThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
       <Stack>
         <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen 
+          name="onboarding" 
+          options={{ 
+            headerShown: false,
+            animation: 'fade',
+          }} 
+        />
         <Stack.Screen 
           name="history" 
           options={{ 
