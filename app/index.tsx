@@ -96,9 +96,12 @@ export default function ChallengeScreen() {
   const handleInvitePress = useCallback(() => {
     if (!household || !household.competitors[0]) return;
     
+    // Get pending competitor name (competitorB without userId)
+    const pendingCompetitor = household.competitors.find(c => !c.userId);
+    
     shareHouseholdInvite(
       household.competitors[0].name,
-      household.pendingHousemateName,
+      pendingCompetitor?.name,
       household.joinCode || ''
     );
   }, [household]);
@@ -336,7 +339,6 @@ export default function ChallengeScreen() {
         scoreA={scoreA}
         scoreB={scoreB}
         prize={household?.prize || 'Set a prize!'}
-        pendingHousemateName={household?.pendingHousemateName}
         onInvitePress={handleInvitePress}
       />
 

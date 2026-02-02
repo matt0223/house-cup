@@ -10,7 +10,7 @@ export interface CollapsibleScoreboardProps {
   scrollY: Animated.Value;
   /** First competitor (always present) */
   competitorA: Competitor;
-  /** Second competitor (optional - may not have joined yet) */
+  /** Second competitor (optional - may not exist yet) */
   competitorB?: Competitor;
   /** Score for first competitor */
   scoreA: number;
@@ -18,9 +18,7 @@ export interface CollapsibleScoreboardProps {
   scoreB: number;
   /** Prize text */
   prize: string;
-  /** Name of pending housemate (for invite button text) */
-  pendingHousemateName?: string;
-  /** Callback when invite button is pressed */
+  /** Callback when invite button is pressed (for pending competitor) */
   onInvitePress?: () => void;
 }
 
@@ -43,7 +41,6 @@ export function CollapsibleScoreboard({
   scoreA,
   scoreB,
   prize,
-  pendingHousemateName,
   onInvitePress,
 }: CollapsibleScoreboardProps) {
   const { spacing } = useTheme();
@@ -93,7 +90,6 @@ export function CollapsibleScoreboard({
             scoreA={scoreA}
             scoreB={scoreB}
             prize={prize}
-            pendingHousemateName={pendingHousemateName}
             onInvitePress={onInvitePress}
           />
         </Animated.View>

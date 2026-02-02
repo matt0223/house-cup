@@ -9,6 +9,26 @@ export interface Competitor {
   name: string;
   /** Color for UI elements (hex string) */
   color: string;
+  /** Firebase user ID - undefined means pending (hasn't joined yet) */
+  userId?: string;
+  /** ISO timestamp when invite was sent - undefined means not yet invited */
+  inviteSentAt?: string;
+}
+
+/**
+ * Check if a competitor is pending (hasn't joined yet).
+ * A pending competitor has no userId linked.
+ */
+export function isPendingCompetitor(competitor: Competitor): boolean {
+  return !competitor.userId;
+}
+
+/**
+ * Check if a pending competitor has been invited.
+ * Returns true if inviteSentAt is set.
+ */
+export function hasBeenInvited(competitor: Competitor): boolean {
+  return !!competitor.inviteSentAt;
 }
 
 /**
@@ -48,11 +68,13 @@ export const sampleCompetitors: Competitor[] = [
     id: 'competitor-a',
     name: 'Pri',
     color: '#9B7FD1', // Purple chip color
+    userId: 'user-1',
   },
   {
     id: 'competitor-b',
     name: 'Matt',
     color: '#5B9BD5', // Blue chip color
+    userId: 'user-2',
   },
 ];
 

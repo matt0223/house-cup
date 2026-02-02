@@ -16,10 +16,12 @@ import {
   isFirebaseConfigured,
   createHousehold as createHouseholdInFirestore,
   findHouseholdByJoinCode,
-  addCompetitorToHousehold,
+  claimCompetitorSlot,
+  markCompetitorInvited,
+  addPendingCompetitor,
   createChallenge,
 } from '../services/firebase';
-import { Competitor } from '../domain/models/Competitor';
+import { Competitor, isPendingCompetitor } from '../domain/models/Competitor';
 import { getCurrentWeekWindow, getTodayDayKey } from '../domain/services';
 
 const HOUSEHOLD_ID_KEY = '@housecup/householdId';
@@ -57,15 +59,20 @@ interface FirebaseContextValue {
   createHousehold: (
     yourName: string,
     yourColor: string,
-    pendingHousemateName?: string,
+    housemateName?: string,
+    housemateColor?: string,
     prize?: string
   ) => Promise<string>;
-  /** Join an existing household by code (Person B creates their own profile) */
+  /** Join an existing household by code (claims pending competitor slot) */
   joinHousehold: (
     code: string,
     yourName: string,
     yourColor: string
   ) => Promise<void>;
+  /** Mark a pending competitor as invited (sets inviteSentAt timestamp) */
+  markInviteSent: (competitorId: string) => Promise<void>;
+  /** Add a pending housemate to the household (returns the new competitor) */
+  addHousemate: (name: string, color: string) => Promise<Competitor>;
 }
 
 const FirebaseContext = createContext<FirebaseContextValue | null>(null);
@@ -166,12 +173,13 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
     }
   }, [household, householdId, isConfigured]);
 
-  // Create a new household (with just your profile)
+  // Create a new household (with your profile and optionally a pending housemate)
   const createHousehold = useCallback(
     async (
       yourName: string,
       yourColor: string,
-      pendingHousemateName?: string,
+      housemateName?: string,
+      housemateColor?: string,
       prize?: string
     ): Promise<string> => {
       if (!userId) {
@@ -180,11 +188,22 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
 
       const joinCode = generateJoinCode();
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const timestamp = Date.now();
 
-      // Start with just one competitor (you)
+      // Create competitors array
       const competitors: Competitor[] = [
-        { id: `competitor-${Date.now()}-1`, name: yourName, color: yourColor },
+        { id: `competitor-${timestamp}-1`, name: yourName, color: yourColor, userId },
       ];
+
+      // If housemate info provided, create a pending competitor (no userId)
+      if (housemateName && housemateColor) {
+        competitors.push({
+          id: `competitor-${timestamp}-2`,
+          name: housemateName,
+          color: housemateColor,
+          // No userId - they're pending until they join
+        });
+      }
 
       const newHousehold = await createHouseholdInFirestore({
         competitors,
@@ -193,7 +212,6 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
         memberIds: [userId],
         joinCode,
         prize: prize || 'Winner picks dinner!',
-        ...(pendingHousemateName ? { pendingHousemateName } : {}),
       });
 
       // Update local state
@@ -219,10 +237,10 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
       // Return the join code so caller can share it
       return joinCode;
     },
-    [userId, setHouseholdInStore]
+    [userId, setHouseholdInStore, setHouseholdId]
   );
 
-  // Join an existing household by code (Person B creates their own profile)
+  // Join an existing household by code (claims pending competitor slot)
   const joinHousehold = useCallback(
     async (code: string, yourName: string, yourColor: string): Promise<void> => {
       if (!userId) {
@@ -235,23 +253,26 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
         throw new Error('Invalid join code');
       }
 
-      // Check if household is full (already has 2 competitors)
-      if (foundHousehold.competitors.length >= 2) {
-        throw new Error('This household is full');
+      // Find pending competitor (one without userId)
+      const pendingCompetitor = foundHousehold.competitors.find(isPendingCompetitor);
+      
+      if (!pendingCompetitor) {
+        // No pending competitor - check if household is full
+        const hasJoinedCompetitors = foundHousehold.competitors.filter(c => c.userId).length;
+        if (hasJoinedCompetitors >= 2) {
+          throw new Error('This household is full');
+        }
+        // Edge case: household has only 1 competitor and no pending slot
+        // This shouldn't happen with the new flow, but handle it gracefully
+        throw new Error('No pending invite found for this household');
       }
 
-      // Create the new competitor (Person B)
-      const newCompetitor: Competitor = {
-        id: `competitor-${Date.now()}-2`,
-        name: yourName,
-        color: yourColor,
-      };
-
-      // Add competitor and member to household
-      const updatedHousehold = await addCompetitorToHousehold(
+      // Claim the pending competitor slot with userId and optionally update name/color
+      const updatedHousehold = await claimCompetitorSlot(
         foundHousehold.id,
-        newCompetitor,
-        userId
+        pendingCompetitor.id,
+        userId,
+        { name: yourName, color: yourColor }
       );
 
       // Update local state
@@ -264,7 +285,57 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
         getTodayDayKey(updatedHousehold.timezone)
       );
     },
-    [userId, setHouseholdInStore]
+    [userId, setHouseholdInStore, setHouseholdId]
+  );
+
+  // Mark a pending competitor as invited
+  const markInviteSent = useCallback(
+    async (competitorId: string): Promise<void> => {
+      if (!householdId) {
+        throw new Error('No household to update');
+      }
+
+      await markCompetitorInvited(householdId, competitorId);
+
+      // Update local state immediately (optimistic update)
+      const currentHousehold = useHouseholdStore.getState().household;
+      if (currentHousehold) {
+        const updatedCompetitors = currentHousehold.competitors.map(c =>
+          c.id === competitorId
+            ? { ...c, inviteSentAt: new Date().toISOString() }
+            : c
+        );
+        setHouseholdInStore({
+          ...currentHousehold,
+          competitors: updatedCompetitors,
+        });
+      }
+    },
+    [householdId, setHouseholdInStore]
+  );
+
+  // Add a pending housemate to the household
+  const addHousemate = useCallback(
+    async (name: string, color: string): Promise<Competitor> => {
+      if (!householdId) {
+        throw new Error('No household to add housemate to');
+      }
+
+      const newCompetitor: Competitor = {
+        id: `competitor-${Date.now()}-2`,
+        name,
+        color,
+        // No userId - they're pending until they join
+      };
+
+      const updatedHousehold = await addPendingCompetitor(householdId, newCompetitor);
+
+      // Update local state
+      setHouseholdInStore(updatedHousehold);
+
+      return newCompetitor;
+    },
+    [householdId, setHouseholdInStore]
   );
 
   const value: FirebaseContextValue = {
@@ -278,6 +349,8 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
     isOfflineMode: !isConfigured,
     createHousehold,
     joinHousehold,
+    markInviteSent,
+    addHousemate,
   };
 
   return (

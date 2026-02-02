@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
 import { Card } from '../ui/Card';
-import { Competitor } from '../../domain/models/Competitor';
+import { Competitor, isPendingCompetitor } from '../../domain/models/Competitor';
 
 export interface MiniScoreboardProps {
   /** First competitor (always present) */
@@ -41,12 +41,29 @@ export function MiniScoreboard({
 
   const renderRightSection = () => {
     if (competitorB) {
-      // Show competitor B: Name + Score
+      const isPending = isPendingCompetitor(competitorB);
+      
+      // Show competitor B: Name (with paper-plane if pending) + Score
       return (
         <View style={styles.rightSection}>
-          <Text style={[typography.callout, { color: colors.textSecondary }]}>
-            {competitorB.name}
-          </Text>
+          <View style={styles.nameWithIcon}>
+            <Text style={[typography.callout, { color: colors.textSecondary }]}>
+              {competitorB.name}
+            </Text>
+            {isPending && onInvitePress && (
+              <TouchableOpacity
+                onPress={onInvitePress}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={{ marginLeft: spacing.xxs }}
+              >
+                <Ionicons
+                  name="paper-plane-outline"
+                  size={14}
+                  color={colors.primary}
+                />
+              </TouchableOpacity>
+            )}
+          </View>
           <Text style={[styles.miniScore, { color: competitorB.color }]}>
             {scoreB}
           </Text>
@@ -54,7 +71,7 @@ export function MiniScoreboard({
       );
     }
 
-    // Show invite button: "+ Add"
+    // Fallback: Show invite button: "+ Add"
     return (
       <TouchableOpacity
         style={[
@@ -135,6 +152,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  nameWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   miniScore: {
     fontSize: 28,

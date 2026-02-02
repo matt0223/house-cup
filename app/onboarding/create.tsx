@@ -18,9 +18,11 @@ import { useTheme } from '../../src/theme/useTheme';
 import { Button, ColorPicker, OnboardingHeader } from '../../src/components/ui';
 import { availableCompetitorColors } from '../../src/domain/models/Competitor';
 import { useFirebase } from '../../src/providers/FirebaseProvider';
+import { useHouseholdStore } from '../../src/store';
 import { shareHouseholdInvite } from '../../src/utils/shareInvite';
 import { updateHousehold } from '../../src/services/firebase/householdService';
 import { useStepAnimation } from '../../src/hooks';
+import { isPendingCompetitor } from '../../src/domain/models/Competitor';
 
 /**
  * Onboarding create flow.
@@ -32,7 +34,7 @@ import { useStepAnimation } from '../../src/hooks';
 export default function OnboardingCreateScreen() {
   const { colors, spacing, typography, radius } = useTheme();
   const router = useRouter();
-  const { createHousehold, householdId } = useFirebase();
+  const { createHousehold, householdId, markInviteSent } = useFirebase();
 
   // Step state
   const [step, setStep] = useState(1);
@@ -43,6 +45,7 @@ export default function OnboardingCreateScreen() {
 
   // Form state - Step 2: Housemate invite
   const [housemateName, setHousemateName] = useState('');
+  const [housemateColor, setHousemateColor] = useState(availableCompetitorColors[0].hex); // Purple (different from default teal)
   const [hasSharedInvite, setHasSharedInvite] = useState(false);
   const [isSendingInvite, setIsSendingInvite] = useState(false);
   const [storedJoinCode, setStoredJoinCode] = useState<string | null>(null);
@@ -98,10 +101,12 @@ export default function OnboardingCreateScreen() {
       // Create household if not already created
       if (!householdCreated) {
         const pendingName = housemateName.trim() || undefined;
+        const pendingColor = pendingName ? housemateColor : undefined;
         joinCode = await createHousehold(
           yourName.trim(),
           yourColor,
           pendingName,
+          pendingColor,
           'Winner picks dinner!' // Default prize, will be updated in Step 3
         );
         if (joinCode) {
@@ -119,6 +124,13 @@ export default function OnboardingCreateScreen() {
         );
         if (shared) {
           setHasSharedInvite(true);
+          
+          // Mark the pending competitor as invited
+          const household = useHouseholdStore.getState().household;
+          const pendingCompetitor = household?.competitors.find(isPendingCompetitor);
+          if (pendingCompetitor) {
+            await markInviteSent(pendingCompetitor.id);
+          }
         }
       }
     } catch (err) {
@@ -143,10 +155,12 @@ export default function OnboardingCreateScreen() {
         await updateHousehold(householdId, { prize: finalPrize });
       } else {
         // Create household with all data
+        const pendingColor = pendingName ? housemateColor : undefined;
         await createHousehold(
           yourName.trim(),
           yourColor,
           pendingName,
+          pendingColor,
           finalPrize
         );
       }
@@ -161,8 +175,9 @@ export default function OnboardingCreateScreen() {
   };
 
   const handleSkipInvite = () => {
-    // Skip invite step and go to prize
+    // Skip invite step and go to prize - clear housemate data
     setHousemateName('');
+    setHousemateColor(availableCompetitorColors[0].hex);
     handleContinue();
   };
 
@@ -209,7 +224,7 @@ export default function OnboardingCreateScreen() {
         <ColorPicker
           selectedColor={yourColor}
           onColorSelect={setYourColor}
-          unavailableColors={[]}
+          unavailableColors={housemateColor ? [housemateColor] : []}
         />
       </View>
 
@@ -231,7 +246,10 @@ export default function OnboardingCreateScreen() {
         Enter their name for a personalized invite
       </Text>
 
-      <View style={[styles.inputContainer, { marginBottom: spacing.lg }]}>
+      <View style={[styles.inputContainer, { marginBottom: spacing.md }]}>
+        <Text style={[typography.callout, { color: colors.textSecondary, marginBottom: spacing.xs }]}>
+          Their name
+        </Text>
         <TextInput
           ref={housemateInputRef}
           style={[
@@ -253,7 +271,7 @@ export default function OnboardingCreateScreen() {
               setHasSharedInvite(false);
             }
           }}
-          placeholder="Their name"
+          placeholder="Enter their name"
           placeholderTextColor={colors.textSecondary}
           autoCapitalize="words"
           autoCorrect={false}
@@ -261,6 +279,20 @@ export default function OnboardingCreateScreen() {
           editable={!isSendingInvite}
         />
       </View>
+
+      {/* Color picker for housemate - only show when name is entered */}
+      {housemateName.trim().length > 0 && (
+        <View style={{ marginBottom: spacing.lg }}>
+          <Text style={[typography.callout, { color: colors.textSecondary, marginBottom: spacing.sm }]}>
+            Pick their color
+          </Text>
+          <ColorPicker
+            selectedColor={housemateColor}
+            onColorSelect={setHousemateColor}
+            unavailableColors={[yourColor]}
+          />
+        </View>
+      )}
 
       {/* Send Invite Button */}
       {hasSharedInvite ? (

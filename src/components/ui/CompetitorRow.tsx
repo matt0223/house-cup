@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, ReactNode } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
@@ -20,6 +20,16 @@ export interface CompetitorRowProps {
   unavailableColors?: string[];
   /** Show divider below */
   showDivider?: boolean;
+  /** Status label to show (e.g., "Invite Sent") */
+  statusLabel?: string;
+  /** Action element to render (e.g., Resend Invite button) */
+  actionElement?: ReactNode;
+  /** Placeholder text for name input */
+  placeholder?: string;
+  /** Called when name input gains focus */
+  onFocus?: () => void;
+  /** Called when name input loses focus */
+  onBlur?: () => void;
 }
 
 /**
@@ -33,6 +43,11 @@ export function CompetitorRow({
   onToggleExpand,
   unavailableColors = [],
   showDivider = true,
+  statusLabel,
+  actionElement,
+  placeholder = 'Enter name',
+  onFocus,
+  onBlur,
 }: CompetitorRowProps) {
   const { colors, typography, spacing, radius } = useTheme();
   const nameInputRef = useRef<TextInput>(null);
@@ -84,31 +99,42 @@ export function CompetitorRow({
           </View>
         </TouchableOpacity>
 
-        {/* Name input */}
-        <TextInput
-          ref={nameInputRef}
-          style={[
-            typography.body,
-            styles.nameInput,
-            { color: colors.textPrimary },
-          ]}
-          value={competitor.name}
-          onChangeText={onNameChange}
-          placeholder="Enter name"
-          placeholderTextColor={colors.textSecondary}
-        />
-
-        {/* Edit indicator - tappable to focus name input */}
-        <TouchableOpacity
-          onPress={() => nameInputRef.current?.focus()}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Ionicons
-            name="pencil"
-            size={18}
-            color={colors.textSecondary}
+        {/* Name and status */}
+        <View style={styles.nameContainer}>
+          <TextInput
+            ref={nameInputRef}
+            style={[
+              typography.body,
+              styles.nameInput,
+              { color: colors.textPrimary },
+            ]}
+            value={competitor.name}
+            onChangeText={onNameChange}
+            placeholder={placeholder}
+            placeholderTextColor={colors.textSecondary}
+            onFocus={onFocus}
+            onBlur={onBlur}
           />
-        </TouchableOpacity>
+          {statusLabel && (
+            <Text style={[typography.caption, { color: colors.textSecondary }]}>
+              {statusLabel}
+            </Text>
+          )}
+        </View>
+
+        {/* Action element or edit indicator */}
+        {actionElement || (
+          <TouchableOpacity
+            onPress={() => nameInputRef.current?.focus()}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons
+              name="pencil"
+              size={18}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Color picker (expanded) */}
@@ -176,10 +202,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1.5,
   },
-  nameInput: {
+  nameContainer: {
     flex: 1,
     marginLeft: 12,
-    paddingVertical: 8,
+  },
+  nameInput: {
+    paddingVertical: 4,
   },
   colorPickerContainer: {},
   divider: {

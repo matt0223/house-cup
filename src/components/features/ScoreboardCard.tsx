@@ -3,12 +3,12 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
 import { Card } from '../ui/Card';
-import { Competitor } from '../../domain/models/Competitor';
+import { Competitor, isPendingCompetitor } from '../../domain/models/Competitor';
 
 export interface ScoreboardCardProps {
   /** First competitor (always present) */
   competitorA: Competitor;
-  /** Second competitor (optional - may not have joined yet) */
+  /** Second competitor (optional - may not exist yet) */
   competitorB?: Competitor;
   /** Score for first competitor */
   scoreA: number;
@@ -16,9 +16,7 @@ export interface ScoreboardCardProps {
   scoreB: number;
   /** Prize text */
   prize: string;
-  /** Name of pending housemate (for invite button text) */
-  pendingHousemateName?: string;
-  /** Callback when invite button is pressed */
+  /** Callback when invite button is pressed (for pending competitor) */
   onInvitePress?: () => void;
 }
 
@@ -41,19 +39,35 @@ export function ScoreboardCard({
   scoreA,
   scoreB,
   prize,
-  pendingHousemateName,
   onInvitePress,
 }: ScoreboardCardProps) {
   const { colors, typography, spacing, radius } = useTheme();
 
   const renderRightColumn = () => {
     if (competitorB) {
-      // Show competitor B's score - mirrors left column structure
+      const isPending = isPendingCompetitor(competitorB);
+      
+      // Show competitor B's name + score, with paper-plane icon if pending
       return (
         <View style={[styles.competitorColumn, styles.rightColumn]}>
-          <Text style={[typography.callout, { color: colors.textSecondary }]}>
-            {competitorB.name}
-          </Text>
+          <View style={styles.nameRow}>
+            <Text style={[typography.callout, { color: colors.textSecondary }]}>
+              {competitorB.name}
+            </Text>
+            {isPending && onInvitePress && (
+              <TouchableOpacity
+                onPress={onInvitePress}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={{ marginLeft: spacing.xxs }}
+              >
+                <Ionicons
+                  name="paper-plane-outline"
+                  size={16}
+                  color={colors.primary}
+                />
+              </TouchableOpacity>
+            )}
+          </View>
           <Text style={[typography.display, { color: competitorB.color }]}>
             {scoreB}
           </Text>
@@ -61,7 +75,7 @@ export function ScoreboardCard({
       );
     }
 
-    // Show "Housemate" label + circular invite button - mirrors left column structure
+    // Fallback: No competitor B at all - show "Housemate" label + Add button
     return (
       <View style={[styles.competitorColumn, styles.rightColumn]}>
         <Text style={[typography.callout, { color: colors.textSecondary }]}>
@@ -174,6 +188,10 @@ const styles = StyleSheet.create({
   },
   rightColumn: {
     alignItems: 'flex-end',
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   centerSpacer: {
     flex: 1,

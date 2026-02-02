@@ -8,6 +8,8 @@ This file provides quick context for AI assistants working on this codebase.
 
 The repository contains the React Native app code. Push changes to `main` branch.
 
+**TestFlight:** App is deployed to TestFlight for beta testing.
+
 ## What is House Cup?
 
 A React Native mobile app for iOS that gamifies household chores between two partners. Each week is a "challenge" where partners earn points for completing tasks, competing for a prize.
@@ -20,6 +22,7 @@ A React Native mobile app for iOS that gamifies household chores between two par
 - **Zustand 5** - State management (3 stores: household, challenge, recurring)
 - **Firebase JS SDK** - Real-time sync and persistence (web SDK, works with Expo Go)
 - **Firebase Auth** - Anonymous authentication
+- **EAS Build** - Expo Application Services for TestFlight builds
 - **Ionicons** - Icon library (use `@expo/vector-icons`)
 
 ## Critical Patterns
@@ -68,11 +71,16 @@ export { MyNewComponent } from './MyNewComponent';
 | Main screen | `app/index.tsx` |
 | Theme colors | `src/theme/colors.ts` |
 | Task model | `src/domain/models/TaskInstance.ts` |
+| Competitor model | `src/domain/models/Competitor.ts` |
 | Challenge state | `src/store/useChallengeStore.ts` |
 | Settings screen | `app/settings.tsx` |
+| Onboarding index | `app/onboarding/index.tsx` |
+| Create household | `app/onboarding/create.tsx` |
+| Join household | `app/onboarding/join.tsx` |
 | Firebase config | `src/services/firebase/firebaseConfig.ts` |
 | Firestore sync hook | `src/hooks/useFirestoreSync.ts` |
 | Firebase provider | `src/providers/FirebaseProvider.tsx` |
+| Household service | `src/services/firebase/householdService.ts` |
 | Firebase setup guide | `docs/FIREBASE_SETUP.md` |
 
 ## Common Tasks
@@ -92,6 +100,20 @@ export { MyNewComponent } from './MyNewComponent';
 2. Export from `src/domain/services/index.ts`
 3. Add tests in `src/domain/__tests__/`
 
+### Modifying Firebase Data Model
+1. Update interface in `src/domain/models/`
+2. Update Firestore service in `src/services/firebase/`
+3. Update sample data if needed
+4. Check if Firestore security rules need updating
+
+### Building for TestFlight
+```bash
+cd rn-app
+eas build --platform ios --profile production
+eas submit --platform ios
+```
+Then approve in App Store Connect TestFlight tab.
+
 ## Design Opinions (Follow These)
 
 1. **Warm, inviting aesthetic** - Cream backgrounds, coral accent
@@ -104,7 +126,7 @@ export { MyNewComponent } from './MyNewComponent';
 ## Current State (January 2026)
 
 ### Completed
-- Scoreboard with weekly competition
+- Scoreboard with weekly competition (collapsible with scroll animation)
 - Day strip navigation
 - Task list with point circles
 - Add/edit task bottom sheet
@@ -114,14 +136,42 @@ export { MyNewComponent } from './MyNewComponent';
 - Firebase/Firestore real-time sync
 - Anonymous authentication
 - Optimistic UI updates with background sync
+- **Onboarding flow** (3 steps: your profile, invite housemate, set prize)
+- **Join flow** (2 steps: enter code, set up profile)
+- **Pending housemate feature** - Create competitors upfront, log points before they join
+- **TestFlight deployment** - App is live on TestFlight
 
 ### In Progress
-- Firebase integration using JS SDK (switched from native SDK due to iOS 26 compatibility)
+- Stats & History screen
 
 ### Planned
-- Stats & History screen
-- Onboarding flow
-- Household join flow UI
+- Push notifications for reminders
+- Achievements and streaks
+
+## Pending Housemate Feature (Important!)
+
+When a user creates a household and invites a housemate:
+
+1. **Both competitors are created immediately** - The housemate gets a `Competitor` with name + color but no `userId`
+2. **Points can be logged for pending housemate** - They appear on scoreboard with their score
+3. **Paper-plane icon** - Shows next to pending housemate's name for resending invites
+4. **When housemate joins** - Their `userId` is linked to the existing competitor (not creating a new one)
+
+### Data Model
+
+```typescript
+interface Competitor {
+  id: string;
+  name: string;
+  color: string;
+  userId?: string;  // undefined = pending (hasn't joined)
+}
+
+// Helper function
+isPendingCompetitor(competitor): boolean  // returns !competitor.userId
+```
+
+**Note:** `Household.pendingHousemateName` has been REMOVED. The pending housemate's name is stored in their `Competitor` object.
 
 ## Gotchas
 
@@ -133,7 +183,10 @@ export { MyNewComponent } from './MyNewComponent';
 6. **Offline mode** - Without Firebase env vars, app runs locally with sample data
 7. **Optimistic updates** - Stores update immediately, then sync to Firestore in background
 8. **syncEnabled flag** - Each store has a `syncEnabled` flag that controls Firestore writes
-9. **Firestore Security Rules** - After changes that add new collections or subcollections, remind user to update Firebase Console rules. Current required rules:
+9. **Pending competitor has no userId** - Check with `isPendingCompetitor(competitor)` helper
+10. **Join flow claims existing competitor** - Uses `claimCompetitorSlot()`, not `addCompetitorToHousehold()`
+11. **Onboarding redirects** - `app/index.tsx` redirects to `/onboarding` if no `householdId`
+12. **Firestore Security Rules** - After changes that add new collections or subcollections, remind user to update Firebase Console rules. Current required rules:
 
 ```
 rules_version = '2';

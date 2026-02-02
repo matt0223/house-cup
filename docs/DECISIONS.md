@@ -279,6 +279,119 @@ Create ThemeContext that:
 
 ---
 
+## ADR-012: Firebase JS SDK (Not Native)
+
+**Date:** January 2026  
+**Status:** Active
+
+### Context
+Needed to implement Firebase for real-time sync and authentication.
+
+### Decision
+Use Firebase JS SDK (`firebase` package) instead of React Native Firebase (`@react-native-firebase/*`).
+
+### Rationale
+- Works with Expo Go (no native build required during development)
+- Simpler setup via environment variables
+- Compatible with EAS Build for production
+- Sufficient for our needs (Firestore, Anonymous Auth)
+
+### Consequences
+- (+) Works in Expo Go for rapid development
+- (+) Simpler configuration
+- (+) No GoogleService-Info.plist required in git
+- (-) No access to native-only Firebase features (e.g., Analytics, Crashlytics)
+
+---
+
+## ADR-013: Pending Housemate Data Model
+
+**Date:** January 2026  
+**Status:** Active
+
+### Context
+When Person A creates a household and invites Person B, we needed a way to:
+1. Let Person A log tasks for Person B before they join
+2. Show Person B's name/color on the scoreboard
+3. Link Person B's account when they join
+
+### Decision
+Create both competitors upfront when household is created:
+- Competitor A: Has `userId` (Person A is logged in)
+- Competitor B: No `userId` (pending until they join)
+
+When Person B joins, they "claim" the existing competitor by linking their `userId`.
+
+### Rationale
+- Points can be logged immediately for pending housemate
+- Single competitor record throughout (not created on join)
+- Clean data model: `!competitor.userId` = pending
+- Removed `pendingHousemateName` field (redundant)
+
+### Consequences
+- (+) Seamless experience for Person A (log tasks immediately)
+- (+) Person B sees existing points when joining
+- (+) Single source of truth for competitor data
+- (-) Slightly more complex join logic (claim vs. create)
+
+---
+
+## ADR-014: Optimistic UI Updates
+
+**Date:** January 2026  
+**Status:** Active
+
+### Context
+Users expected instant feedback when adding/editing tasks, but Firebase writes have latency.
+
+### Decision
+Implement optimistic updates:
+1. Update local Zustand state immediately
+2. Write to Firestore in background
+3. If Firestore write fails, state is still correct (Firestore sync will reconcile)
+
+### Rationale
+- App feels instant and responsive
+- Works offline (local state persists)
+- Firebase real-time listeners handle sync
+- Each store has `syncEnabled` flag to control writes
+
+### Consequences
+- (+) Instant UI feedback
+- (+) Works offline
+- (+) Simple mental model for developers
+- (-) Potential for brief inconsistency if device goes offline mid-write
+
+---
+
+## ADR-015: Collapsible Scoreboard with Scroll Animation
+
+**Date:** January 2026  
+**Status:** Active
+
+### Context
+The scoreboard took significant vertical space, leaving less room for the task list.
+
+### Decision
+Implement a collapsible scoreboard that animates based on scroll position:
+- Expanded: Full `ScoreboardCard` with prize circle and text
+- Collapsed: Compact `MiniScoreboard` with just scores and trophy icon
+- Smooth crossfade animation tied to scroll Y value
+
+### Rationale
+- More vertical space for task list when scrolled
+- Prize details visible at rest (top of scroll)
+- Scores always visible in both states
+- Delightful scroll-linked animation
+
+### Consequences
+- (+) Better use of vertical space
+- (+) Engaging micro-interaction
+- (+) Scores always accessible
+- (-) More complex component structure (two views, animation logic)
+
+---
+
 ## Template for New Decisions
 
 ```markdown

@@ -55,7 +55,6 @@ function docToHousehold(
     prize: data.prize,
     themePreference: data.themePreference as ThemePreference | undefined,
     joinCode: data.joinCode,
-    pendingHousemateName: data.pendingHousemateName,
     createdAt: data.createdAt?.toDate?.()?.toISOString() ?? data.createdAt,
   };
 }
@@ -123,7 +122,7 @@ export async function updateHousehold(
 export async function updateCompetitor(
   householdId: string,
   competitorIndex: number,
-  updates: Partial<Pick<Competitor, 'name' | 'color'>>
+  updates: Partial<Pick<Competitor, 'name' | 'color' | 'inviteSentAt'>>
 ): Promise<void> {
   const ref = getHouseholdRef(householdId);
   if (!ref) {
@@ -151,6 +150,82 @@ export async function updateCompetitor(
 }
 
 /**
+ * Mark a pending competitor as invited by setting inviteSentAt timestamp
+ */
+export async function markCompetitorInvited(
+  householdId: string,
+  competitorId: string
+): Promise<void> {
+  const ref = getHouseholdRef(householdId);
+  if (!ref) {
+    throw new Error('Firestore is not configured');
+  }
+
+  const docSnap = await getDoc(ref);
+  const data = docSnap.data();
+
+  if (!data?.competitors) {
+    throw new Error('Household not found or has no competitors');
+  }
+
+  const competitors = [...data.competitors] as Competitor[];
+  const competitorIndex = competitors.findIndex(c => c.id === competitorId);
+  
+  if (competitorIndex === -1) {
+    throw new Error('Competitor not found');
+  }
+
+  competitors[competitorIndex] = {
+    ...competitors[competitorIndex],
+    inviteSentAt: new Date().toISOString(),
+  };
+
+  await updateDoc(ref, { competitors });
+}
+
+/**
+ * Add a pending competitor to the household (for adding housemate from Settings)
+ */
+export async function addPendingCompetitor(
+  householdId: string,
+  competitor: Competitor
+): Promise<Household> {
+  const ref = getHouseholdRef(householdId);
+  if (!ref) {
+    throw new Error('Firestore is not configured');
+  }
+
+  const docSnap = await getDoc(ref);
+  const data = docSnap.data();
+
+  if (!data) {
+    throw new Error('Household not found');
+  }
+
+  const existingCompetitors = data.competitors as Competitor[];
+  
+  // Check if household already has 2 competitors
+  if (existingCompetitors.length >= 2) {
+    throw new Error('Household already has 2 competitors');
+  }
+
+  const updatedCompetitors = [...existingCompetitors, competitor];
+
+  await updateDoc(ref, { competitors: updatedCompetitors });
+
+  return {
+    id: householdId,
+    competitors: updatedCompetitors,
+    timezone: data.timezone,
+    weekStartDay: data.weekStartDay,
+    prize: data.prize,
+    themePreference: data.themePreference,
+    joinCode: data.joinCode,
+    createdAt: data.createdAt?.toDate?.()?.toISOString() ?? data.createdAt,
+  };
+}
+
+/**
  * Add a member to the household (for join flow)
  */
 export async function addMemberToHousehold(
@@ -167,13 +242,14 @@ export async function addMemberToHousehold(
 }
 
 /**
- * Add the second competitor to the household (when housemate joins)
- * Also adds the user to memberIds and clears pendingHousemateName
+ * Claim a pending competitor slot (when housemate joins)
+ * Links the userId to an existing pending competitor and optionally updates name/color
  */
-export async function addCompetitorToHousehold(
+export async function claimCompetitorSlot(
   householdId: string,
-  competitor: Competitor,
-  userId: string
+  pendingCompetitorId: string,
+  userId: string,
+  updates?: { name?: string; color?: string }
 ): Promise<Household> {
   const ref = getHouseholdRef(householdId);
   if (!ref) {
@@ -187,25 +263,29 @@ export async function addCompetitorToHousehold(
     throw new Error('Household not found');
   }
 
-  const existingCompetitors = data.competitors as Competitor[];
+  const competitors = [...data.competitors] as Competitor[];
+  const pendingIndex = competitors.findIndex(c => c.id === pendingCompetitorId);
   
-  // Check if household is full
-  if (existingCompetitors.length >= 2) {
-    throw new Error('Household is full');
+  if (pendingIndex === -1) {
+    throw new Error('Pending competitor not found');
   }
 
-  // Add the new competitor
-  const updatedCompetitors = [...existingCompetitors, competitor];
+  // Claim the slot by setting userId and optionally updating name/color
+  competitors[pendingIndex] = {
+    ...competitors[pendingIndex],
+    userId,
+    ...(updates?.name ? { name: updates.name } : {}),
+    ...(updates?.color ? { color: updates.color } : {}),
+  };
 
   await updateDoc(ref, {
-    competitors: updatedCompetitors,
+    competitors,
     memberIds: arrayUnion(userId),
-    pendingHousemateName: null, // Clear pending name
   });
 
   return {
     id: householdId,
-    competitors: updatedCompetitors,
+    competitors,
     timezone: data.timezone,
     weekStartDay: data.weekStartDay,
     prize: data.prize,

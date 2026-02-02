@@ -24,7 +24,7 @@ export interface Household {
 
   /**
    * The competitors in this household.
-   * Starts with 1 competitor when created, becomes 2 when housemate joins.
+   * Can be 1 or 2 competitors. If 2 and one has no userId, they're pending.
    */
   competitors: Competitor[] | [Competitor, Competitor];
 
@@ -43,9 +43,6 @@ export interface Household {
   /** Short code for partner to join */
   joinCode?: string;
 
-  /** Name of invited housemate (before they join) */
-  pendingHousemateName?: string;
-
   /** When the household was created */
   createdAt: string;
 }
@@ -54,8 +51,8 @@ export interface Household {
 export const sampleHousehold: Household = {
   id: 'household-1',
   competitors: [
-    { id: 'competitor-a', name: 'Pri', color: '#9B7FD1' },
-    { id: 'competitor-b', name: 'Matt', color: '#5B9BD5' },
+    { id: 'competitor-a', name: 'Pri', color: '#9B7FD1', userId: 'user-1' },
+    { id: 'competitor-b', name: 'Matt', color: '#5B9BD5', userId: 'user-2' },
   ],
   timezone: 'America/New_York',
   weekStartDay: 0, // Sunday

@@ -16,6 +16,8 @@ House Cup gamifies household responsibilities by letting two partners earn point
 | Language | TypeScript 5.9 |
 | Navigation | Expo Router 6 |
 | State Management | Zustand 5 |
+| Backend | Firebase (Firestore + Anonymous Auth) |
+| Build | EAS Build (TestFlight deployment) |
 | Gestures | react-native-gesture-handler + reanimated |
 | Testing | Jest |
 
@@ -27,7 +29,12 @@ rn-app/
 │   ├── _layout.tsx        # Root layout with ThemeProvider
 │   ├── index.tsx          # Main Challenge screen
 │   ├── history.tsx        # Stats & History screen (placeholder)
-│   └── settings.tsx       # Settings screen
+│   ├── settings.tsx       # Settings screen
+│   └── onboarding/        # Onboarding flow
+│       ├── _layout.tsx    # Onboarding stack layout
+│       ├── index.tsx      # Landing (Create/Join choice)
+│       ├── create.tsx     # 3-step household creation
+│       └── join.tsx       # 2-step join via code
 │
 ├── src/
 │   ├── components/
@@ -65,6 +72,20 @@ rn-app/
 │   │   ├── useHouseholdStore.ts  # Household + settings
 │   │   ├── useChallengeStore.ts  # Current challenge + tasks
 │   │   └── useRecurringStore.ts  # Recurring templates
+│   │
+│   ├── services/          # External service integrations
+│   │   └── firebase/      # Firestore services
+│   │       ├── firebaseConfig.ts    # Firebase initialization
+│   │       ├── householdService.ts  # Household CRUD
+│   │       ├── challengeService.ts  # Challenge CRUD
+│   │       └── taskService.ts       # Task CRUD
+│   │
+│   ├── providers/         # React context providers
+│   │   └── FirebaseProvider.tsx  # Auth + household management
+│   │
+│   ├── hooks/             # Custom React hooks
+│   │   ├── useFirestoreSync.ts   # Real-time Firestore sync
+│   │   └── useStepAnimation.ts   # Onboarding step transitions
 │   │
 │   └── theme/             # Design system
 │       ├── colors.ts      # Color tokens (light/dark)
@@ -170,11 +191,11 @@ This is stored in `household.themePreference` and provided via `ThemeContext`.
 
 ## Architecture Decisions
 
-### 1. Local-First Strategy
+### 1. Local-First Strategy with Firebase Sync
 
-**Decision:** All data is stored locally first. Firebase/backend is planned for sync but not yet implemented.
+**Decision:** All data is stored locally first with optimistic updates. Firebase Firestore provides real-time sync.
 
-**Rationale:** Ensures the app works reliably offline and feels instant. Sync can be added later without changing the core architecture.
+**Rationale:** Ensures the app works reliably offline and feels instant. Firebase JS SDK enables real-time sync across devices without native builds.
 
 ### 2. Domain-Driven Design
 
@@ -226,7 +247,7 @@ This is stored in `household.themePreference` and provided via `ThemeContext`.
 
 ## Current Features (v1.0)
 
-- [x] Scoreboard with weekly scores and prize
+- [x] Scoreboard with weekly scores and prize (collapsible with scroll animation)
 - [x] Day strip for navigating the week
 - [x] Task list with competitor point circles
 - [x] Add/edit tasks via bottom sheet
@@ -235,19 +256,23 @@ This is stored in `household.themePreference` and provided via `ThemeContext`.
 - [x] Settings screen (competitors, week end day, prize, theme)
 - [x] Theme preference (system/light/dark)
 - [x] Repeat icon indicator on recurring tasks
+- [x] **Firebase real-time sync** - Multi-device support
+- [x] **Anonymous authentication** - No sign-up required
+- [x] **Onboarding flow** - 3-step household creation
+- [x] **Join flow** - Partner invitation via 6-character code
+- [x] **Pending housemate** - Log tasks for invitee before they join
+- [x] **TestFlight deployment** - App available for beta testing
 
 ## Planned Features
 
 ### v1.1
 - [ ] Stats & History screen with charts
-- [ ] Onboarding flow (competitor setup)
 - [ ] Push notifications for reminders
 
 ### Future
-- [ ] Firebase sync for multi-device
-- [ ] Partner invitation via join code
 - [ ] Task suggestions/templates library
 - [ ] Achievements and streaks
+- [ ] Weekly summary notifications
 
 ## Development
 
@@ -287,12 +312,18 @@ npm run test:watch # Watch mode
 | What | Where |
 |------|-------|
 | Main screen | `app/index.tsx` |
+| Settings screen | `app/settings.tsx` |
+| Onboarding (create) | `app/onboarding/create.tsx` |
+| Onboarding (join) | `app/onboarding/join.tsx` |
 | Theme colors | `src/theme/colors.ts` |
 | Typography | `src/theme/typography.ts` |
 | Task data model | `src/domain/models/TaskInstance.ts` |
+| Competitor model | `src/domain/models/Competitor.ts` |
 | Scoring logic | `src/domain/services/scoring.ts` |
 | Task seeding | `src/domain/services/seeding.ts` |
 | Challenge state | `src/store/useChallengeStore.ts` |
+| Firebase provider | `src/providers/FirebaseProvider.tsx` |
+| Household service | `src/services/firebase/householdService.ts` |
 | Add/Edit sheet | `src/components/features/AddTaskSheet.tsx` |
 
 ## Contributing
@@ -307,4 +338,4 @@ When making changes:
 
 ---
 
-*Last updated: January 2026*
+*Last updated: January 29, 2026*

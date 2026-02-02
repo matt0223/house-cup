@@ -6,8 +6,6 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  Pressable,
-  Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -23,8 +21,9 @@ import {
 } from '../src/components/ui';
 import { useHouseholdStore } from '../src/store';
 import { WeekStartDay } from '../src/domain/models/Household';
+import { isPendingCompetitor, hasBeenInvited, availableCompetitorColors } from '../src/domain/models/Competitor';
+import { useFirebase } from '../src/providers/FirebaseProvider';
 import Constants from 'expo-constants';
-import * as Clipboard from 'expo-clipboard';
 import { shareHouseholdInvite } from '../src/utils/shareInvite';
 
 /** Day options for picker */
@@ -52,6 +51,7 @@ const THEME_OPTIONS: { id: ThemePreference; label: string }[] = [
 export default function SettingsScreen() {
   const { colors, typography, spacing, radius } = useTheme();
   const router = useRouter();
+  const { markInviteSent, addHousemate } = useFirebase();
 
   // Household store
   const household = useHouseholdStore((s) => s.household);
@@ -64,34 +64,96 @@ export default function SettingsScreen() {
   const [prizeText, setPrizeText] = useState(household?.prize ?? '');
   const [showEndDayPicker, setShowEndDayPicker] = useState(false);
   const [showThemePicker, setShowThemePicker] = useState(false);
-  const [copied, setCopied] = useState(false);
 
-  // Handle copying join code to clipboard
-  const handleCopyCode = async () => {
-    if (household?.joinCode) {
-      await Clipboard.setStringAsync(household.joinCode);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
+  // State for new housemate (when no competitorB exists)
+  const competitorAColor = household?.competitors[0]?.color;
+  const defaultHousemateColor: string = availableCompetitorColors.find(
+    c => c.hex !== competitorAColor
+  )?.hex || availableCompetitorColors[0].hex;
+  
+  const [newHousemateName, setNewHousemateName] = useState('');
+  const [newHousemateColor, setNewHousemateColor] = useState<string>(defaultHousemateColor);
+  const [isHousemateNameFocused, setIsHousemateNameFocused] = useState(false);
+  const [isSendingInvite, setIsSendingInvite] = useState(false);
 
-  // Handle sharing invite
-  const handleShareInvite = useCallback(() => {
+  // Handle sharing invite for existing pending competitor
+  const handleShareInvite = useCallback(async () => {
     if (!household || !household.competitors[0]) return;
     
-    shareHouseholdInvite(
+    // Find pending competitor (one without userId)
+    const pendingCompetitor = household.competitors.find(c => isPendingCompetitor(c));
+    
+    const shared = await shareHouseholdInvite(
       household.competitors[0].name,
-      household.pendingHousemateName,
+      pendingCompetitor?.name,
       household.joinCode || ''
     );
-  }, [household]);
+    
+    // Mark as invited if share was successful
+    if (shared && pendingCompetitor) {
+      await markInviteSent(pendingCompetitor.id);
+    }
+  }, [household, markInviteSent]);
+
+  // Handle sending invite for new housemate (creates competitor first)
+  const handleSendNewInvite = useCallback(async () => {
+    if (!household || !newHousemateName.trim()) return;
+    
+    setIsSendingInvite(true);
+    try {
+      // Create the competitor first
+      const newCompetitor = await addHousemate(newHousemateName.trim(), newHousemateColor);
+      
+      // Then open share sheet
+      const shared = await shareHouseholdInvite(
+        household.competitors[0].name,
+        newHousemateName.trim(),
+        household.joinCode || ''
+      );
+      
+      // Mark as invited if share was successful
+      if (shared) {
+        await markInviteSent(newCompetitor.id);
+      }
+      
+      // Clear the input
+      setNewHousemateName('');
+    } catch (err) {
+      console.error('Failed to send invite:', err);
+    } finally {
+      setIsSendingInvite(false);
+    }
+  }, [household, newHousemateName, newHousemateColor, addHousemate, markInviteSent]);
+
+  // Auto-save new housemate on blur (when name field loses focus)
+  const handleNewHousemateBlur = useCallback(async () => {
+    setIsHousemateNameFocused(false);
+    
+    // Only auto-save if there's a valid name and we're not already sending an invite
+    if (!household || !newHousemateName.trim() || isSendingInvite) return;
+    
+    try {
+      // Create the competitor (they'll show as "Not yet invited")
+      await addHousemate(newHousemateName.trim(), newHousemateColor);
+      
+      // Clear the input since competitor now exists
+      setNewHousemateName('');
+    } catch (err) {
+      console.error('Failed to save housemate:', err);
+    }
+  }, [household, newHousemateName, newHousemateColor, isSendingInvite, addHousemate]);
 
   // Theme from household store
   const selectedTheme = household?.themePreference ?? 'system';
 
   const competitorA = household?.competitors[0];
   const competitorB = household?.competitors[1];
-  const hasPendingHousemate = !competitorB && household?.pendingHousemateName;
+  
+  // Check if competitorB exists but is pending (no userId)
+  const isPendingHousemate = competitorB ? isPendingCompetitor(competitorB) : false;
+  
+  // Check if pending housemate has been invited
+  const hasInviteBeenSent = competitorB ? hasBeenInvited(competitorB) : false;
 
   // Calculate competition end day from weekStartDay
   // End day is the day before the start day
@@ -141,8 +203,7 @@ export default function SettingsScreen() {
         leftAction={{ icon: 'chevron-back', onPress: () => router.back() }}
       />
 
-      <Pressable style={{ flex: 1 }} onPress={Keyboard.dismiss}>
-        <ScrollView
+      <ScrollView
           style={styles.scrollView}
           contentContainerStyle={[
             styles.scrollContent,
@@ -165,8 +226,8 @@ export default function SettingsScreen() {
                   editingCompetitor === competitorA.id ? null : competitorA.id
                 )
               }
-              unavailableColors={[competitorB?.color ?? '']}
-              showDivider={!!competitorB || !!hasPendingHousemate}
+              unavailableColors={[competitorB?.color ?? newHousemateColor]}
+              showDivider={true}
             />
           )}
           {competitorB ? (
@@ -182,63 +243,92 @@ export default function SettingsScreen() {
               }
               unavailableColors={[competitorA?.color ?? '']}
               showDivider={false}
+              statusLabel={
+                isPendingHousemate
+                  ? hasInviteBeenSent
+                    ? 'Invite Sent'
+                    : 'Not yet invited'
+                  : undefined
+              }
+              actionElement={
+                isPendingHousemate ? (
+                  <TouchableOpacity
+                    onPress={handleShareInvite}
+                    style={[
+                      styles.inviteButton,
+                      {
+                        backgroundColor: colors.primary + '15',
+                        borderRadius: radius.small,
+                        paddingHorizontal: spacing.sm,
+                        paddingVertical: spacing.xxs,
+                      },
+                    ]}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Text
+                      style={[
+                        typography.callout,
+                        { color: colors.primary, fontWeight: '600' },
+                      ]}
+                    >
+                      {hasInviteBeenSent ? 'Resend' : 'Send Invite'}
+                    </Text>
+                  </TouchableOpacity>
+                ) : undefined
+              }
             />
           ) : (
-            // Pending housemate row with invite button
-            <SettingsRow
-              label={household?.pendingHousemateName || 'Add housemate'}
-              icon="person-add"
-              iconColor={colors.primary}
+            /* Empty housemate row - for adding new housemate */
+            <CompetitorRow
+              competitor={{
+                id: 'new-housemate',
+                name: newHousemateName,
+                color: newHousemateColor,
+              }}
+              onNameChange={setNewHousemateName}
+              onColorChange={setNewHousemateColor}
+              isExpanded={editingCompetitor === 'new-housemate'}
+              onToggleExpand={() =>
+                setEditingCompetitor(
+                  editingCompetitor === 'new-housemate' ? null : 'new-housemate'
+                )
+              }
+              unavailableColors={[competitorA?.color ?? '']}
               showDivider={false}
-              value="Not joined yet"
-              rightElement={
-                <TouchableOpacity
-                  onPress={handleShareInvite}
-                  style={[
-                    styles.inviteButton,
-                    {
-                      backgroundColor: colors.primary + '15',
-                      borderRadius: radius.small,
-                      paddingHorizontal: spacing.sm,
-                      paddingVertical: spacing.xxs,
-                    },
-                  ]}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                  <Text
+              placeholder="Housemate's name"
+              onFocus={() => setIsHousemateNameFocused(true)}
+              onBlur={handleNewHousemateBlur}
+              statusLabel={undefined}
+              actionElement={
+                newHousemateName.trim() ? (
+                  <TouchableOpacity
+                    onPress={handleSendNewInvite}
+                    disabled={isSendingInvite}
                     style={[
-                      typography.callout,
-                      { color: colors.primary, fontWeight: '600' },
+                      styles.inviteButton,
+                      {
+                        backgroundColor: colors.primary + '15',
+                        borderRadius: radius.small,
+                        paddingHorizontal: spacing.sm,
+                        paddingVertical: spacing.xxs,
+                        opacity: isSendingInvite ? 0.5 : 1,
+                      },
                     ]}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
-                    Invite
-                  </Text>
-                </TouchableOpacity>
+                    <Text
+                      style={[
+                        typography.callout,
+                        { color: colors.primary, fontWeight: '600' },
+                      ]}
+                    >
+                      {isSendingInvite ? 'Sending...' : 'Send Invite'}
+                    </Text>
+                  </TouchableOpacity>
+                ) : undefined
               }
             />
           )}
-        </SettingsSection>
-
-        {/* Household Section - Join Code */}
-        <SettingsSection title="Household">
-          <SettingsRow
-            label="Join Code"
-            icon="key"
-            iconColor={iconColors.key}
-            value={household?.joinCode || 'Not available'}
-            showDivider={false}
-            rightElement={
-              household?.joinCode ? (
-                <TouchableOpacity onPress={handleCopyCode} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                  <Ionicons
-                    name={copied ? "checkmark" : "copy"}
-                    size={20}
-                    color={copied ? '#34C759' : colors.textSecondary}
-                  />
-                </TouchableOpacity>
-              ) : null
-            }
-          />
         </SettingsSection>
 
         {/* Challenge Section */}
@@ -388,8 +478,7 @@ export default function SettingsScreen() {
 
           {/* Bottom padding */}
           <View style={{ height: spacing.xxl }} />
-        </ScrollView>
-      </Pressable>
+      </ScrollView>
 
       {/* End Day Picker Modal */}
       <OptionPickerModal

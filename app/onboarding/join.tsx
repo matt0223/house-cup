@@ -14,7 +14,7 @@ import { useRouter } from 'expo-router';
 import { useTheme } from '../../src/theme/useTheme';
 import { Button, ColorPicker, OnboardingHeader } from '../../src/components/ui';
 import { useFirebase } from '../../src/providers/FirebaseProvider';
-import { availableCompetitorColors } from '../../src/domain/models/Competitor';
+import { availableCompetitorColors, isPendingCompetitor } from '../../src/domain/models/Competitor';
 import { findHouseholdByJoinCode } from '../../src/services/firebase';
 import { useStepAnimation } from '../../src/hooks';
 
@@ -40,7 +40,8 @@ export default function OnboardingJoinScreen() {
   // Step 2: Profile setup
   const [yourName, setYourName] = useState('');
   const [yourColor, setYourColor] = useState(availableCompetitorColors[0].hex); // Purple
-  const [existingCompetitorColor, setExistingCompetitorColor] = useState<string | null>(null);
+  const [inviterName, setInviterName] = useState<string | null>(null);
+  const [inviterColor, setInviterColor] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -86,31 +87,31 @@ export default function OnboardingJoinScreen() {
         return;
       }
 
-      // Check if household is full
-      if (household.competitors.length >= 2) {
-        setCodeError("This household already has two members.");
+      // Find the pending competitor (one without userId)
+      const pendingCompetitor = household.competitors.find(isPendingCompetitor);
+      
+      if (!pendingCompetitor) {
+        // No pending invite - check if household is full
+        const joinedCount = household.competitors.filter(c => c.userId).length;
+        if (joinedCount >= 2) {
+          setCodeError("This household already has two members.");
+        } else {
+          setCodeError("No pending invite found for this household.");
+        }
         setIsValidating(false);
         return;
       }
 
-      // Pre-fill name from pending invite if available
-      if (household.pendingHousemateName) {
-        setYourName(household.pendingHousemateName);
+      // Find the inviter (competitor with userId)
+      const inviter = household.competitors.find(c => c.userId);
+      if (inviter) {
+        setInviterName(inviter.name);
+        setInviterColor(inviter.color);
       }
 
-      // Store existing competitor's color so we can exclude it
-      if (household.competitors[0]) {
-        setExistingCompetitorColor(household.competitors[0].color);
-        // If our default color matches theirs, pick a different one
-        if (household.competitors[0].color === yourColor) {
-          const altColor = availableCompetitorColors.find(
-            (c) => c.hex !== household.competitors[0].color
-          );
-          if (altColor) {
-            setYourColor(altColor.hex);
-          }
-        }
-      }
+      // Pre-fill name and color from the pending competitor
+      setYourName(pendingCompetitor.name);
+      setYourColor(pendingCompetitor.color);
 
       // Move to profile setup
       setIsValidating(false);
@@ -207,10 +208,10 @@ export default function OnboardingJoinScreen() {
   const renderStep2 = () => (
     <Animated.View style={[styles.content, { opacity: fadeAnim, paddingHorizontal: spacing.lg }]}>
       <Text style={[typography.title, { color: colors.textPrimary, marginBottom: spacing.xs }]}>
-        Set up your profile
+        Welcome!
       </Text>
       <Text style={[typography.body, { color: colors.textSecondary, marginBottom: spacing.lg }]}>
-        Almost there! Just a few details.
+        {inviterName ? `${inviterName} invited you to join their household.` : 'Almost there! Just a few details.'}
       </Text>
 
       <View style={[styles.inputContainer, { marginBottom: spacing.lg }]}>
@@ -248,7 +249,7 @@ export default function OnboardingJoinScreen() {
         <ColorPicker
           selectedColor={yourColor}
           onColorSelect={setYourColor}
-          unavailableColors={existingCompetitorColor ? [existingCompetitorColor] : []}
+          unavailableColors={inviterColor ? [inviterColor] : []}
         />
       </View>
 
