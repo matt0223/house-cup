@@ -2,6 +2,12 @@
 
 This file provides quick context for AI assistants working on this codebase.
 
+## GitHub Repository
+
+**URL:** https://github.com/matt0223/house-cup.git
+
+The repository contains the React Native app code. Push changes to `main` branch.
+
 ## What is House Cup?
 
 A React Native mobile app for iOS that gamifies household chores between two partners. Each week is a "challenge" where partners earn points for completing tasks, competing for a prize.
