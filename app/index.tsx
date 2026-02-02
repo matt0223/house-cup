@@ -351,7 +351,7 @@ export default function ChallengeScreen() {
         scrollEventThrottle={16}
       >
         {/* Day Strip */}
-        <View style={{ marginTop: spacing.md + 8 }}>
+        <View style={{ marginTop: spacing.xxxs }}>
           <DayStrip
             dayKeys={weekDayKeys}
             selectedDayKey={selectedDayKey}

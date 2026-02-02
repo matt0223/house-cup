@@ -19,17 +19,19 @@ import { Button, ColorPicker, OnboardingHeader } from '../../src/components/ui';
 import { availableCompetitorColors } from '../../src/domain/models/Competitor';
 import { useFirebase } from '../../src/providers/FirebaseProvider';
 import { shareHouseholdInvite } from '../../src/utils/shareInvite';
+import { updateHousehold } from '../../src/services/firebase/householdService';
 
 /**
  * Onboarding create flow.
- * 2-step wizard:
+ * 3-step wizard:
  *   Step 1: Your name + color
- *   Step 2: Invite housemate (optional) + Prize
+ *   Step 2: Housemate name + Send invite
+ *   Step 3: Prize
  */
 export default function OnboardingCreateScreen() {
   const { colors, spacing, typography, radius } = useTheme();
   const router = useRouter();
-  const { createHousehold } = useFirebase();
+  const { createHousehold, householdId } = useFirebase();
 
   // Step state
   const [step, setStep] = useState(1);
@@ -38,12 +40,17 @@ export default function OnboardingCreateScreen() {
   const [yourName, setYourName] = useState('');
   const [yourColor, setYourColor] = useState(availableCompetitorColors[2].hex); // Teal
 
-  // Form state - Step 2: Invite + Prize
+  // Form state - Step 2: Housemate invite
   const [housemateName, setHousemateName] = useState('');
+  const [hasSharedInvite, setHasSharedInvite] = useState(false);
+  const [isSendingInvite, setIsSendingInvite] = useState(false);
+  const [storedJoinCode, setStoredJoinCode] = useState<string | null>(null);
+  const [householdCreated, setHouseholdCreated] = useState(false);
+
+  // Form state - Step 3: Prize
   const [prize, setPrize] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [hasSharedInvite, setHasSharedInvite] = useState(false);
 
   // Refs for inputs
   const housemateInputRef = useRef<TextInput>(null);
@@ -78,23 +85,58 @@ export default function OnboardingCreateScreen() {
 
   const handleContinue = () => {
     Keyboard.dismiss();
-    if (step < 2) {
+    if (step < 3) {
       animateStepChange(step + 1);
-      // Focus housemate input after animation
+      // Focus appropriate input after animation
       setTimeout(() => {
-        housemateInputRef.current?.focus();
+        if (step === 1) {
+          housemateInputRef.current?.focus();
+        } else if (step === 2) {
+          prizeInputRef.current?.focus();
+        }
       }, 200);
     }
   };
 
-  const handleShareInvite = async (joinCode: string) => {
-    const shared = await shareHouseholdInvite(
-      yourName.trim(),
-      housemateName.trim() || undefined,
-      joinCode
-    );
-    if (shared) {
-      setHasSharedInvite(true);
+  const handleSendInvite = async () => {
+    Keyboard.dismiss();
+    setIsSendingInvite(true);
+    setError(null);
+
+    try {
+      let joinCode = storedJoinCode;
+
+      // Create household if not already created
+      if (!householdCreated) {
+        const pendingName = housemateName.trim() || undefined;
+        joinCode = await createHousehold(
+          yourName.trim(),
+          yourColor,
+          pendingName,
+          'Winner picks dinner!' // Default prize, will be updated in Step 3
+        );
+        if (joinCode) {
+          setStoredJoinCode(joinCode);
+          setHouseholdCreated(true);
+        }
+      }
+
+      // Share the invite
+      if (joinCode) {
+        const shared = await shareHouseholdInvite(
+          yourName.trim(),
+          housemateName.trim() || undefined,
+          joinCode
+        );
+        if (shared) {
+          setHasSharedInvite(true);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to send invite:', err);
+      setError('Something went wrong. Try again.');
+    } finally {
+      setIsSendingInvite(false);
     }
   };
 
@@ -106,18 +148,18 @@ export default function OnboardingCreateScreen() {
     try {
       const finalPrize = prize.trim() || 'Winner picks dinner!';
       const pendingName = housemateName.trim() || undefined;
-      
-      // Create household with just your profile
-      const joinCode = await createHousehold(
-        yourName.trim(),
-        yourColor,
-        pendingName,
-        finalPrize
-      );
 
-      // If user entered a housemate name but hasn't shared yet, prompt share
-      if (pendingName && !hasSharedInvite && joinCode) {
-        await handleShareInvite(joinCode);
+      if (householdCreated && householdId) {
+        // Household was already created in Step 2, just update the prize
+        await updateHousehold(householdId, { prize: finalPrize });
+      } else {
+        // Create household with all data
+        await createHousehold(
+          yourName.trim(),
+          yourColor,
+          pendingName,
+          finalPrize
+        );
       }
 
       // Navigate to home
@@ -129,29 +171,10 @@ export default function OnboardingCreateScreen() {
     }
   };
 
-  const handleSkip = async () => {
-    // Clear housemate name and create without invite
+  const handleSkipInvite = () => {
+    // Skip invite step and go to prize
     setHousemateName('');
-    Keyboard.dismiss();
-    setIsSubmitting(true);
-    setError(null);
-
-    try {
-      const finalPrize = prize.trim() || 'Winner picks dinner!';
-      
-      await createHousehold(
-        yourName.trim(),
-        yourColor,
-        undefined, // No pending housemate
-        finalPrize
-      );
-
-      router.replace('/');
-    } catch (err) {
-      console.error('Failed to create household:', err);
-      setError('Something went wrong. Try again.');
-      setIsSubmitting(false);
-    }
+    handleContinue();
   };
 
   const canContinueStep1 = yourName.trim().length > 0;
@@ -212,7 +235,6 @@ export default function OnboardingCreateScreen() {
 
   const renderStep2 = () => (
     <Animated.View style={[styles.stepContent, { opacity: fadeAnim }]}>
-      {/* Invite Section */}
       <Text style={[typography.title, { color: colors.textPrimary, marginBottom: spacing.xs }]}>
         Invite your housemate
       </Text>
@@ -220,7 +242,7 @@ export default function OnboardingCreateScreen() {
         Enter their name for a personalized invite
       </Text>
 
-      <View style={[styles.inputContainer, { marginBottom: spacing.xl }]}>
+      <View style={[styles.inputContainer, { marginBottom: spacing.lg }]}>
         <TextInput
           ref={housemateInputRef}
           style={[
@@ -235,22 +257,77 @@ export default function OnboardingCreateScreen() {
             },
           ]}
           value={housemateName}
-          onChangeText={setHousemateName}
-          placeholder="Their name (optional)"
+          onChangeText={(text) => {
+            setHousemateName(text);
+            // Reset shared state if name changes
+            if (hasSharedInvite) {
+              setHasSharedInvite(false);
+            }
+          }}
+          placeholder="Their name"
           placeholderTextColor={colors.textSecondary}
           autoCapitalize="words"
           autoCorrect={false}
-          returnKeyType="next"
-          onSubmitEditing={() => prizeInputRef.current?.focus()}
+          returnKeyType="done"
+          editable={!isSendingInvite}
         />
       </View>
 
-      {/* Prize Section */}
-      <Text style={[typography.headline, { color: colors.textPrimary, marginBottom: spacing.xs }]}>
-        Weekly prize
+      {/* Send Invite Button */}
+      {hasSharedInvite ? (
+        <View style={[styles.inviteSentContainer, { marginBottom: spacing.xl }]}>
+          <Ionicons name="checkmark-circle" size={24} color={colors.success} />
+          <Text style={[typography.body, { color: colors.success, marginLeft: spacing.xs }]}>
+            Invite sent!
+          </Text>
+        </View>
+      ) : (
+        <Button
+          label="Send Invite"
+          onPress={handleSendInvite}
+          fullWidth
+          variant="secondary"
+          isLoading={isSendingInvite}
+          isDisabled={!housemateName.trim()}
+        />
+      )}
+
+      {error && (
+        <Text style={[typography.callout, { color: colors.error, marginTop: spacing.md, textAlign: 'center' }]}>
+          {error}
+        </Text>
+      )}
+
+      {/* Continue button - always visible */}
+      <View style={{ marginTop: spacing.xl }}>
+        <Button
+          label="Continue"
+          onPress={handleContinue}
+          fullWidth
+          isDisabled={isSendingInvite}
+        />
+      </View>
+
+      {/* Skip link */}
+      <TouchableOpacity
+        onPress={handleSkipInvite}
+        style={styles.skipLink}
+        disabled={isSendingInvite}
+      >
+        <Text style={[typography.callout, { color: colors.textSecondary }]}>
+          Skip for now
+        </Text>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+
+  const renderStep3 = () => (
+    <Animated.View style={[styles.stepContent, { opacity: fadeAnim }]}>
+      <Text style={[typography.title, { color: colors.textPrimary, marginBottom: spacing.xs }]}>
+        Set the prize
       </Text>
-      <Text style={[typography.body, { color: colors.textSecondary, marginBottom: spacing.md }]}>
-        What does the winner get?
+      <Text style={[typography.body, { color: colors.textSecondary, marginBottom: spacing.lg }]}>
+        What does the weekly winner get?
       </Text>
 
       <View style={[styles.inputContainer, { marginBottom: spacing.xl }]}>
@@ -295,17 +372,6 @@ export default function OnboardingCreateScreen() {
         fullWidth
         isLoading={isSubmitting}
       />
-
-      {/* Skip link */}
-      <TouchableOpacity
-        onPress={handleSkip}
-        style={styles.skipLink}
-        disabled={isSubmitting}
-      >
-        <Text style={[typography.callout, { color: colors.textSecondary }]}>
-          Skip for now
-        </Text>
-      </TouchableOpacity>
     </Animated.View>
   );
 
@@ -314,7 +380,7 @@ export default function OnboardingCreateScreen() {
       <OnboardingHeader
         onBack={handleBack}
         currentStep={step}
-        totalSteps={2}
+        totalSteps={3}
       />
 
       <KeyboardAvoidingView
@@ -329,6 +395,7 @@ export default function OnboardingCreateScreen() {
         >
           {step === 1 && renderStep1()}
           {step === 2 && renderStep2()}
+          {step === 3 && renderStep3()}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -370,5 +437,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 16,
     marginTop: 8,
+  },
+  inviteSentContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
   },
 });
