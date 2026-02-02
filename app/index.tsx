@@ -1,11 +1,11 @@
-import React, { useEffect, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, Text, ActivityIndicator } from 'react-native';
+import React, { useEffect, useCallback, useRef } from 'react';
+import { View, StyleSheet, Text, ActivityIndicator, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../src/theme/useTheme';
 import { AppHeader, DayStrip, AddTaskButton, TaskAddedToast } from '../src/components/ui';
-import { ScoreboardCard, TaskList, AddTaskSheet, TaskChanges, ChangeScope } from '../src/components/features';
+import { CollapsibleScoreboard, TaskList, AddTaskSheet, TaskChanges, ChangeScope } from '../src/components/features';
 import { ConfirmationModal } from '../src/components/ui';
 import {
   useHouseholdStore,
@@ -30,6 +30,9 @@ export default function ChallengeScreen() {
   const [swipeDeleteTask, setSwipeDeleteTask] = React.useState<TaskInstance | null>(null);
   // Track the weekStartDay used to create the current challenge
   const [challengeWeekStartDay, setChallengeWeekStartDay] = React.useState<number | null>(null);
+
+  // Animated value for scroll-linked scoreboard collapse
+  const scrollY = useRef(new Animated.Value(0)).current;
 
   // Firebase context for onboarding redirect
   const { isConfigured, isAuthLoading, householdId } = useFirebase();
@@ -325,23 +328,27 @@ export default function ChallengeScreen() {
         ]}
       />
 
-      {/* Scoreboard Card - Fixed outside ScrollView */}
-      <View style={{ paddingHorizontal: spacing.sm, paddingTop: spacing.xxs }}>
-        <ScoreboardCard
-          competitorA={competitorA}
-          competitorB={competitorB}
-          scoreA={scoreA}
-          scoreB={scoreB}
-          prize={household?.prize || 'Set a prize!'}
-          pendingHousemateName={household?.pendingHousemateName}
-          onInvitePress={handleInvitePress}
-        />
-      </View>
+      {/* Collapsible Scoreboard - Animates based on scroll */}
+      <CollapsibleScoreboard
+        scrollY={scrollY}
+        competitorA={competitorA}
+        competitorB={competitorB}
+        scoreA={scoreA}
+        scoreB={scoreB}
+        prize={household?.prize || 'Set a prize!'}
+        pendingHousemateName={household?.pendingHousemateName}
+        onInvitePress={handleInvitePress}
+      />
 
-      <ScrollView
+      <Animated.ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false }
+        )}
+        scrollEventThrottle={16}
       >
         {/* Day Strip */}
         <View style={{ marginTop: spacing.md + 8 }}>
@@ -384,7 +391,7 @@ export default function ChallengeScreen() {
             </Text>
           </View>
         )}
-      </ScrollView>
+      </Animated.ScrollView>
 
       {/* Floating Add Task Button */}
       <AddTaskButton onPress={() => setIsAddSheetVisible(true)} />
