@@ -22,8 +22,11 @@ export interface Household {
   /** Unique identifier */
   id: string;
 
-  /** The two competitors in this household */
-  competitors: [Competitor, Competitor];
+  /**
+   * The competitors in this household.
+   * Starts with 1 competitor when created, becomes 2 when housemate joins.
+   */
+  competitors: Competitor[] | [Competitor, Competitor];
 
   /** IANA timezone identifier (e.g., "America/New_York") */
   timezone: string;
@@ -39,6 +42,9 @@ export interface Household {
 
   /** Short code for partner to join */
   joinCode?: string;
+
+  /** Name of invited housemate (before they join) */
+  pendingHousemateName?: string;
 
   /** When the household was created */
   createdAt: string;

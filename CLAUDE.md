@@ -127,6 +127,24 @@ export { MyNewComponent } from './MyNewComponent';
 6. **Offline mode** - Without Firebase env vars, app runs locally with sample data
 7. **Optimistic updates** - Stores update immediately, then sync to Firestore in background
 8. **syncEnabled flag** - Each store has a `syncEnabled` flag that controls Firestore writes
+9. **Firestore Security Rules** - After changes that add new collections or subcollections, remind user to update Firebase Console rules. Current required rules:
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /households/{householdId} {
+      allow read, write: if request.auth != null;
+      
+      match /{subcollection=**} {
+        allow read, write: if request.auth != null;
+      }
+    }
+  }
+}
+```
+
+If user sees "Missing or insufficient permissions" errors, provide these rules.
 
 ## Questions to Ask User
 

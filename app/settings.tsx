@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -23,6 +23,8 @@ import {
 import { useHouseholdStore } from '../src/store';
 import { WeekStartDay } from '../src/domain/models/Household';
 import Constants from 'expo-constants';
+import * as Clipboard from 'expo-clipboard';
+import { shareHouseholdInvite } from '../src/utils/shareInvite';
 
 /** Day names for display */
 const DAY_NAMES = [
@@ -61,12 +63,34 @@ export default function SettingsScreen() {
   const [prizeText, setPrizeText] = useState(household?.prize ?? '');
   const [showEndDayPicker, setShowEndDayPicker] = useState(false);
   const [showThemePicker, setShowThemePicker] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  // Handle copying join code to clipboard
+  const handleCopyCode = async () => {
+    if (household?.joinCode) {
+      await Clipboard.setStringAsync(household.joinCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  // Handle sharing invite
+  const handleShareInvite = useCallback(() => {
+    if (!household || !household.competitors[0]) return;
+    
+    shareHouseholdInvite(
+      household.competitors[0].name,
+      household.pendingHousemateName,
+      household.joinCode || ''
+    );
+  }, [household]);
 
   // Theme from household store
   const selectedTheme = household?.themePreference ?? 'system';
 
   const competitorA = household?.competitors[0];
   const competitorB = household?.competitors[1];
+  const hasPendingHousemate = !competitorB && household?.pendingHousemateName;
 
   // Calculate competition end day from weekStartDay
   // End day is the day before the start day
@@ -141,10 +165,10 @@ export default function SettingsScreen() {
                 )
               }
               unavailableColors={[competitorB?.color ?? '']}
-              showDivider={true}
+              showDivider={!!competitorB || !!hasPendingHousemate}
             />
           )}
-          {competitorB && (
+          {competitorB ? (
             <CompetitorRow
               competitor={competitorB}
               onNameChange={(name) => handleNameChange(competitorB.id, name)}
@@ -158,7 +182,62 @@ export default function SettingsScreen() {
               unavailableColors={[competitorA?.color ?? '']}
               showDivider={false}
             />
+          ) : (
+            // Pending housemate row with invite button
+            <SettingsRow
+              label={household?.pendingHousemateName || 'Add housemate'}
+              icon="person-add"
+              iconColor={colors.primary}
+              showDivider={false}
+              value="Not joined yet"
+              rightElement={
+                <TouchableOpacity
+                  onPress={handleShareInvite}
+                  style={[
+                    styles.inviteButton,
+                    {
+                      backgroundColor: colors.primary + '15',
+                      borderRadius: radius.small,
+                      paddingHorizontal: spacing.sm,
+                      paddingVertical: spacing.xxs,
+                    },
+                  ]}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Text
+                    style={[
+                      typography.callout,
+                      { color: colors.primary, fontWeight: '600' },
+                    ]}
+                  >
+                    Invite
+                  </Text>
+                </TouchableOpacity>
+              }
+            />
           )}
+        </SettingsSection>
+
+        {/* Household Section - Join Code */}
+        <SettingsSection title="Household">
+          <SettingsRow
+            label="Join Code"
+            icon="key"
+            iconColor="#FF9500"
+            value={household?.joinCode || 'Not available'}
+            showDivider={false}
+            rightElement={
+              household?.joinCode ? (
+                <TouchableOpacity onPress={handleCopyCode} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <Ionicons
+                    name={copied ? "checkmark" : "copy"}
+                    size={20}
+                    color={copied ? '#34C759' : colors.textSecondary}
+                  />
+                </TouchableOpacity>
+              ) : null
+            }
+          />
         </SettingsSection>
 
         {/* Challenge Section */}
@@ -474,6 +553,11 @@ const styles = StyleSheet.create({
   prizeInput: {
     minWidth: 120,
     textAlign: 'right',
+  },
+  inviteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalOverlay: {
     flex: 1,

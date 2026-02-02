@@ -9,6 +9,7 @@ import {
   Animated,
   KeyboardAvoidingView,
   Platform,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -17,10 +18,13 @@ import { useTheme } from '../../src/theme/useTheme';
 import { Button, ColorPicker, OnboardingHeader } from '../../src/components/ui';
 import { availableCompetitorColors } from '../../src/domain/models/Competitor';
 import { useFirebase } from '../../src/providers/FirebaseProvider';
+import { shareHouseholdInvite } from '../../src/utils/shareInvite';
 
 /**
  * Onboarding create flow.
- * 3-step wizard: You → Housemate → Prize
+ * 2-step wizard:
+ *   Step 1: Your name + color
+ *   Step 2: Invite housemate (optional) + Prize
  */
 export default function OnboardingCreateScreen() {
   const { colors, spacing, typography, radius } = useTheme();
@@ -30,14 +34,16 @@ export default function OnboardingCreateScreen() {
   // Step state
   const [step, setStep] = useState(1);
 
-  // Form state
+  // Form state - Step 1: Your profile
   const [yourName, setYourName] = useState('');
   const [yourColor, setYourColor] = useState(availableCompetitorColors[2].hex); // Teal
+
+  // Form state - Step 2: Invite + Prize
   const [housemateName, setHousemateName] = useState('');
-  const [housemateColor, setHousemateColor] = useState(availableCompetitorColors[0].hex); // Purple
   const [prize, setPrize] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasSharedInvite, setHasSharedInvite] = useState(false);
 
   // Refs for inputs
   const housemateInputRef = useRef<TextInput>(null);
@@ -72,13 +78,23 @@ export default function OnboardingCreateScreen() {
 
   const handleContinue = () => {
     Keyboard.dismiss();
-    if (step < 3) {
+    if (step < 2) {
       animateStepChange(step + 1);
-      // Focus next input after animation
+      // Focus housemate input after animation
       setTimeout(() => {
-        if (step === 1) housemateInputRef.current?.focus();
-        if (step === 2) prizeInputRef.current?.focus();
+        housemateInputRef.current?.focus();
       }, 200);
+    }
+  };
+
+  const handleShareInvite = async (joinCode: string) => {
+    const shared = await shareHouseholdInvite(
+      yourName.trim(),
+      housemateName.trim() || undefined,
+      joinCode
+    );
+    if (shared) {
+      setHasSharedInvite(true);
     }
   };
 
@@ -89,13 +105,21 @@ export default function OnboardingCreateScreen() {
 
     try {
       const finalPrize = prize.trim() || 'Winner picks dinner!';
-      await createHousehold(
+      const pendingName = housemateName.trim() || undefined;
+      
+      // Create household with just your profile
+      const joinCode = await createHousehold(
         yourName.trim(),
         yourColor,
-        housemateName.trim(),
-        housemateColor,
+        pendingName,
         finalPrize
       );
+
+      // If user entered a housemate name but hasn't shared yet, prompt share
+      if (pendingName && !hasSharedInvite && joinCode) {
+        await handleShareInvite(joinCode);
+      }
+
       // Navigate to home
       router.replace('/');
     } catch (err) {
@@ -105,13 +129,37 @@ export default function OnboardingCreateScreen() {
     }
   };
 
+  const handleSkip = async () => {
+    // Clear housemate name and create without invite
+    setHousemateName('');
+    Keyboard.dismiss();
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      const finalPrize = prize.trim() || 'Winner picks dinner!';
+      
+      await createHousehold(
+        yourName.trim(),
+        yourColor,
+        undefined, // No pending housemate
+        finalPrize
+      );
+
+      router.replace('/');
+    } catch (err) {
+      console.error('Failed to create household:', err);
+      setError('Something went wrong. Try again.');
+      setIsSubmitting(false);
+    }
+  };
+
   const canContinueStep1 = yourName.trim().length > 0;
-  const canContinueStep2 = housemateName.trim().length > 0;
 
   const renderStep1 = () => (
     <Animated.View style={[styles.stepContent, { opacity: fadeAnim }]}>
       <Text style={[typography.title, { color: colors.textPrimary, marginBottom: spacing.lg }]}>
-        First, you
+        First, about you
       </Text>
 
       <View style={[styles.inputContainer, { marginBottom: spacing.lg }]}>
@@ -164,14 +212,15 @@ export default function OnboardingCreateScreen() {
 
   const renderStep2 = () => (
     <Animated.View style={[styles.stepContent, { opacity: fadeAnim }]}>
-      <Text style={[typography.title, { color: colors.textPrimary, marginBottom: spacing.lg }]}>
-        Now, your housemate
+      {/* Invite Section */}
+      <Text style={[typography.title, { color: colors.textPrimary, marginBottom: spacing.xs }]}>
+        Invite your housemate
+      </Text>
+      <Text style={[typography.body, { color: colors.textSecondary, marginBottom: spacing.lg }]}>
+        Enter their name for a personalized invite
       </Text>
 
-      <View style={[styles.inputContainer, { marginBottom: spacing.lg }]}>
-        <Text style={[typography.callout, { color: colors.textSecondary, marginBottom: spacing.xs }]}>
-          Their name
-        </Text>
+      <View style={[styles.inputContainer, { marginBottom: spacing.xl }]}>
         <TextInput
           ref={housemateInputRef}
           style={[
@@ -187,42 +236,21 @@ export default function OnboardingCreateScreen() {
           ]}
           value={housemateName}
           onChangeText={setHousemateName}
-          placeholder="Enter their name"
+          placeholder="Their name (optional)"
           placeholderTextColor={colors.textSecondary}
           autoCapitalize="words"
           autoCorrect={false}
           returnKeyType="next"
-          onSubmitEditing={() => canContinueStep2 && handleContinue()}
+          onSubmitEditing={() => prizeInputRef.current?.focus()}
         />
       </View>
 
-      <View style={{ marginBottom: spacing.xl }}>
-        <Text style={[typography.callout, { color: colors.textSecondary, marginBottom: spacing.sm }]}>
-          Their color
-        </Text>
-        <ColorPicker
-          selectedColor={housemateColor}
-          onColorSelect={setHousemateColor}
-          unavailableColors={[yourColor]}
-        />
-      </View>
-
-      <Button
-        label="Continue"
-        onPress={handleContinue}
-        fullWidth
-        isDisabled={!canContinueStep2}
-      />
-    </Animated.View>
-  );
-
-  const renderStep3 = () => (
-    <Animated.View style={[styles.stepContent, { opacity: fadeAnim }]}>
-      <Text style={[typography.title, { color: colors.textPrimary, marginBottom: spacing.xs }]}>
-        The prize
+      {/* Prize Section */}
+      <Text style={[typography.headline, { color: colors.textPrimary, marginBottom: spacing.xs }]}>
+        Weekly prize
       </Text>
-      <Text style={[typography.body, { color: colors.textSecondary, marginBottom: spacing.lg }]}>
-        What does the weekly winner get?
+      <Text style={[typography.body, { color: colors.textSecondary, marginBottom: spacing.md }]}>
+        What does the winner get?
       </Text>
 
       <View style={[styles.inputContainer, { marginBottom: spacing.xl }]}>
@@ -267,6 +295,17 @@ export default function OnboardingCreateScreen() {
         fullWidth
         isLoading={isSubmitting}
       />
+
+      {/* Skip link */}
+      <TouchableOpacity
+        onPress={handleSkip}
+        style={styles.skipLink}
+        disabled={isSubmitting}
+      >
+        <Text style={[typography.callout, { color: colors.textSecondary }]}>
+          Skip for now
+        </Text>
+      </TouchableOpacity>
     </Animated.View>
   );
 
@@ -275,7 +314,7 @@ export default function OnboardingCreateScreen() {
       <OnboardingHeader
         onBack={handleBack}
         currentStep={step}
-        totalSteps={3}
+        totalSteps={2}
       />
 
       <KeyboardAvoidingView
@@ -290,7 +329,6 @@ export default function OnboardingCreateScreen() {
         >
           {step === 1 && renderStep1()}
           {step === 2 && renderStep2()}
-          {step === 3 && renderStep3()}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -327,5 +365,10 @@ const styles = StyleSheet.create({
   prizeInput: {
     flex: 1,
     minHeight: 48,
+  },
+  skipLink: {
+    alignItems: 'center',
+    paddingVertical: 16,
+    marginTop: 8,
   },
 });

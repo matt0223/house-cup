@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, Text, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, Redirect } from 'expo-router';
@@ -15,6 +15,7 @@ import {
 import { useFirebase } from '../src/providers/FirebaseProvider';
 import { formatDayKeyRange, getTodayDayKey, getCurrentWeekWindow } from '../src/domain/services';
 import { TaskInstance } from '../src/domain/models/TaskInstance';
+import { shareHouseholdInvite } from '../src/utils/shareInvite';
 
 /**
  * Challenge screen - Main tab showing scoreboard, day strip, and task list.
@@ -87,6 +88,18 @@ export default function ChallengeScreen() {
     }
   }, [templates, challenge]);
 
+  // Handle invite button press on ScoreboardCard
+  // Note: Must be defined before conditional returns to follow Rules of Hooks
+  const handleInvitePress = useCallback(() => {
+    if (!household || !household.competitors[0]) return;
+    
+    shareHouseholdInvite(
+      household.competitors[0].name,
+      household.pendingHousemateName,
+      household.joinCode || ''
+    );
+  }, [household]);
+
   // Redirect to onboarding if Firebase is configured but no household exists
   if (isConfigured && !isAuthLoading && !householdId) {
     return <Redirect href="/onboarding" />;
@@ -106,7 +119,7 @@ export default function ChallengeScreen() {
   // Derived state
   const competitors = household?.competitors ?? [];
   const competitorA = competitors[0];
-  const competitorB = competitors[1];
+  const competitorB = competitors[1]; // May be undefined if housemate hasn't joined
   const tasksForDay = tasks.filter((t) => t.dayKey === selectedDayKey);
   const scores = competitors.length > 0 ? getScores(competitors) : null;
   const scoreA = scores?.scores.find((s) => s.competitorId === competitorA?.id)?.total ?? 0;
@@ -284,8 +297,8 @@ export default function ChallengeScreen() {
     updateTaskPoints(taskId, competitorId, points);
   };
 
-  // Loading state
-  if (!household || !competitorA || !competitorB) {
+  // Loading state - only require household and competitorA (competitorB may not have joined yet)
+  if (!household || !competitorA) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.loading}>
@@ -312,24 +325,26 @@ export default function ChallengeScreen() {
         ]}
       />
 
+      {/* Scoreboard Card - Fixed outside ScrollView */}
+      <View style={{ paddingHorizontal: spacing.sm, paddingTop: spacing.xxs }}>
+        <ScoreboardCard
+          competitorA={competitorA}
+          competitorB={competitorB}
+          scoreA={scoreA}
+          scoreB={scoreB}
+          prize={household?.prize || 'Set a prize!'}
+          pendingHousemateName={household?.pendingHousemateName}
+          onInvitePress={handleInvitePress}
+        />
+      </View>
+
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Scoreboard Card */}
-        <View style={{ paddingHorizontal: spacing.sm }}>
-          <ScoreboardCard
-            competitorA={competitorA}
-            competitorB={competitorB}
-            scoreA={scoreA}
-            scoreB={scoreB}
-            prize={household?.prize || 'Set a prize!'}
-          />
-        </View>
-
         {/* Day Strip */}
-        <View style={{ marginTop: spacing.md }}>
+        <View style={{ marginTop: spacing.md + 8 }}>
           <DayStrip
             dayKeys={weekDayKeys}
             selectedDayKey={selectedDayKey}
@@ -351,11 +366,10 @@ export default function ChallengeScreen() {
           </View>
         ) : (
           <View style={styles.emptyState}>
-            <EmptyStateIllustration />
             <Text
               style={[
                 typography.headline,
-                { color: colors.textPrimary, marginTop: spacing.lg },
+                { color: colors.textPrimary },
               ]}
             >
               Start by adding your first task
@@ -433,14 +447,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 100,
+    flexGrow: 1,
+    paddingBottom: 225,
   },
   emptyState: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 32,
-    paddingTop: 60,
   },
   illustration: {
     width: 140,

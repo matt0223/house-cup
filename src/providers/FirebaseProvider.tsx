@@ -16,7 +16,7 @@ import {
   isFirebaseConfigured,
   createHousehold as createHouseholdInFirestore,
   findHouseholdByJoinCode,
-  addMemberToHousehold,
+  addCompetitorToHousehold,
   createChallenge,
 } from '../services/firebase';
 import { Competitor } from '../domain/models/Competitor';
@@ -53,16 +53,19 @@ interface FirebaseContextValue {
   error: string | null;
   /** Whether running in offline mode (Firebase not configured) */
   isOfflineMode: boolean;
-  /** Create a new household */
+  /** Create a new household (returns join code) */
   createHousehold: (
     yourName: string,
     yourColor: string,
-    housemateName: string,
-    housemateColor: string,
+    pendingHousemateName?: string,
     prize?: string
+  ) => Promise<string>;
+  /** Join an existing household by code (Person B creates their own profile) */
+  joinHousehold: (
+    code: string,
+    yourName: string,
+    yourColor: string
   ) => Promise<void>;
-  /** Join an existing household by code */
-  joinHousehold: (code: string) => Promise<void>;
 }
 
 const FirebaseContext = createContext<FirebaseContextValue | null>(null);
@@ -163,15 +166,14 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
     }
   }, [household, householdId, isConfigured]);
 
-  // Create a new household
+  // Create a new household (with just your profile)
   const createHousehold = useCallback(
     async (
       yourName: string,
       yourColor: string,
-      housemateName: string,
-      housemateColor: string,
+      pendingHousemateName?: string,
       prize?: string
-    ): Promise<void> => {
+    ): Promise<string> => {
       if (!userId) {
         throw new Error('Must be authenticated to create household');
       }
@@ -179,9 +181,9 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
       const joinCode = generateJoinCode();
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-      const competitors: [Competitor, Competitor] = [
+      // Start with just one competitor (you)
+      const competitors: Competitor[] = [
         { id: `competitor-${Date.now()}-1`, name: yourName, color: yourColor },
-        { id: `competitor-${Date.now()}-2`, name: housemateName, color: housemateColor },
       ];
 
       const newHousehold = await createHouseholdInFirestore({
@@ -191,6 +193,7 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
         memberIds: [userId],
         joinCode,
         prize: prize || 'Winner picks dinner!',
+        ...(pendingHousemateName ? { pendingHousemateName } : {}),
       });
 
       // Update local state
@@ -212,13 +215,16 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
       // Set challenge in store (with Firestore ID)
       useChallengeStore.getState().setChallenge(initialChallenge);
       useChallengeStore.getState().setSelectedDay(getTodayDayKey(timezone));
+
+      // Return the join code so caller can share it
+      return joinCode;
     },
     [userId, setHouseholdInStore]
   );
 
-  // Join an existing household by code
+  // Join an existing household by code (Person B creates their own profile)
   const joinHousehold = useCallback(
-    async (code: string): Promise<void> => {
+    async (code: string, yourName: string, yourColor: string): Promise<void> => {
       if (!userId) {
         throw new Error('Must be authenticated to join household');
       }
@@ -229,17 +235,33 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
         throw new Error('Invalid join code');
       }
 
-      // Add user to household
-      await addMemberToHousehold(foundHousehold.id, userId);
+      // Check if household is full (already has 2 competitors)
+      if (foundHousehold.competitors.length >= 2) {
+        throw new Error('This household is full');
+      }
+
+      // Create the new competitor (Person B)
+      const newCompetitor: Competitor = {
+        id: `competitor-${Date.now()}-2`,
+        name: yourName,
+        color: yourColor,
+      };
+
+      // Add competitor and member to household
+      const updatedHousehold = await addCompetitorToHousehold(
+        foundHousehold.id,
+        newCompetitor,
+        userId
+      );
 
       // Update local state
-      setHouseholdInStore(foundHousehold);
-      setHouseholdId(foundHousehold.id);
+      setHouseholdInStore(updatedHousehold);
+      setHouseholdId(updatedHousehold.id);
 
       // Challenge will be synced automatically via subscribeToCurrentChallenge
       // Set selected day to today
       useChallengeStore.getState().setSelectedDay(
-        getTodayDayKey(foundHousehold.timezone)
+        getTodayDayKey(updatedHousehold.timezone)
       );
     },
     [userId, setHouseholdInStore]

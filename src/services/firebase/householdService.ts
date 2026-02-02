@@ -49,12 +49,13 @@ function docToHousehold(
 
   return {
     id: docSnap.id,
-    competitors: data.competitors as [Competitor, Competitor],
+    competitors: data.competitors as Competitor[],
     timezone: data.timezone,
     weekStartDay: data.weekStartDay as WeekStartDay,
     prize: data.prize,
     themePreference: data.themePreference as ThemePreference | undefined,
     joinCode: data.joinCode,
+    pendingHousemateName: data.pendingHousemateName,
     createdAt: data.createdAt?.toDate?.()?.toISOString() ?? data.createdAt,
   };
 }
@@ -121,7 +122,7 @@ export async function updateHousehold(
  */
 export async function updateCompetitor(
   householdId: string,
-  competitorIndex: 0 | 1,
+  competitorIndex: number,
   updates: Partial<Pick<Competitor, 'name' | 'color'>>
 ): Promise<void> {
   const ref = getHouseholdRef(householdId);
@@ -136,7 +137,11 @@ export async function updateCompetitor(
     throw new Error('Household not found or has no competitors');
   }
 
-  const competitors = [...data.competitors] as [Competitor, Competitor];
+  const competitors = [...data.competitors] as Competitor[];
+  if (competitorIndex >= competitors.length) {
+    throw new Error('Competitor index out of bounds');
+  }
+  
   competitors[competitorIndex] = {
     ...competitors[competitorIndex],
     ...updates,
@@ -159,6 +164,55 @@ export async function addMemberToHousehold(
   await updateDoc(ref, {
     memberIds: arrayUnion(userId),
   });
+}
+
+/**
+ * Add the second competitor to the household (when housemate joins)
+ * Also adds the user to memberIds and clears pendingHousemateName
+ */
+export async function addCompetitorToHousehold(
+  householdId: string,
+  competitor: Competitor,
+  userId: string
+): Promise<Household> {
+  const ref = getHouseholdRef(householdId);
+  if (!ref) {
+    throw new Error('Firestore is not configured');
+  }
+
+  const docSnap = await getDoc(ref);
+  const data = docSnap.data();
+
+  if (!data) {
+    throw new Error('Household not found');
+  }
+
+  const existingCompetitors = data.competitors as Competitor[];
+  
+  // Check if household is full
+  if (existingCompetitors.length >= 2) {
+    throw new Error('Household is full');
+  }
+
+  // Add the new competitor
+  const updatedCompetitors = [...existingCompetitors, competitor];
+
+  await updateDoc(ref, {
+    competitors: updatedCompetitors,
+    memberIds: arrayUnion(userId),
+    pendingHousemateName: null, // Clear pending name
+  });
+
+  return {
+    id: householdId,
+    competitors: updatedCompetitors,
+    timezone: data.timezone,
+    weekStartDay: data.weekStartDay,
+    prize: data.prize,
+    themePreference: data.themePreference,
+    joinCode: data.joinCode,
+    createdAt: data.createdAt?.toDate?.()?.toISOString() ?? data.createdAt,
+  };
 }
 
 /**

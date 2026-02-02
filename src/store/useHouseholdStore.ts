@@ -103,7 +103,7 @@ export const useHouseholdStore = create<HouseholdStore>((set, get) => ({
 
     const updatedCompetitors = household.competitors.map((c) =>
       c.id === competitorId ? { ...c, ...updates } : c
-    ) as [Competitor, Competitor];
+    );
 
     // Optimistic update
     set({
@@ -116,7 +116,7 @@ export const useHouseholdStore = create<HouseholdStore>((set, get) => ({
     // Persist to Firestore
     if (syncEnabled) {
       householdService
-        .updateCompetitor(household.id, competitorIndex as 0 | 1, updates)
+        .updateCompetitor(household.id, competitorIndex, updates)
         .catch((error) => {
           console.error('Failed to sync competitor update:', error);
           set({ error: `Sync failed: ${error.message}` });
