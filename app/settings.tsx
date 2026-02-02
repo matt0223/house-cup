@@ -6,7 +6,6 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  Modal,
   Pressable,
   Keyboard,
 } from 'react-native';
@@ -14,11 +13,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../src/theme/useTheme';
+import { iconColors } from '../src/theme';
 import {
   AppHeader,
   SettingsSection,
   SettingsRow,
   CompetitorRow,
+  OptionPickerModal,
 } from '../src/components/ui';
 import { useHouseholdStore } from '../src/store';
 import { WeekStartDay } from '../src/domain/models/Household';
@@ -26,15 +27,15 @@ import Constants from 'expo-constants';
 import * as Clipboard from 'expo-clipboard';
 import { shareHouseholdInvite } from '../src/utils/shareInvite';
 
-/** Day names for display */
-const DAY_NAMES = [
-  'Sunday',
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-  'Friday',
-  'Saturday',
+/** Day options for picker */
+const DAY_OPTIONS = [
+  { id: '0', label: 'Sunday' },
+  { id: '1', label: 'Monday' },
+  { id: '2', label: 'Tuesday' },
+  { id: '3', label: 'Wednesday' },
+  { id: '4', label: 'Thursday' },
+  { id: '5', label: 'Friday' },
+  { id: '6', label: 'Saturday' },
 ] as const;
 
 /** Theme options */
@@ -223,7 +224,7 @@ export default function SettingsScreen() {
           <SettingsRow
             label="Join Code"
             icon="key"
-            iconColor="#FF9500"
+            iconColor={iconColors.key}
             value={household?.joinCode || 'Not available'}
             showDivider={false}
             rightElement={
@@ -245,7 +246,7 @@ export default function SettingsScreen() {
           <SettingsRow
             label="Prize"
             icon="trophy"
-            iconColor="#E9B44C"
+            iconColor={iconColors.trophy}
             rightElement={
               editingPrize ? (
                 <View style={[styles.prizeEditRow, { alignItems: 'center' }]}>
@@ -304,9 +305,9 @@ export default function SettingsScreen() {
           <SettingsRow
             label="Week ends on"
             icon="calendar"
-            iconColor="#5B9BD5"
+            iconColor={iconColors.calendar}
             showDivider={false}
-            value={DAY_NAMES[currentEndDay]}
+            value={DAY_OPTIONS[currentEndDay].label}
             onPress={() => setShowEndDayPicker(true)}
           />
         </SettingsSection>
@@ -316,7 +317,7 @@ export default function SettingsScreen() {
           <SettingsRow
             label="Theme"
             icon="color-palette-outline"
-            iconColor="#5C6BC0"
+            iconColor={iconColors.theme}
             showDivider={false}
             value={THEME_OPTIONS.find((t) => t.id === selectedTheme)?.label}
             onPress={() => setShowThemePicker(true)}
@@ -328,13 +329,13 @@ export default function SettingsScreen() {
           <SettingsRow
             label="Sign in"
             icon="person-circle"
-            iconColor="#4ECDC4"
+            iconColor={iconColors.user}
             disabled={true}
           />
           <SettingsRow
             label="Sync settings"
             icon="cloud"
-            iconColor="#26C6DA"
+            iconColor={iconColors.cloud}
             showDivider={false}
             disabled={true}
           />
@@ -345,13 +346,13 @@ export default function SettingsScreen() {
           <SettingsRow
             label="Daily reminders"
             icon="notifications"
-            iconColor="#E57373"
+            iconColor={iconColors.notifications}
             disabled={true}
           />
           <SettingsRow
             label="Weekly summary"
             icon="mail"
-            iconColor="#7CB342"
+            iconColor={iconColors.mail}
             showDivider={false}
             disabled={true}
           />
@@ -362,13 +363,13 @@ export default function SettingsScreen() {
           <SettingsRow
             label="Version"
             icon="information-circle"
-            iconColor="#8E8E93"
+            iconColor={iconColors.info}
             value={appVersion}
           />
           <SettingsRow
             label="Send feedback"
             icon="chatbubble"
-            iconColor="#5B9BD5"
+            iconColor={iconColors.feedback}
             showDivider={false}
             disabled={true}
           />
@@ -379,7 +380,7 @@ export default function SettingsScreen() {
           <SettingsRow
             label="Reset all data"
             icon="trash"
-            iconColor="#FF3B30"
+            iconColor={iconColors.trash}
             showDivider={false}
             disabled={true}
           />
@@ -391,147 +392,29 @@ export default function SettingsScreen() {
       </Pressable>
 
       {/* End Day Picker Modal */}
-      <Modal
+      <OptionPickerModal
         visible={showEndDayPicker}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowEndDayPicker(false)}
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setShowEndDayPicker(false)}
-        >
-          <View
-            style={[
-              styles.modalContent,
-              {
-                backgroundColor: colors.surface,
-                borderRadius: radius.large,
-              },
-            ]}
-          >
-            <Text
-              style={[
-                typography.headline,
-                { color: colors.textPrimary, marginBottom: spacing.sm },
-              ]}
-            >
-              Week ends on
-            </Text>
-            {DAY_NAMES.map((dayName, index) => (
-              <TouchableOpacity
-                key={dayName}
-                style={[
-                  styles.dayOption,
-                  {
-                    backgroundColor:
-                      currentEndDay === index
-                        ? colors.primary + '15'
-                        : 'transparent',
-                    borderRadius: radius.small,
-                  },
-                ]}
-                onPress={() => handleEndDayChange(index)}
-              >
-                <Text
-                  style={[
-                    typography.body,
-                    {
-                      color:
-                        currentEndDay === index
-                          ? colors.primary
-                          : colors.textPrimary,
-                      fontWeight: currentEndDay === index ? '600' : '400',
-                    },
-                  ]}
-                >
-                  {dayName}
-                </Text>
-                {currentEndDay === index && (
-                  <Ionicons
-                    name="checkmark"
-                    size={20}
-                    color={colors.primary}
-                  />
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-        </Pressable>
-      </Modal>
+        title="Week ends on"
+        options={DAY_OPTIONS}
+        selectedId={String(currentEndDay)}
+        onSelect={(id) => {
+          handleEndDayChange(parseInt(id, 10));
+        }}
+        onClose={() => setShowEndDayPicker(false)}
+      />
 
       {/* Theme Picker Modal */}
-      <Modal
+      <OptionPickerModal
         visible={showThemePicker}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowThemePicker(false)}
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setShowThemePicker(false)}
-        >
-          <View
-            style={[
-              styles.modalContent,
-              {
-                backgroundColor: colors.surface,
-                borderRadius: radius.large,
-              },
-            ]}
-          >
-            <Text
-              style={[
-                typography.headline,
-                { color: colors.textPrimary, marginBottom: spacing.sm },
-              ]}
-            >
-              Theme
-            </Text>
-            {THEME_OPTIONS.map((option) => (
-              <TouchableOpacity
-                key={option.id}
-                style={[
-                  styles.dayOption,
-                  {
-                    backgroundColor:
-                      selectedTheme === option.id
-                        ? colors.primary + '15'
-                        : 'transparent',
-                    borderRadius: radius.small,
-                  },
-                ]}
-                onPress={() => {
-                  updateSettings({ themePreference: option.id });
-                  setShowThemePicker(false);
-                }}
-              >
-                <Text
-                  style={[
-                    typography.body,
-                    {
-                      color:
-                        selectedTheme === option.id
-                          ? colors.primary
-                          : colors.textPrimary,
-                      fontWeight: selectedTheme === option.id ? '600' : '400',
-                    },
-                  ]}
-                >
-                  {option.label}
-                </Text>
-                {selectedTheme === option.id && (
-                  <Ionicons
-                    name="checkmark"
-                    size={20}
-                    color={colors.primary}
-                  />
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-        </Pressable>
-      </Modal>
+        title="Theme"
+        options={THEME_OPTIONS}
+        selectedId={selectedTheme}
+        onSelect={(id) => {
+          updateSettings({ themePreference: id });
+          setShowThemePicker(false);
+        }}
+        onClose={() => setShowThemePicker(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -558,25 +441,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 32,
-  },
-  modalContent: {
-    width: '100%',
-    maxWidth: 320,
-    padding: 20,
-  },
-  dayOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    marginVertical: 2,
   },
 });

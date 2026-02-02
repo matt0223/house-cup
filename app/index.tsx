@@ -431,16 +431,6 @@ export default function ChallengeScreen() {
   );
 }
 
-// Simple placeholder illustration
-function EmptyStateIllustration() {
-  const { colors } = useTheme();
-  return (
-    <View style={[styles.illustration, { backgroundColor: colors.primary + '20' }]}>
-      <Ionicons name="clipboard-outline" size={64} color={colors.primary} />
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -462,12 +452,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 32,
-  },
-  illustration: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });

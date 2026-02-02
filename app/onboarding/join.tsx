@@ -16,6 +16,7 @@ import { Button, ColorPicker, OnboardingHeader } from '../../src/components/ui';
 import { useFirebase } from '../../src/providers/FirebaseProvider';
 import { availableCompetitorColors } from '../../src/domain/models/Competitor';
 import { findHouseholdByJoinCode } from '../../src/services/firebase';
+import { useStepAnimation } from '../../src/hooks';
 
 /**
  * Onboarding join screen.
@@ -47,22 +48,10 @@ export default function OnboardingJoinScreen() {
   const nameInputRef = useRef<TextInput>(null);
 
   // Animation for step transitions
-  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const { fadeAnim, animateStepChange } = useStepAnimation();
 
-  const animateStepChange = (newStep: number) => {
-    Animated.sequence([
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 100,
-        useNativeDriver: true,
-      }),
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 150,
-        useNativeDriver: true,
-      }),
-    ]).start();
-    setStep(newStep);
+  const goToStep = (newStep: number) => {
+    animateStepChange(() => setStep(newStep));
   };
 
   const handleCodeChange = (text: string) => {
@@ -76,7 +65,7 @@ export default function OnboardingJoinScreen() {
     if (step === 1) {
       router.back();
     } else {
-      animateStepChange(1);
+      goToStep(1);
     }
   };
 
@@ -125,7 +114,7 @@ export default function OnboardingJoinScreen() {
 
       // Move to profile setup
       setIsValidating(false);
-      animateStepChange(2);
+      goToStep(2);
       
       // Focus name input after animation
       setTimeout(() => {

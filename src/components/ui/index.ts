@@ -24,3 +24,4 @@ export { SettingsRow, type SettingsRowProps } from './SettingsRow';
 export { ColorPicker, type ColorPickerProps } from './ColorPicker';
 export { CompetitorRow, type CompetitorRowProps } from './CompetitorRow';
 export { OnboardingHeader, type OnboardingHeaderProps } from './OnboardingHeader';
+export { OptionPickerModal, type OptionPickerModalProps, type OptionPickerOption } from './OptionPickerModal';

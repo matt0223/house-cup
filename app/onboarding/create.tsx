@@ -20,6 +20,7 @@ import { availableCompetitorColors } from '../../src/domain/models/Competitor';
 import { useFirebase } from '../../src/providers/FirebaseProvider';
 import { shareHouseholdInvite } from '../../src/utils/shareInvite';
 import { updateHousehold } from '../../src/services/firebase/householdService';
+import { useStepAnimation } from '../../src/hooks';
 
 /**
  * Onboarding create flow.
@@ -57,36 +58,24 @@ export default function OnboardingCreateScreen() {
   const prizeInputRef = useRef<TextInput>(null);
 
   // Animation for step transitions
-  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const { fadeAnim, animateStepChange } = useStepAnimation();
 
-  const animateStepChange = (newStep: number) => {
-    Animated.sequence([
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 100,
-        useNativeDriver: true,
-      }),
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 150,
-        useNativeDriver: true,
-      }),
-    ]).start();
-    setStep(newStep);
+  const goToStep = (newStep: number) => {
+    animateStepChange(() => setStep(newStep));
   };
 
   const handleBack = () => {
     if (step === 1) {
       router.back();
     } else {
-      animateStepChange(step - 1);
+      goToStep(step - 1);
     }
   };
 
   const handleContinue = () => {
     Keyboard.dismiss();
     if (step < 3) {
-      animateStepChange(step + 1);
+      goToStep(step + 1);
       // Focus appropriate input after animation
       setTimeout(() => {
         if (step === 1) {
