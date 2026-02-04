@@ -392,6 +392,39 @@ Implement a collapsible scoreboard that animates based on scroll position:
 
 ---
 
+## ADR-016: Recurring Task Seeding Persists to Firestore
+
+**Date:** February 2026  
+**Status:** Active
+
+### Context
+When a user creates a recurring task (e.g., "daily, all days"), the app needs to create TaskInstance records for all applicable days in the current week. These instances were being created locally but not persisted to Firestore.
+
+### Decision
+The `seedFromTemplates` function in `useChallengeStore` now persists all seeded task instances to Firestore when sync is enabled.
+
+**Flow when creating a recurring task:**
+1. User creates recurring task with repeat days (e.g., all 7 days)
+2. `addTemplate()` creates the `RecurringTemplate` and persists to Firestore
+3. `addTask()` creates ONE `TaskInstance` for the current day and persists to Firestore
+4. `seedFromTemplates()` is triggered (via useEffect watching templates)
+5. `seedTasks()` creates instances for all OTHER applicable days (checking skip records)
+6. **NEW:** Each seeded instance is persisted to Firestore via `taskService.createTask()`
+
+### Rationale
+- Task instances must persist across logout/login
+- Without Firestore persistence, seeded tasks only existed in local Zustand state
+- Users expected recurring tasks to appear on all days after sign-in
+- Maintains consistency with `addTask()` which already persists
+
+### Consequences
+- (+) Recurring tasks appear on all days after logout/login
+- (+) Consistent data between devices
+- (+) Idempotent (duplicate seeding is still safe)
+- (-) More Firestore writes when creating recurring tasks (up to 6 extra writes for daily task)
+
+---
+
 ## Template for New Decisions
 
 ```markdown

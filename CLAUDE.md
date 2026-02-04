@@ -211,12 +211,76 @@ isPendingCompetitor(competitor): boolean  // returns !competitor.userId
 
 **Note:** `Household.pendingHousemateName` has been REMOVED. The pending housemate's name is stored in their `Competitor` object.
 
+## Recurring Tasks Feature (Important!)
+
+Recurring tasks allow users to create tasks that repeat on specific days of the week.
+
+### Data Model
+
+```typescript
+interface RecurringTemplate {
+  id: string;
+  name: string;
+  repeatDays: number[];  // 0=Sun, 1=Mon, ..., 6=Sat
+  householdId: string;
+}
+
+interface TaskInstance {
+  id: string;
+  challengeId: string;
+  dayKey: DayKey;         // yyyy-MM-dd
+  name: string;
+  templateId?: string;    // Links to RecurringTemplate (null for one-off tasks)
+  originalName?: string;  // For detecting renames
+  points: Record<string, number>;  // competitorId -> points
+}
+
+interface SkipRecord {
+  templateId: string;
+  dayKey: DayKey;
+}
+```
+
+### Creation Flow
+
+1. User creates recurring task with repeat days (e.g., daily = [0,1,2,3,4,5,6])
+2. `addTemplate()` creates `RecurringTemplate` → persists to Firestore
+3. `addTask()` creates ONE `TaskInstance` for current day → persists to Firestore
+4. `seedFromTemplates()` triggers via useEffect
+5. `seedTasks()` creates instances for ALL other applicable days in the week
+6. Each seeded instance is persisted to Firestore
+
+### Seeding Rules
+
+- Only seeds for days in the current challenge window (week)
+- Checks `shouldRepeatOnDay(template, dayOfWeek)` for each day
+- Skips if `TaskInstance` with same `templateId:dayKey` already exists
+- Skips if `SkipRecord` exists for that `templateId:dayKey`
+- Idempotent: safe to call multiple times
+
+### Skip Records
+
+Skip records prevent re-seeding of deleted task instances:
+- Created when user deletes a recurring task instance ("delete this day only")
+- Created when user detaches a task from its template ("edit this day only")
+- Checked during seeding to prevent recreating deleted/detached instances
+
+### Key Files
+
+| Purpose | File |
+|---------|------|
+| Template store | `src/store/useRecurringStore.ts` |
+| Seeding logic | `src/domain/services/seeding.ts` |
+| seedFromTemplates | `src/store/useChallengeStore.ts` |
+| Auto-seed trigger | `app/index.tsx` (useEffect) |
+
 ## Gotchas
 
 1. **Theme preference is in Household** - Not a separate store
 2. **weekStartDay is internally 0-6** - UI shows "Week ends on" but converts
 3. **Templates seed idempotently** - Safe to call seedFromTemplates() anytime
 4. **Skip records prevent re-seeding** - Deleted recurring tasks stay deleted
+5. **Seeded tasks persist to Firestore** - When a recurring task is created, `seedFromTemplates()` creates instances for all applicable days AND persists each to Firestore
 5. **Firebase JS SDK** - Works with Expo Go, no native build required. Set env vars in `.env`
 6. **Offline mode** - Without Firebase env vars, app runs locally with sample data
 7. **Optimistic updates** - Stores update immediately, then sync to Firestore in background
