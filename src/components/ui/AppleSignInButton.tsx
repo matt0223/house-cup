@@ -13,8 +13,8 @@ import { useTheme } from '../../theme/useTheme';
 export interface AppleSignInButtonProps {
   /** Called when button is pressed */
   onPress: () => void;
-  /** Button mode - 'sign-in' for new sign in, 'link' for linking to existing account */
-  mode?: 'sign-in' | 'link';
+  /** Button mode - 'sign-in', 'continue', or 'link' */
+  mode?: 'sign-in' | 'continue' | 'link';
   /** Whether the button is disabled */
   disabled?: boolean;
   /** Custom width (defaults to 100%) */
@@ -43,16 +43,24 @@ export function AppleSignInButton({
 }: AppleSignInButtonProps) {
   const { colors, spacing, radius } = useTheme();
 
+  // Map mode to Apple button type
+  const getButtonType = () => {
+    switch (mode) {
+      case 'continue':
+      case 'link':
+        return AppleAuthentication.AppleAuthenticationButtonType.CONTINUE;
+      case 'sign-in':
+      default:
+        return AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN;
+    }
+  };
+
   // Only show native Apple button on iOS
   if (Platform.OS === 'ios') {
     return (
       <View style={[styles.container, { width }]}>
         <AppleAuthentication.AppleAuthenticationButton
-          buttonType={
-            mode === 'link'
-              ? AppleAuthentication.AppleAuthenticationButtonType.CONTINUE
-              : AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN
-          }
+          buttonType={getButtonType()}
           buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
           cornerRadius={radius.medium}
           style={[styles.button, { opacity: disabled ? 0.5 : 1 }]}
@@ -78,7 +86,7 @@ export function AppleSignInButton({
       ]}
     >
       <Text style={[styles.fallbackText, { color: colors.background }]}>
-        {mode === 'link' ? 'Continue with Apple' : 'Sign in with Apple'}
+        {mode === 'sign-in' ? 'Sign in with Apple' : 'Continue with Apple'}
       </Text>
     </TouchableOpacity>
   );

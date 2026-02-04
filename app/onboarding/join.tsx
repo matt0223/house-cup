@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,38 +8,53 @@ import {
   KeyboardAvoidingView,
   Platform,
   Animated,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '../../src/theme/useTheme';
-import { Button, ColorPicker, OnboardingHeader } from '../../src/components/ui';
+import { Button, ColorPicker, OnboardingHeader, AppleSignInButton } from '../../src/components/ui';
 import { useFirebase } from '../../src/providers/FirebaseProvider';
+import { useAppleAuth } from '../../src/hooks/useAppleAuth';
 import { availableCompetitorColors, isPendingCompetitor } from '../../src/domain/models/Competitor';
 import { findHouseholdByJoinCode } from '../../src/services/firebase';
 import { useStepAnimation } from '../../src/hooks';
+import { Household } from '../../src/domain/models/Household';
 
 /**
  * Onboarding join screen.
- * 2-step flow:
- *   Step 1: Enter 6-character code
- *   Step 2: Set up your profile (name pre-filled from invite, pick color)
+ * Flow:
+ *   Step 1: Enter 6-character code (skipped if code passed via param)
+ *   Step 2: Sign in with Apple (if not already signed in)
+ *   Step 3: Set up your profile (name pre-filled from invite, pick color)
  */
 export default function OnboardingJoinScreen() {
   const { colors, spacing, typography, radius } = useTheme();
   const router = useRouter();
-  const { joinHousehold } = useFirebase();
+  const params = useLocalSearchParams<{ code?: string }>();
+  const { joinHousehold, userId } = useFirebase();
+  const {
+    isAvailable: isAppleAvailable,
+    isLoading: isAppleLoading,
+    error: appleError,
+    signIn: signInWithApple,
+  } = useAppleAuth();
 
-  // Step state
+  // Step state - start at step 1 unless code is provided
   const [step, setStep] = useState(1);
+  const [isInitializing, setIsInitializing] = useState(!!params.code);
 
   // Step 1: Code entry
-  const [code, setCode] = useState('');
+  const [code, setCode] = useState(params.code || '');
   const [isValidating, setIsValidating] = useState(false);
   const [codeError, setCodeError] = useState<string | null>(null);
 
-  // Step 2: Profile setup
+  // Validated household data
+  const [validatedHousehold, setValidatedHousehold] = useState<Household | null>(null);
+
+  // Step 3: Profile setup
   const [yourName, setYourName] = useState('');
-  const [yourColor, setYourColor] = useState(availableCompetitorColors[0].hex); // Purple
+  const [yourColor, setYourColor] = useState(availableCompetitorColors[0].hex);
   const [inviterName, setInviterName] = useState<string | null>(null);
   const [inviterColor, setInviterColor] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -51,12 +66,84 @@ export default function OnboardingJoinScreen() {
   // Animation for step transitions
   const { fadeAnim, animateStepChange } = useStepAnimation();
 
+  // If code is passed via param, validate it immediately
+  useEffect(() => {
+    if (params.code && params.code.length === 6) {
+      validateCode(params.code);
+    }
+  }, [params.code]);
+
   const goToStep = (newStep: number) => {
     animateStepChange(() => setStep(newStep));
   };
 
+  const validateCode = async (codeToValidate: string) => {
+    setIsValidating(true);
+    setIsInitializing(true);
+    setCodeError(null);
+
+    try {
+      const household = await findHouseholdByJoinCode(codeToValidate.toUpperCase());
+      
+      if (!household) {
+        setCodeError("That code didn't work. Double-check with your housemate.");
+        setIsValidating(false);
+        setIsInitializing(false);
+        setStep(1);
+        return;
+      }
+
+      const pendingCompetitor = household.competitors.find(isPendingCompetitor);
+      
+      if (!pendingCompetitor) {
+        const joinedCount = household.competitors.filter(c => c.userId).length;
+        if (joinedCount >= 2) {
+          setCodeError("This household already has two members.");
+        } else {
+          setCodeError("No pending invite found for this household.");
+        }
+        setIsValidating(false);
+        setIsInitializing(false);
+        setStep(1);
+        return;
+      }
+
+      // Store validated household data
+      setValidatedHousehold(household);
+      setCode(codeToValidate.toUpperCase());
+
+      // Find the inviter
+      const inviter = household.competitors.find(c => c.userId);
+      if (inviter) {
+        setInviterName(inviter.name);
+        setInviterColor(inviter.color);
+      }
+
+      // Pre-fill name and color from pending competitor
+      setYourName(pendingCompetitor.name);
+      setYourColor(pendingCompetitor.color);
+
+      setIsValidating(false);
+      setIsInitializing(false);
+
+      // If already signed in, go straight to profile
+      // Otherwise, go to Apple sign-in step
+      if (userId) {
+        goToStep(3);
+        setTimeout(() => nameInputRef.current?.focus(), 200);
+      } else {
+        goToStep(2);
+      }
+    } catch (err) {
+      console.error('Failed to validate code:', err);
+      setCodeError("Something went wrong. Try again.");
+      setIsValidating(false);
+      setIsInitializing(false);
+      setStep(1);
+    }
+  };
+
   const handleCodeChange = (text: string) => {
-    // Only allow alphanumeric, uppercase, max 6 chars
     const cleaned = text.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
     setCode(cleaned);
     setCodeError(null);
@@ -65,66 +152,27 @@ export default function OnboardingJoinScreen() {
   const handleBack = () => {
     if (step === 1) {
       router.back();
-    } else {
+    } else if (step === 2) {
+      // Go back to code entry
       goToStep(1);
+    } else {
+      // Go back to sign-in (or code if already signed in)
+      goToStep(userId ? 1 : 2);
     }
   };
 
   const handleValidateCode = async () => {
     if (code.length !== 6) return;
-
     Keyboard.dismiss();
-    setIsValidating(true);
-    setCodeError(null);
+    await validateCode(code);
+  };
 
-    try {
-      // Validate the code by looking up the household
-      const household = await findHouseholdByJoinCode(code.toUpperCase());
-      
-      if (!household) {
-        setCodeError("That code didn't work. Double-check with your housemate.");
-        setIsValidating(false);
-        return;
-      }
-
-      // Find the pending competitor (one without userId)
-      const pendingCompetitor = household.competitors.find(isPendingCompetitor);
-      
-      if (!pendingCompetitor) {
-        // No pending invite - check if household is full
-        const joinedCount = household.competitors.filter(c => c.userId).length;
-        if (joinedCount >= 2) {
-          setCodeError("This household already has two members.");
-        } else {
-          setCodeError("No pending invite found for this household.");
-        }
-        setIsValidating(false);
-        return;
-      }
-
-      // Find the inviter (competitor with userId)
-      const inviter = household.competitors.find(c => c.userId);
-      if (inviter) {
-        setInviterName(inviter.name);
-        setInviterColor(inviter.color);
-      }
-
-      // Pre-fill name and color from the pending competitor
-      setYourName(pendingCompetitor.name);
-      setYourColor(pendingCompetitor.color);
-
+  const handleAppleSignIn = async () => {
+    const success = await signInWithApple();
+    if (success) {
       // Move to profile setup
-      setIsValidating(false);
-      goToStep(2);
-      
-      // Focus name input after animation
-      setTimeout(() => {
-        nameInputRef.current?.focus();
-      }, 200);
-    } catch (err) {
-      console.error('Failed to validate code:', err);
-      setCodeError("Something went wrong. Try again.");
-      setIsValidating(false);
+      goToStep(3);
+      setTimeout(() => nameInputRef.current?.focus(), 200);
     }
   };
 
@@ -148,6 +196,24 @@ export default function OnboardingJoinScreen() {
 
   const canValidate = code.length === 6;
   const canJoin = yourName.trim().length > 0;
+
+  // Determine total steps based on auth state
+  const totalSteps = userId ? 2 : 3; // Skip sign-in step if already authed
+  const displayStep = userId ? (step === 3 ? 2 : step) : step;
+
+  // Show loading while initializing with code param
+  if (isInitializing) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing.md }]}>
+            Validating code...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const renderStep1 = () => (
     <Animated.View style={[styles.content, { opacity: fadeAnim, paddingHorizontal: spacing.lg }]}>
@@ -207,6 +273,50 @@ export default function OnboardingJoinScreen() {
   );
 
   const renderStep2 = () => (
+    <Animated.View style={[styles.content, { opacity: fadeAnim, paddingHorizontal: spacing.lg }]}>
+      <Text style={[typography.title, { color: colors.textPrimary, marginBottom: spacing.xs }]}>
+        Sign in to continue
+      </Text>
+      <Text style={[typography.body, { color: colors.textSecondary, marginBottom: spacing.xl }]}>
+        {inviterName 
+          ? `Sign in with Apple to join ${inviterName}'s household.`
+          : 'Sign in with Apple to join this household.'}
+      </Text>
+
+      {appleError && (
+        <Text
+          style={[
+            typography.callout,
+            { color: colors.error, marginBottom: spacing.md, textAlign: 'center' },
+          ]}
+        >
+          {appleError}
+        </Text>
+      )}
+
+      {isAppleLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing.md }]}>
+            Signing in...
+          </Text>
+        </View>
+      ) : isAppleAvailable ? (
+        <AppleSignInButton
+          onPress={handleAppleSignIn}
+          mode="sign-in"
+        />
+      ) : (
+        <Button
+          label="Continue as Guest"
+          onPress={() => goToStep(3)}
+          fullWidth
+        />
+      )}
+    </Animated.View>
+  );
+
+  const renderStep3 = () => (
     <Animated.View style={[styles.content, { opacity: fadeAnim, paddingHorizontal: spacing.lg }]}>
       <Text style={[typography.title, { color: colors.textPrimary, marginBottom: spacing.xs }]}>
         Welcome!
@@ -280,8 +390,8 @@ export default function OnboardingJoinScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <OnboardingHeader 
         onBack={handleBack}
-        currentStep={step}
-        totalSteps={2}
+        currentStep={displayStep}
+        totalSteps={totalSteps}
       />
 
       <KeyboardAvoidingView
@@ -290,6 +400,7 @@ export default function OnboardingJoinScreen() {
       >
         {step === 1 && renderStep1()}
         {step === 2 && renderStep2()}
+        {step === 3 && renderStep3()}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -305,6 +416,11 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingTop: 24,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   codeInputContainer: {
     alignItems: 'center',
