@@ -18,9 +18,12 @@ import {
 } from 'firebase/firestore';
 import {
   getAuth,
+  initializeAuth,
+  getReactNativePersistence,
   Auth,
   connectAuthEmulator,
 } from 'firebase/auth';
+import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 
 /**
  * Firebase configuration object.
@@ -104,6 +107,7 @@ export const db: Firestore | null = null; // Will be initialized lazily
 
 /**
  * Get Firebase Auth instance
+ * Uses AsyncStorage for persistence so auth state survives app restarts
  */
 export function getFirebaseAuth(): Auth | null {
   if (authInstance) {
@@ -115,7 +119,22 @@ export function getFirebaseAuth(): Auth | null {
     return null;
   }
 
-  authInstance = getAuth(firebaseApp);
+  // Use initializeAuth with AsyncStorage persistence for React Native
+  // This ensures the user stays logged in between app sessions
+  try {
+    authInstance = initializeAuth(firebaseApp, {
+      persistence: getReactNativePersistence(ReactNativeAsyncStorage),
+    });
+  } catch (error: unknown) {
+    // If auth is already initialized (e.g., hot reload), get the existing instance
+    const err = error as { code?: string };
+    if (err.code === 'auth/already-initialized') {
+      authInstance = getAuth(firebaseApp);
+    } else {
+      throw error;
+    }
+  }
+  
   return authInstance;
 }
 
