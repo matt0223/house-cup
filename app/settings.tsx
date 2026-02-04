@@ -7,6 +7,7 @@ import {
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -26,6 +27,7 @@ import { WeekStartDay } from '../src/domain/models/Household';
 import { isPendingCompetitor, hasBeenInvited, availableCompetitorColors } from '../src/domain/models/Competitor';
 import { useFirebase } from '../src/providers/FirebaseProvider';
 import { useAppleAuth } from '../src/hooks/useAppleAuth';
+import { useAuth } from '../src/hooks/useAuth';
 import Constants from 'expo-constants';
 import { shareHouseholdInvite } from '../src/utils/shareInvite';
 
@@ -54,12 +56,14 @@ const THEME_OPTIONS: { id: ThemePreference; label: string }[] = [
 export default function SettingsScreen() {
   const { colors, typography, spacing, radius } = useTheme();
   const router = useRouter();
-  const { markInviteSent, addHousemate } = useFirebase();
+  const { markInviteSent, addHousemate, setHouseholdId } = useFirebase();
+  const { signOut } = useAuth();
 
   // Household store
   const household = useHouseholdStore((s) => s.household);
   const updateSettings = useHouseholdStore((s) => s.updateSettings);
   const updateCompetitor = useHouseholdStore((s) => s.updateCompetitor);
+  const clearHousehold = useHouseholdStore((s) => s.clearHousehold);
 
   // Local state for editing
   const [editingCompetitor, setEditingCompetitor] = useState<string | null>(null);
@@ -88,6 +92,42 @@ export default function SettingsScreen() {
     linkAccount: linkAppleAccount,
     clearError: clearAppleError,
   } = useAppleAuth();
+
+  // Sign out state
+  const [isSigningOut, setIsSigningOut] = useState(false);
+
+  // Handle sign out
+  const handleSignOut = useCallback(() => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out? You can sign back in with your Apple ID to recover your household.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            setIsSigningOut(true);
+            try {
+              // Sign out from Firebase
+              await signOut();
+              // Clear local household data
+              clearHousehold();
+              // Clear household ID (this clears AsyncStorage too)
+              setHouseholdId(null);
+              // Navigate to onboarding
+              router.replace('/onboarding');
+            } catch (error) {
+              console.error('Sign out error:', error);
+              Alert.alert('Error', 'Failed to sign out. Please try again.');
+            } finally {
+              setIsSigningOut(false);
+            }
+          },
+        },
+      ]
+    );
+  }, [signOut, clearHousehold, setHouseholdId, router]);
 
   // Handle sharing invite for existing pending competitor
   const handleShareInvite = useCallback(async () => {
@@ -502,6 +542,44 @@ export default function SettingsScreen() {
           />
         </SettingsSection>
 
+        {/* Sign Out Section */}
+        <SettingsSection title="">
+          <TouchableOpacity
+            onPress={handleSignOut}
+            disabled={isSigningOut}
+            style={[
+              styles.signOutButton,
+              {
+                backgroundColor: colors.surface,
+                borderRadius: radius.large,
+                paddingVertical: spacing.md,
+                opacity: isSigningOut ? 0.5 : 1,
+              },
+            ]}
+          >
+            {isSigningOut ? (
+              <ActivityIndicator size="small" color={colors.error} />
+            ) : (
+              <>
+                <Ionicons
+                  name="log-out-outline"
+                  size={20}
+                  color={colors.error}
+                  style={{ marginRight: spacing.sm }}
+                />
+                <Text
+                  style={[
+                    typography.body,
+                    { color: colors.error, fontWeight: '600' },
+                  ]}
+                >
+                  Sign Out
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </SettingsSection>
+
           {/* Bottom padding */}
           <View style={{ height: spacing.xxl }} />
       </ScrollView>
@@ -553,6 +631,11 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   inviteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  signOutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
