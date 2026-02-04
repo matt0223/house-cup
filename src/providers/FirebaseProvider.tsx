@@ -21,6 +21,7 @@ import {
   markCompetitorInvited,
   addPendingCompetitor,
   createChallenge,
+  getCurrentUserId,
 } from '../services/firebase';
 import { Competitor, isPendingCompetitor } from '../domain/models/Competitor';
 import { getCurrentWeekWindow, getTodayDayKey } from '../domain/services';
@@ -343,24 +344,34 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
   );
 
   // Recover household after Apple sign-in
+  // Note: We get the userId directly from Firebase Auth instead of React state
+  // to avoid race conditions where the state hasn't updated yet after sign-in
   const recoverHousehold = useCallback(async (): Promise<boolean> => {
-    if (!userId) {
+    // Get current user ID directly from Firebase Auth (not React state)
+    // This ensures we have the correct ID immediately after sign-in
+    const currentUserId = getCurrentUserId();
+    if (!currentUserId) {
+      console.log('recoverHousehold: No current user');
       return false;
     }
 
+    console.log('recoverHousehold: Looking for household with userId:', currentUserId);
+
     try {
-      const foundHousehold = await findHouseholdByUserId(userId);
+      const foundHousehold = await findHouseholdByUserId(currentUserId);
       if (foundHousehold) {
+        console.log('recoverHousehold: Found household:', foundHousehold.id);
         setHouseholdInStore(foundHousehold);
         setHouseholdId(foundHousehold.id);
         return true;
       }
+      console.log('recoverHousehold: No household found for user');
       return false;
     } catch (error) {
       console.error('Failed to recover household:', error);
       return false;
     }
-  }, [userId, setHouseholdInStore, setHouseholdId]);
+  }, [setHouseholdInStore, setHouseholdId]);
 
   const value: FirebaseContextValue = {
     isConfigured,
