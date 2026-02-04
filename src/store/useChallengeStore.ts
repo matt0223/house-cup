@@ -408,7 +408,7 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
   },
 
   seedFromTemplates: (templates) => {
-    const { challenge, tasks, skipRecords } = get();
+    const { challenge, tasks, skipRecords, syncEnabled, householdId } = get();
     if (!challenge) return;
 
     const dayKeys = getChallengeDayKeys(challenge);
@@ -421,7 +421,29 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
     );
 
     if (seedResult.created.length > 0) {
+      // Update local state optimistically
       set({ tasks: [...tasks, ...seedResult.created] });
+
+      // Persist seeded tasks to Firestore
+      if (syncEnabled && householdId) {
+        for (const task of seedResult.created) {
+          taskService
+            .createTask(
+              householdId,
+              {
+                challengeId: task.challengeId,
+                dayKey: task.dayKey,
+                name: task.name,
+                templateId: task.templateId,
+                points: task.points,
+              },
+              task.id
+            )
+            .catch((error) => {
+              console.error('Failed to sync seeded task:', error);
+            });
+        }
+      }
     }
   },
 
