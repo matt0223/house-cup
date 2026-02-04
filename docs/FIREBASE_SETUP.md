@@ -6,6 +6,10 @@ This guide walks you through setting up Firebase for the House Cup app.
 
 House Cup uses the **Firebase JS SDK** (web SDK) which works with Expo Go and doesn't require native builds. This makes development faster and easier.
 
+**Important:** The app uses **two separate Firebase projects**:
+- `house-cup-dev` - Development/testing (bundle ID: `com.kabusworks.housecup.dev`)
+- `house-cup-3e1d7` - Production/TestFlight (bundle ID: `com.kabusworks.housecup`)
+
 ## Step 1: Create a Firebase Project
 
 1. Go to [Firebase Console](https://console.firebase.google.com/)
@@ -38,20 +42,25 @@ const firebaseConfig = {
 
 ## Step 3: Configure Environment Variables
 
-1. Copy `.env.example` to `.env.local`:
+1. Copy `.env.example` to `.env`:
    ```bash
-   cp .env.example .env.local
+   cp .env.example .env
    ```
 
 2. Fill in the values from your Firebase config:
    ```env
+   APP_VARIANT=development
    EXPO_PUBLIC_FIREBASE_API_KEY=AIza...
    EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
    EXPO_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
    EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
    EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=123456789
-   EXPO_PUBLIC_FIREBASE_APP_ID=1:123456789:web:abc123
+   EXPO_PUBLIC_FIREBASE_APP_ID=1:123456789:ios:abc123
    ```
+
+**Important:** Don't create `.env.local` - it loads first and can override your settings.
+
+For EAS builds, environment variables are also set in `eas.json` per build profile.
 
 ## Step 4: Enable Authentication
 
@@ -59,6 +68,34 @@ const firebaseConfig = {
 2. Click **Get started**
 3. In the "Sign-in method" tab, enable **Anonymous**
 4. Click **Save**
+
+### Enable Sign in with Apple
+
+For account recovery, users can link their Apple ID:
+
+1. In Firebase Console → Authentication → Sign-in method, click **Add new provider**
+2. Select **Apple** and enable it
+3. Fill in the OAuth configuration:
+   - **Services ID**: Your Services ID from Apple Developer Portal (e.g., `com.kabusworks.housecup.dev.signin`)
+   - **Apple Team ID**: Your 10-character Team ID
+   - **Key ID**: From your Sign in with Apple private key
+   - **Private Key**: Contents of your `.p8` file
+
+### Apple Developer Portal Setup (Required for Sign in with Apple)
+
+1. **Create a Services ID**:
+   - Go to [Identifiers](https://developer.apple.com/account/resources/identifiers/list/serviceId)
+   - Create a new Services ID (e.g., `com.kabusworks.housecup.dev.signin`)
+   - Enable "Sign In with Apple" and configure:
+     - Primary App ID: Your app's App ID
+     - Domain: `your-project.firebaseapp.com`
+     - Return URL: `https://your-project.firebaseapp.com/__/auth/handler`
+
+2. **Create a Private Key**:
+   - Go to [Keys](https://developer.apple.com/account/resources/authkeys/list)
+   - Create a key with "Sign In with Apple" enabled
+   - Download the `.p8` file (only available once!)
+   - Note the Key ID
 
 ## Step 5: Create Firestore Database
 

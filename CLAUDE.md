@@ -21,9 +21,44 @@ A React Native mobile app for iOS that gamifies household chores between two par
 - **Expo Router 6** - File-based navigation
 - **Zustand 5** - State management (3 stores: household, challenge, recurring)
 - **Firebase JS SDK** - Real-time sync and persistence (web SDK, works with Expo Go)
-- **Firebase Auth** - Anonymous authentication
-- **EAS Build** - Expo Application Services for TestFlight builds
+- **Firebase Auth** - Anonymous authentication + Sign in with Apple
+- **EAS Build** - Expo Application Services for TestFlight and dev client builds
 - **Ionicons** - Icon library (use `@expo/vector-icons`)
+- **expo-apple-authentication** - Native Apple Sign-In
+- **expo-crypto** - Cryptographic operations for auth nonces
+
+## Firebase Projects (Dev vs Prod)
+
+The app uses **two separate Firebase projects** to isolate development data from production:
+
+| Project | Firebase Project ID | Bundle ID | Purpose |
+|---------|---------------------|-----------|---------|
+| **Production** | `house-cup-3e1d7` | `com.kabusworks.housecup` | TestFlight/App Store |
+| **Development** | `house-cup-dev` | `com.kabusworks.housecup.dev` | Local dev/testing |
+
+### Environment Files
+
+```
+.env                 # Default - points to house-cup-dev (for npx expo start)
+.env.development     # Same as .env (dev Firebase config)
+.env.production      # Production Firebase config (for reference)
+eas.json             # Build-time env vars per profile
+```
+
+**Important:** Don't create `.env.local` - it takes precedence and can cause config mismatches.
+
+### Development Workflow
+
+```bash
+# Start dev server (uses .env → house-cup-dev)
+npx expo start --dev-client
+
+# Build dev client (uses eas.json development profile)
+eas build --profile development --platform ios
+
+# Build for TestFlight (uses eas.json production profile)
+eas build --profile production --platform ios
+```
 
 ## Critical Patterns
 
@@ -123,7 +158,7 @@ Then approve in App Store Connect TestFlight tab.
 5. **Competitor colors are user-chosen** - Orange is reserved for app accent
 6. **Typography: 6 variants only** - title, display, headline, body, callout, caption
 
-## Current State (January 2026)
+## Current State (February 2026)
 
 ### Completed
 - Scoreboard with weekly competition (collapsible with scroll animation)
@@ -140,6 +175,8 @@ Then approve in App Store Connect TestFlight tab.
 - **Join flow** (2 steps: enter code, set up profile)
 - **Pending housemate feature** - Create competitors upfront, log points before they join
 - **TestFlight deployment** - App is live on TestFlight
+- **Sign in with Apple** - Link Apple ID for account recovery across devices
+- **Dev/Prod Firebase separation** - Two Firebase projects with distinct bundle IDs
 
 ### In Progress
 - Stats & History screen
@@ -147,6 +184,7 @@ Then approve in App Store Connect TestFlight tab.
 ### Planned
 - Push notifications for reminders
 - Achievements and streaks
+- Sign out button in Settings
 
 ## Pending Housemate Feature (Important!)
 
@@ -179,14 +217,18 @@ isPendingCompetitor(competitor): boolean  // returns !competitor.userId
 2. **weekStartDay is internally 0-6** - UI shows "Week ends on" but converts
 3. **Templates seed idempotently** - Safe to call seedFromTemplates() anytime
 4. **Skip records prevent re-seeding** - Deleted recurring tasks stay deleted
-5. **Firebase JS SDK** - Works with Expo Go, no native build required. Set env vars in `.env.local`
+5. **Firebase JS SDK** - Works with Expo Go, no native build required. Set env vars in `.env`
 6. **Offline mode** - Without Firebase env vars, app runs locally with sample data
 7. **Optimistic updates** - Stores update immediately, then sync to Firestore in background
 8. **syncEnabled flag** - Each store has a `syncEnabled` flag that controls Firestore writes
 9. **Pending competitor has no userId** - Check with `isPendingCompetitor(competitor)` helper
 10. **Join flow claims existing competitor** - Uses `claimCompetitorSlot()`, not `addCompetitorToHousehold()`
 11. **Onboarding redirects** - `app/index.tsx` redirects to `/onboarding` if no `householdId`
-12. **Firestore Security Rules** - After changes that add new collections or subcollections, remind user to update Firebase Console rules. Current required rules:
+12. **Don't create .env.local** - It loads first and overrides other env files
+13. **Dev client vs Expo Go** - Sign in with Apple requires dev client (native modules)
+14. **Apple Sign-In requires Firebase config** - Must configure Services ID, Team ID, Key ID, and private key in Firebase Console → Authentication → Apple
+15. **Firestore indexes** - New Firebase projects need indexes created (click link in error)
+16. **Firestore Security Rules** - After changes that add new collections or subcollections, remind user to update Firebase Console rules. Current required rules:
 
 ```
 rules_version = '2';

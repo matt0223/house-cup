@@ -41,7 +41,7 @@ export function AppleSignInButton({
   disabled = false,
   width = '100%',
 }: AppleSignInButtonProps) {
-  const { colors, spacing, borderRadius } = useTheme();
+  const { colors, spacing, radius } = useTheme();
 
   // Only show native Apple button on iOS
   if (Platform.OS === 'ios') {
@@ -54,7 +54,7 @@ export function AppleSignInButton({
               : AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN
           }
           buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
-          cornerRadius={borderRadius.md}
+          cornerRadius={radius.medium}
           style={[styles.button, { opacity: disabled ? 0.5 : 1 }]}
           onPress={disabled ? undefined : onPress}
         />
@@ -71,7 +71,7 @@ export function AppleSignInButton({
         styles.fallbackButton,
         {
           backgroundColor: colors.text,
-          borderRadius: borderRadius.md,
+          borderRadius: radius.medium,
           paddingVertical: spacing.md,
           opacity: disabled ? 0.5 : 1,
         },
