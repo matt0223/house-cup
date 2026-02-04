@@ -122,12 +122,23 @@ async function sha256(input: string): Promise<string> {
 
 /**
  * Sign in with Apple (for returning users)
- * This signs in directly with Apple credentials
+ * This signs in directly with Apple credentials.
+ * 
+ * Important: This signs out any current user first to ensure
+ * we properly authenticate with the Apple credential and get
+ * the correct Firebase user (the one linked to this Apple ID).
  */
 export async function signInWithApple(): Promise<User> {
   const auth = getFirebaseAuth();
   if (!auth) {
     throw new Error('Firebase Auth is not configured');
+  }
+
+  // Sign out any current user first (e.g., auto-created anonymous user)
+  // This ensures signInWithCredential will properly find the existing
+  // Apple-linked user instead of potentially creating a new one
+  if (auth.currentUser) {
+    await firebaseSignOut(auth);
   }
 
   // Generate nonce for security
@@ -154,7 +165,8 @@ export async function signInWithApple(): Promise<User> {
     rawNonce: nonce,
   });
 
-  // Sign in to Firebase
+  // Sign in to Firebase - this will sign in as the existing Apple user
+  // if the credential is already linked, or create a new user if not
   const result = await signInWithCredential(auth, credential);
   return result.user;
 }
