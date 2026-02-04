@@ -317,6 +317,28 @@ export async function findHouseholdByJoinCode(
 }
 
 /**
+ * Find a household by user ID (for account recovery)
+ * Searches for households where the user is a member
+ */
+export async function findHouseholdByUserId(
+  userId: string
+): Promise<Household | null> {
+  const db = getDb();
+  if (!db) return null;
+
+  const q = query(
+    collection(db, COLLECTION),
+    where('memberIds', 'array-contains', userId),
+    limit(1)
+  );
+
+  const snapshot = await getDocs(q);
+
+  if (snapshot.empty) return null;
+  return docToHousehold(snapshot.docs[0]);
+}
+
+/**
  * Subscribe to household changes
  */
 export function subscribeToHousehold(

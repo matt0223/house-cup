@@ -6,6 +6,7 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -18,16 +19,18 @@ import {
   SettingsRow,
   CompetitorRow,
   OptionPickerModal,
+  AppleSignInButton,
 } from '../src/components/ui';
 import { useHouseholdStore } from '../src/store';
 import { WeekStartDay } from '../src/domain/models/Household';
 import { isPendingCompetitor, hasBeenInvited, availableCompetitorColors } from '../src/domain/models/Competitor';
 import { useFirebase } from '../src/providers/FirebaseProvider';
+import { useAppleAuth } from '../src/hooks/useAppleAuth';
 import Constants from 'expo-constants';
 import { shareHouseholdInvite } from '../src/utils/shareInvite';
 
 /** Day options for picker */
-const DAY_OPTIONS = [
+const DAY_OPTIONS: { id: string; label: string }[] = [
   { id: '0', label: 'Sunday' },
   { id: '1', label: 'Monday' },
   { id: '2', label: 'Tuesday' },
@@ -35,7 +38,7 @@ const DAY_OPTIONS = [
   { id: '4', label: 'Thursday' },
   { id: '5', label: 'Friday' },
   { id: '6', label: 'Saturday' },
-] as const;
+];
 
 /** Theme options */
 import { ThemePreference } from '../src/domain/models/Household';
@@ -76,23 +79,36 @@ export default function SettingsScreen() {
   const [isHousemateNameFocused, setIsHousemateNameFocused] = useState(false);
   const [isSendingInvite, setIsSendingInvite] = useState(false);
 
+  // Apple auth for account linking
+  const {
+    isAvailable: isAppleAvailable,
+    isLinked: isAppleLinked,
+    isLoading: isAppleLinking,
+    error: appleError,
+    linkAccount: linkAppleAccount,
+    clearError: clearAppleError,
+  } = useAppleAuth();
+
   // Handle sharing invite for existing pending competitor
   const handleShareInvite = useCallback(async () => {
     if (!household || !household.competitors[0]) return;
     
     // Find pending competitor (one without userId)
     const pendingCompetitor = household.competitors.find(c => isPendingCompetitor(c));
+    if (!pendingCompetitor) return;
     
-    const shared = await shareHouseholdInvite(
-      household.competitors[0].name,
-      pendingCompetitor?.name,
-      household.joinCode || ''
-    );
-    
-    // Mark as invited if share was successful
-    if (shared && pendingCompetitor) {
+    // Mark as invited BEFORE opening share sheet
+    // This ensures the UI updates immediately when user taps the button
+    if (!hasBeenInvited(pendingCompetitor)) {
       await markInviteSent(pendingCompetitor.id);
     }
+    
+    // Then open share sheet (result doesn't affect invite status)
+    await shareHouseholdInvite(
+      household.competitors[0].name,
+      pendingCompetitor.name,
+      household.joinCode || ''
+    );
   }, [household, markInviteSent]);
 
   // Handle sending invite for new housemate (creates competitor first)
@@ -104,17 +120,15 @@ export default function SettingsScreen() {
       // Create the competitor first
       const newCompetitor = await addHousemate(newHousemateName.trim(), newHousemateColor);
       
-      // Then open share sheet
-      const shared = await shareHouseholdInvite(
+      // Mark as invited immediately after creation
+      await markInviteSent(newCompetitor.id);
+      
+      // Then open share sheet (result doesn't affect invite status)
+      await shareHouseholdInvite(
         household.competitors[0].name,
         newHousemateName.trim(),
         household.joinCode || ''
       );
-      
-      // Mark as invited if share was successful
-      if (shared) {
-        await markInviteSent(newCompetitor.id);
-      }
       
       // Clear the input
       setNewHousemateName('');
@@ -353,6 +367,7 @@ export default function SettingsScreen() {
                     autoFocus
                     onBlur={handlePrizeSave}
                     onSubmitEditing={handlePrizeSave}
+                    maxFontSizeMultiplier={1.2}
                   />
                   <Ionicons
                     name="pencil"
@@ -414,38 +429,66 @@ export default function SettingsScreen() {
           />
         </SettingsSection>
 
-        {/* Account Section (Future) */}
+        {/* Account Section */}
         <SettingsSection title="Account">
-          <SettingsRow
-            label="Sign in"
-            icon="person-circle"
-            iconColor={iconColors.user}
-            disabled={true}
-          />
-          <SettingsRow
-            label="Sync settings"
-            icon="cloud"
-            iconColor={iconColors.cloud}
-            showDivider={false}
-            disabled={true}
-          />
-        </SettingsSection>
-
-        {/* Notifications Section (Future) */}
-        <SettingsSection title="Notifications">
-          <SettingsRow
-            label="Daily reminders"
-            icon="notifications"
-            iconColor={iconColors.notifications}
-            disabled={true}
-          />
-          <SettingsRow
-            label="Weekly summary"
-            icon="mail"
-            iconColor={iconColors.mail}
-            showDivider={false}
-            disabled={true}
-          />
+          {isAppleLinked ? (
+            <SettingsRow
+              label="Signed in with Apple"
+              icon="logo-apple"
+              iconColor={colors.textPrimary}
+              showDivider={false}
+              rightElement={
+                <Ionicons name="checkmark-circle" size={22} color={colors.success} />
+              }
+            />
+          ) : isAppleAvailable ? (
+            <View style={{ paddingVertical: spacing.sm, paddingHorizontal: spacing.sm }}>
+              <Text
+                style={[
+                  typography.callout,
+                  { color: colors.textSecondary, marginBottom: spacing.sm },
+                ]}
+              >
+                Link your Apple ID to recover your household if you reinstall the app or switch devices.
+              </Text>
+              {appleError && (
+                <Text
+                  style={[
+                    typography.callout,
+                    { color: colors.error, marginBottom: spacing.sm },
+                  ]}
+                >
+                  {appleError}
+                </Text>
+              )}
+              {isAppleLinking ? (
+                <View style={{ alignItems: 'center', paddingVertical: spacing.md }}>
+                  <ActivityIndicator size="small" color={colors.primary} />
+                  <Text
+                    style={[
+                      typography.callout,
+                      { color: colors.textSecondary, marginTop: spacing.xs },
+                    ]}
+                  >
+                    Linking account...
+                  </Text>
+                </View>
+              ) : (
+                <AppleSignInButton
+                  onPress={linkAppleAccount}
+                  mode="link"
+                />
+              )}
+            </View>
+          ) : (
+            <SettingsRow
+              label="Sign in with Apple"
+              icon="logo-apple"
+              iconColor={colors.textPrimary}
+              showDivider={false}
+              value="Not available"
+            />
+          )}
         </SettingsSection>
 
         {/* About Section */}
@@ -455,24 +498,7 @@ export default function SettingsScreen() {
             icon="information-circle"
             iconColor={iconColors.info}
             value={appVersion}
-          />
-          <SettingsRow
-            label="Send feedback"
-            icon="chatbubble"
-            iconColor={iconColors.feedback}
             showDivider={false}
-            disabled={true}
-          />
-        </SettingsSection>
-
-        {/* Data Section */}
-        <SettingsSection title="Data">
-          <SettingsRow
-            label="Reset all data"
-            icon="trash"
-            iconColor={iconColors.trash}
-            showDivider={false}
-            disabled={true}
           />
         </SettingsSection>
 

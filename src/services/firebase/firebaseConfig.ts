@@ -25,16 +25,19 @@ import {
 /**
  * Firebase configuration object.
  * 
- * TODO: Move back to environment variables once env loading is fixed.
- * For now, hardcoded to verify Firebase connection works.
+ * Uses environment variables to switch between dev and production Firebase projects:
+ * - Development (Expo Go): reads from .env.development → house-cup-dev project
+ * - Production (TestFlight): reads from .env.production → house-cup-3e1d7 project
+ * 
+ * @see .env.example for the expected environment variables
  */
 const firebaseConfig = {
-  apiKey: 'AIzaSyAmz8uv_VR-m0KymecHPKy5GOUXIG0qEic',
-  authDomain: 'house-cup-3e1d7.firebaseapp.com',
-  projectId: 'house-cup-3e1d7',
-  storageBucket: 'house-cup-3e1d7.firebasestorage.app',
-  messagingSenderId: '672206621674',
-  appId: '1:672206621674:web:5090f15a0a0ec9c5334093',
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
 };
 
 // Initialize Firebase app (singleton)

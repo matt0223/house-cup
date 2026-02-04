@@ -214,6 +214,7 @@ export default function OnboardingCreateScreen() {
           autoCorrect={false}
           returnKeyType="next"
           onSubmitEditing={() => canContinueStep1 && handleContinue()}
+          maxFontSizeMultiplier={1.2}
         />
       </View>
 
@@ -277,6 +278,7 @@ export default function OnboardingCreateScreen() {
           autoCorrect={false}
           returnKeyType="done"
           editable={!isSendingInvite}
+          maxFontSizeMultiplier={1.2}
         />
       </View>
 
@@ -377,6 +379,7 @@ export default function OnboardingCreateScreen() {
             autoCapitalize="sentences"
             returnKeyType="done"
             onSubmitEditing={handleCreate}
+            maxFontSizeMultiplier={1.2}
           />
         </View>
       </View>

@@ -55,6 +55,7 @@ export default function ChallengeScreen() {
   const linkTaskToTemplate = useChallengeStore((s) => s.linkTaskToTemplate);
   const seedFromTemplates = useChallengeStore((s) => s.seedFromTemplates);
   const getScores = useChallengeStore((s) => s.getScores);
+  const updateChallengeBoundaries = useChallengeStore((s) => s.updateChallengeBoundaries);
 
   // Recurring store
   const templates = useRecurringStore((s) => s.templates);
@@ -67,18 +68,21 @@ export default function ChallengeScreen() {
   // When Firebase is configured, data comes from Firestore
   // When offline, FirebaseProvider loads sample data
 
-  // Initialize challenge when household is ready, or reinitialize when weekStartDay changes
+  // Initialize challenge when household is ready, or update boundaries when weekStartDay changes
   useEffect(() => {
     if (household && templates.length > 0) {
-      // Initialize if no challenge, or reinitialize if weekStartDay changed
-      const needsInit = !challenge || challengeWeekStartDay !== household.weekStartDay;
-      if (needsInit) {
+      if (!challenge) {
+        // No challenge - initialize fresh
         initializeChallenge(
           household.timezone,
           household.weekStartDay,
           templates,
           skipRecords
         );
+        setChallengeWeekStartDay(household.weekStartDay);
+      } else if (challengeWeekStartDay !== household.weekStartDay) {
+        // Challenge exists but week setting changed - update boundaries only (preserves tasks/points)
+        updateChallengeBoundaries(household.timezone, household.weekStartDay);
         setChallengeWeekStartDay(household.weekStartDay);
       }
     }

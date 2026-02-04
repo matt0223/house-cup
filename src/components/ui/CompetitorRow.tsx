@@ -114,6 +114,7 @@ export function CompetitorRow({
             placeholderTextColor={colors.textSecondary}
             onFocus={onFocus}
             onBlur={onBlur}
+            maxFontSizeMultiplier={1.2}
           />
           {statusLabel && (
             <Text style={[typography.caption, { color: colors.textSecondary }]}>

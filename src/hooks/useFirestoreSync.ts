@@ -5,7 +5,7 @@
  * Subscribes to Firestore collections and updates local state when data changes.
  */
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import {
   subscribeToHousehold,
   subscribeToCurrentChallenge,
@@ -60,9 +60,6 @@ export function useFirestoreSync({
   const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Track current challenge ID for task subscription
-  const currentChallengeIdRef = useRef<string | null>(null);
-
   // Store setters
   const setHousehold = useHouseholdStore((s) => s.setHousehold);
   const setChallenge = useChallengeStore((s) => s.setChallenge);
@@ -81,6 +78,9 @@ export function useFirestoreSync({
     setError(null);
 
     const unsubscribers: (() => void)[] = [];
+
+    // Track task unsubscriber separately (managed within challenge callback)
+    let unsubTasks: (() => void) | null = null;
 
     // Handle errors consistently
     const handleError = (context: string) => (err: Error) => {
@@ -103,13 +103,28 @@ export function useFirestoreSync({
     );
     unsubscribers.push(unsubHousehold);
 
-    // 2. Subscribe to current challenge
+    // 2. Subscribe to current challenge (and tasks when challenge is received)
     const unsubChallenge = subscribeToCurrentChallenge(
       householdId,
       (challenge: Challenge | null) => {
+        // Clean up previous task subscription when challenge changes
+        if (unsubTasks) {
+          unsubTasks();
+          unsubTasks = null;
+        }
+
         if (challenge) {
           setChallenge(challenge);
-          currentChallengeIdRef.current = challenge.id;
+
+          // Subscribe to tasks for this challenge
+          unsubTasks = subscribeToTasks(
+            householdId,
+            challenge.id,
+            (tasks: TaskInstance[]) => {
+              setTasks(tasks);
+            },
+            handleError('Tasks sync')
+          );
         }
       },
       handleError('Challenge sync')
@@ -139,39 +154,13 @@ export function useFirestoreSync({
     // Cleanup
     return () => {
       unsubscribers.forEach((unsub) => unsub());
+      // Also clean up task subscription
+      if (unsubTasks) {
+        unsubTasks();
+      }
       setIsSyncing(false);
     };
-  }, [enabled, householdId, setHousehold, setChallenge, setTemplates, setSkipRecords, onHouseholdNotFound]);
-
-  // Separate effect for tasks (depends on challenge ID)
-  useEffect(() => {
-    if (!enabled || !householdId) {
-      return;
-    }
-
-    // Get the current challenge ID from the store
-    const challenge = useChallengeStore.getState().challenge;
-    const challengeId = challenge?.id;
-
-    if (!challengeId) {
-      return;
-    }
-
-    // Subscribe to tasks for the current challenge
-    const unsubTasks = subscribeToTasks(
-      householdId,
-      challengeId,
-      (tasks: TaskInstance[]) => {
-        setTasks(tasks);
-      },
-      (err) => {
-        console.error('Tasks sync error:', err);
-        setError(`Tasks sync: ${err.message}`);
-      }
-    );
-
-    return unsubTasks;
-  }, [enabled, householdId, setTasks]);
+  }, [enabled, householdId, setHousehold, setChallenge, setTasks, setTemplates, setSkipRecords, onHouseholdNotFound]);
 
   return {
     isSyncing,

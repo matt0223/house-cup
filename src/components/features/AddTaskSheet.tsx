@@ -445,6 +445,7 @@ export function AddTaskSheet({
                   returnKeyType="done"
                   onSubmitEditing={handleSubmit}
                   blurOnSubmit={false}
+                  maxFontSizeMultiplier={1.2}
                 />
 
                 <View style={styles.chipsRow}>

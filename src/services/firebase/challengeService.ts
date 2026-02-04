@@ -143,7 +143,12 @@ export async function createChallenge(
 export async function updateChallenge(
   householdId: string,
   challengeId: string,
-  updates: Partial<Pick<Challenge, 'prize' | 'winnerId' | 'isTie' | 'isCompleted'>>
+  updates: Partial<
+    Pick<
+      Challenge,
+      'prize' | 'winnerId' | 'isTie' | 'isCompleted' | 'startDayKey' | 'endDayKey'
+    >
+  >
 ): Promise<void> {
   const ref = getChallengeRef(householdId, challengeId);
   if (!ref) {

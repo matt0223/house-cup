@@ -181,6 +181,7 @@ export default function OnboardingJoinScreen() {
           maxLength={6}
           returnKeyType="done"
           onSubmitEditing={() => canValidate && handleValidateCode()}
+          maxFontSizeMultiplier={1.2}
         />
       </View>
 
@@ -239,6 +240,7 @@ export default function OnboardingJoinScreen() {
           autoCorrect={false}
           returnKeyType="done"
           onSubmitEditing={() => canJoin && handleJoin()}
+          maxFontSizeMultiplier={1.2}
         />
       </View>
 

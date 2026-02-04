@@ -113,6 +113,9 @@ interface ChallengeActions {
   /** Update the prize */
   updatePrize: (prize: string) => void;
 
+  /** Update challenge boundaries when weekStartDay changes (preserves tasks) */
+  updateChallengeBoundaries: (timezone: string, weekStartDay: WeekStartDay) => void;
+
   /** Clear all data */
   reset: () => void;
 
@@ -439,6 +442,36 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
     set({
       challenge: { ...challenge, prize },
     });
+  },
+
+  updateChallengeBoundaries: (timezone, weekStartDay) => {
+    const { challenge, syncEnabled, householdId } = get();
+    if (!challenge) return;
+
+    // Calculate new week boundaries
+    const weekWindow = getCurrentWeekWindow(timezone, weekStartDay);
+
+    // Update challenge locally
+    const updatedChallenge = {
+      ...challenge,
+      startDayKey: weekWindow.startDayKey,
+      endDayKey: weekWindow.endDayKey,
+    };
+
+    set({ challenge: updatedChallenge });
+
+    // Sync to Firebase if enabled
+    if (syncEnabled && householdId) {
+      challengeService
+        .updateChallenge(householdId, challenge.id, {
+          startDayKey: weekWindow.startDayKey,
+          endDayKey: weekWindow.endDayKey,
+        })
+        .catch((error) => {
+          console.error('Failed to sync challenge boundary update:', error);
+          set({ error: `Sync failed: ${error.message}` });
+        });
+    }
   },
 
   reset: () => {

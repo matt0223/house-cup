@@ -16,6 +16,7 @@ import {
   isFirebaseConfigured,
   createHousehold as createHouseholdInFirestore,
   findHouseholdByJoinCode,
+  findHouseholdByUserId,
   claimCompetitorSlot,
   markCompetitorInvited,
   addPendingCompetitor,
@@ -73,6 +74,8 @@ interface FirebaseContextValue {
   markInviteSent: (competitorId: string) => Promise<void>;
   /** Add a pending housemate to the household (returns the new competitor) */
   addHousemate: (name: string, color: string) => Promise<Competitor>;
+  /** Recover household after Apple sign-in (finds household by userId) */
+  recoverHousehold: () => Promise<boolean>;
 }
 
 const FirebaseContext = createContext<FirebaseContextValue | null>(null);
@@ -291,13 +294,7 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
   // Mark a pending competitor as invited
   const markInviteSent = useCallback(
     async (competitorId: string): Promise<void> => {
-      if (!householdId) {
-        throw new Error('No household to update');
-      }
-
-      await markCompetitorInvited(householdId, competitorId);
-
-      // Update local state immediately (optimistic update)
+      // Optimistic update FIRST - ensures UI updates immediately
       const currentHousehold = useHouseholdStore.getState().household;
       if (currentHousehold) {
         const updatedCompetitors = currentHousehold.competitors.map(c =>
@@ -308,6 +305,13 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
         setHouseholdInStore({
           ...currentHousehold,
           competitors: updatedCompetitors,
+        });
+      }
+
+      // Then persist to Firestore in background
+      if (householdId) {
+        markCompetitorInvited(householdId, competitorId).catch((error) => {
+          console.error('Failed to persist invite status:', error);
         });
       }
     },
@@ -338,6 +342,26 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
     [householdId, setHouseholdInStore]
   );
 
+  // Recover household after Apple sign-in
+  const recoverHousehold = useCallback(async (): Promise<boolean> => {
+    if (!userId) {
+      return false;
+    }
+
+    try {
+      const foundHousehold = await findHouseholdByUserId(userId);
+      if (foundHousehold) {
+        setHouseholdInStore(foundHousehold);
+        setHouseholdId(foundHousehold.id);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Failed to recover household:', error);
+      return false;
+    }
+  }, [userId, setHouseholdInStore, setHouseholdId]);
+
   const value: FirebaseContextValue = {
     isConfigured,
     userId,
@@ -351,6 +375,7 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
     joinHousehold,
     markInviteSent,
     addHousemate,
+    recoverHousehold,
   };
 
   return (
