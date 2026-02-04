@@ -15,7 +15,7 @@ import { useFirebase } from '../../src/providers/FirebaseProvider';
 export default function OnboardingWelcomeScreen() {
   const { colors, spacing, typography } = useTheme();
   const router = useRouter();
-  const { householdId, recoverHousehold } = useFirebase();
+  const { householdId, recoverHousehold, setHouseholdId } = useFirebase();
   const {
     isAvailable: isAppleAvailable,
     isLoading: isAppleLoading,
@@ -27,18 +27,26 @@ export default function OnboardingWelcomeScreen() {
 
   // Handle Apple sign-in for returning users
   const handleAppleSignIn = async () => {
+    // Clear any stale householdId before signing in
+    // This prevents subscription errors during the sign-in process
+    if (householdId) {
+      setHouseholdId(null);
+    }
+    
     const success = await signInWithApple();
     if (success) {
       // Try to recover the household for this user
       const recovered = await recoverHousehold();
-      if (!recovered) {
+      if (recovered) {
+        // Navigate to main screen on successful recovery
+        router.replace('/');
+      } else {
         Alert.alert(
           'No Household Found',
           'No household was found linked to this Apple ID. You may need to create a new household or join with a code.',
           [{ text: 'OK' }]
         );
       }
-      // If recovered, the app will redirect automatically when householdId is set
     }
   };
 
