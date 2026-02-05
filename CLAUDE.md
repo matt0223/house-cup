@@ -158,25 +158,37 @@ Then approve in App Store Connect TestFlight tab.
 5. **Competitor colors are user-chosen** - Orange is reserved for app accent
 6. **Typography: 6 variants only** - title, display, headline, body, callout, caption
 
-## Current State (February 2026)
+## Current State (March 2026)
+
+### Auth & Onboarding
+- **Sign in with Apple only** - No guest mode, no "Link Apple Account" in Settings. User must sign in with Apple before seeing the household (onboarding and join flow both require Apple Sign-In). Keeps identity simple and avoids orphaned anonymous users.
+- Onboarding: Create (3 steps) or Join (enter code → Apple Sign-In → set profile). No "Continue as Guest."
+- Sign out in Settings clears local household and navigates to onboarding.
+
+### Recurring Tasks (Important for UX and Bugs)
+- **New recurring task with points:** We create the template, then **one anchor task** for the selected day with points via `addTask(name, points, templateId)`. Seeding fills other days; seeding never overwrites existing `(templateId, dayKey)`.
+- **Convert one-off → recurring:** We `addTemplate` + `linkTaskToTemplate` (and persist the link to Firestore). A **seed-skip anchor** (`seedSkipAnchor`) ensures we don’t seed the anchor day even if a stale Firestore snapshot overwrote the link. **Seed runs only when the set of template IDs actually changes** (not on every Firestore sync reference change), so we avoid duplicate tasks on the other recurring days.
+- **Skip records:** Stored in both challenge and recurring stores; Firestore sync updates both so seeding always sees the latest. When a template is deleted, its skip records are removed from Firestore and local state (no orphaned skip records).
+- **Recurring icon:** Shown only if the task has a `templateId` **and** that template exists in `templates` **and** the template has `repeatDays.length > 0` (so detached/kept tasks don’t show the icon).
+
+### Data & Sync
+- **Clear all task data:** Settings → Data → "Clear all tasks and templates" deletes all tasks, templates, and skip records from Firestore for the current household and resets challenge + recurring stores. Household and competitors are unchanged. Use for testing or fresh start.
+- All task/template/skip-record edits (name, points, detach, convert to one-off) persist to Firestore when sync is enabled.
+- Optimistic updates first, then Firestore; subscriptions overwrite local state when Firestore changes.
 
 ### Completed
 - Scoreboard with weekly competition (collapsible with scroll animation)
 - Day strip navigation
 - Task list with point circles
 - Add/edit task bottom sheet
-- Recurring tasks
-- Swipe-to-delete
-- Settings (competitors, theme, prize, week end day)
+- Recurring tasks (with anchor + seed, convert one-off, no duplicates)
+- Swipe-to-delete (recurring: "This and all without points" option)
+- Settings (competitors, theme, prize, week end day, clear-all data)
 - Firebase/Firestore real-time sync
-- Anonymous authentication
-- Optimistic UI updates with background sync
-- **Onboarding flow** (3 steps: your profile, invite housemate, set prize)
-- **Join flow** (2 steps: enter code, set up profile)
-- **Pending housemate feature** - Create competitors upfront, log points before they join
-- **TestFlight deployment** - App is live on TestFlight
-- **Sign in with Apple** - Link Apple ID for account recovery across devices
+- **Sign in with Apple only** (no anonymous, no guest)
 - **Dev/Prod Firebase separation** - Two Firebase projects with distinct bundle IDs
+- **TestFlight deployment** - App is live on TestFlight
+- **Sign out** - In Settings
 
 ### In Progress
 - Stats & History screen
@@ -184,7 +196,6 @@ Then approve in App Store Connect TestFlight tab.
 ### Planned
 - Push notifications for reminders
 - Achievements and streaks
-- Sign out button in Settings
 
 ## Pending Housemate Feature (Important!)
 
@@ -245,9 +256,9 @@ interface SkipRecord {
 
 1. User creates recurring task with repeat days (e.g., daily = [0,1,2,3,4,5,6])
 2. `addTemplate()` creates `RecurringTemplate` → persists to Firestore
-3. `addTask()` creates ONE `TaskInstance` for current day → persists to Firestore
-4. `seedFromTemplates()` triggers via useEffect
-5. `seedTasks()` creates instances for ALL other applicable days in the week
+3. `addTask(name, points, newTemplate.id)` creates ONE anchor `TaskInstance` for the selected day (with points) → persists to Firestore
+4. `seedFromTemplates()` triggers via useEffect **only when the set of template IDs actually changes** (avoids duplicate seed when Firestore sync sends same templates with new reference)
+5. `seedTasks()` creates instances for other applicable days (skips anchor day; uses `seedSkipAnchor` if we just converted one-off→recurring)
 6. Each seeded instance is persisted to Firestore
 
 ### Seeding Rules
@@ -263,6 +274,8 @@ interface SkipRecord {
 Skip records prevent re-seeding of deleted task instances:
 - Created when user deletes a recurring task instance ("delete this day only")
 - Created when user detaches a task from its template ("edit this day only")
+- **Deleted when their template is deleted** (no orphaned skip records)
+- Held in both challenge store (for seeding) and recurring store (synced from Firestore); when Firestore skip records update, both stores are updated so seeding sees the latest
 - Checked during seeding to prevent recreating deleted/detached instances
 
 ### Key Files
@@ -278,21 +291,21 @@ Skip records prevent re-seeding of deleted task instances:
 
 1. **Theme preference is in Household** - Not a separate store
 2. **weekStartDay is internally 0-6** - UI shows "Week ends on" but converts
-3. **Templates seed idempotently** - Safe to call seedFromTemplates() anytime
-4. **Skip records prevent re-seeding** - Deleted recurring tasks stay deleted
+3. **Templates seed idempotently** - Safe to call seedFromTemplates() anytime; we only run the seed effect when the **set of template IDs** changes (not on every Firestore array reference change) to avoid duplicates
+4. **Skip records prevent re-seeding** - Deleted recurring tasks stay deleted; skip records are removed when their template is deleted
 5. **Seeded tasks persist to Firestore** - When a recurring task is created, `seedFromTemplates()` creates instances for all applicable days AND persists each to Firestore
-5. **Firebase JS SDK** - Works with Expo Go, no native build required. Set env vars in `.env`
-6. **Offline mode** - Without Firebase env vars, app runs locally with sample data
-7. **Optimistic updates** - Stores update immediately, then sync to Firestore in background
-8. **syncEnabled flag** - Each store has a `syncEnabled` flag that controls Firestore writes
-9. **Pending competitor has no userId** - Check with `isPendingCompetitor(competitor)` helper
-10. **Join flow claims existing competitor** - Uses `claimCompetitorSlot()`, not `addCompetitorToHousehold()`
-11. **Onboarding redirects** - `app/index.tsx` redirects to `/onboarding` if no `householdId`
-12. **Don't create .env.local** - It loads first and overrides other env files
-13. **Dev client vs Expo Go** - Sign in with Apple requires dev client (native modules)
-14. **Apple Sign-In requires Firebase config** - Must configure Services ID, Team ID, Key ID, and private key in Firebase Console → Authentication → Apple
-15. **Firestore indexes** - New Firebase projects need indexes created (click link in error)
-16. **Firestore Security Rules** - After changes that add new collections or subcollections, remind user to update Firebase Console rules. Current required rules:
+6. **Firebase JS SDK** - Works with Expo Go, no native build required. Set env vars in `.env`
+7. **Offline mode** - Without Firebase env vars, app runs locally with sample data
+8. **Optimistic updates** - Stores update immediately, then sync to Firestore in background
+9. **syncEnabled flag** - Each store has a `syncEnabled` flag that controls Firestore writes
+10. **Pending competitor has no userId** - Check with `isPendingCompetitor(competitor)` helper
+11. **Join flow claims existing competitor** - Uses `claimCompetitorSlot()`, not `addCompetitorToHousehold()`
+12. **Onboarding redirects** - `app/index.tsx` redirects to `/onboarding` if no `householdId`
+13. **Don't create .env.local** - It loads first and overrides other env files
+14. **Dev client vs Expo Go** - Sign in with Apple requires dev client (native modules)
+15. **Apple Sign-In requires Firebase config** - Must configure Services ID, Team ID, Key ID, and private key in Firebase Console → Authentication → Apple
+16. **Firestore indexes** - New Firebase projects need indexes created (click link in error)
+17. **Firestore Security Rules** - After changes that add new collections or subcollections, remind user to update Firebase Console rules. Current required rules:
 
 ```
 rules_version = '2';

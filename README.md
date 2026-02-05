@@ -257,10 +257,12 @@ This is stored in `household.themePreference` and provided via `ThemeContext`.
 - [x] Theme preference (system/light/dark)
 - [x] Repeat icon indicator on recurring tasks
 - [x] **Firebase real-time sync** - Multi-device support
-- [x] **Anonymous authentication** - No sign-up required
+- [x] **Sign in with Apple only** - No guest mode; required before household
 - [x] **Onboarding flow** - 3-step household creation
 - [x] **Join flow** - Partner invitation via 6-character code
 - [x] **Pending housemate** - Log tasks for invitee before they join
+- [x] **Recurring tasks** - Anchor task + seed; convert one-off→recurring without duplicates
+- [x] **Clear all task data** - Settings → Data (tasks, templates, skip records from Firestore)
 - [x] **TestFlight deployment** - App available for beta testing
 
 ## Planned Features
@@ -338,4 +340,4 @@ When making changes:
 
 ---
 
-*Last updated: January 29, 2026*
+*Last updated: March 2026*
