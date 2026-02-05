@@ -138,7 +138,42 @@ service cloud.firestore {
 
 3. Click **Publish**
 
-## Step 7: Run the App
+## Step 7: Deploy Firestore indexes (when needed)
+
+Some Firestore queries need composite indexes. The app defines them in `firestore.indexes.json`. When you add new indexes or work with a new Firebase project, deploy them with the Firebase CLI.
+
+### One-time setup (Firebase CLI)
+
+1. **Install the Firebase CLI** (if you don’t have it):
+   ```bash
+   npm install -g firebase-tools
+   ```
+
+2. **Log in to Firebase**:
+   ```bash
+   firebase login
+   ```
+   Complete the browser sign-in.
+
+3. **From the `rn-app` directory**, link the app to your Firebase project:
+   ```bash
+   cd rn-app
+   firebase use house-cup-dev
+   ```
+   Use `house-cup-dev` for development or `house-cup-3e1d7` for production. If the project isn’t listed, run `firebase use --add` and pick the project and an alias (e.g. `dev`).
+
+### Deploy indexes
+
+From the **`rn-app`** directory (where `firebase.json` and `firestore.indexes.json` live):
+
+```bash
+cd rn-app
+firebase deploy --only firestore:indexes
+```
+
+Wait until the CLI reports success. New indexes can take 1–2 minutes to become active in the Firebase Console.
+
+## Step 8: Run the App
 
 ```bash
 npx expo start

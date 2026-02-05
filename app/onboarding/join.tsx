@@ -34,7 +34,6 @@ export default function OnboardingJoinScreen() {
   const params = useLocalSearchParams<{ code?: string }>();
   const { joinHousehold, userId } = useFirebase();
   const {
-    isAvailable: isAppleAvailable,
     isLoading: isAppleLoading,
     error: appleError,
     signIn: signInWithApple,
@@ -301,16 +300,10 @@ export default function OnboardingJoinScreen() {
             Signing in...
           </Text>
         </View>
-      ) : isAppleAvailable ? (
+      ) : (
         <AppleSignInButton
           onPress={handleAppleSignIn}
           mode="sign-in"
-        />
-      ) : (
-        <Button
-          label="Continue as Guest"
-          onPress={() => goToStep(3)}
-          fullWidth
         />
       )}
     </Animated.View>
@@ -340,6 +333,7 @@ export default function OnboardingJoinScreen() {
               borderRadius: radius.medium,
               paddingHorizontal: spacing.sm,
               paddingVertical: spacing.xs,
+              letterSpacing: 0,
             },
           ]}
           value={yourName}

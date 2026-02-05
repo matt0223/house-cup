@@ -5,6 +5,7 @@ import { useTheme } from '../../theme/useTheme';
 import { Card } from '../ui/Card';
 import { SwipeableTaskRow } from './SwipeableTaskRow';
 import { TaskInstance } from '../../domain/models/TaskInstance';
+import { RecurringTemplate } from '../../domain/models/RecurringTemplate';
 import { Competitor } from '../../domain/models/Competitor';
 
 export interface TaskListProps {
@@ -12,6 +13,8 @@ export interface TaskListProps {
   tasks: TaskInstance[];
   /** Competitors for points chips */
   competitors: Competitor[];
+  /** Recurring templates (for showing recurring icon only when task has repeat days) */
+  templates?: RecurringTemplate[];
   /** Called when points change */
   onPointsChange: (taskId: string, competitorId: string, points: number) => void;
   /** Called when a task is pressed */
@@ -26,6 +29,7 @@ export interface TaskListProps {
 export function TaskList({
   tasks,
   competitors,
+  templates = [],
   onPointsChange,
   onTaskPress,
   onTaskDelete,
@@ -41,6 +45,7 @@ export function TaskList({
       <SwipeableTaskRow
         task={item}
         competitors={competitors}
+        templates={templates}
         onPointsChange={(competitorId, points) =>
           onPointsChange(item.id, competitorId, points)
         }

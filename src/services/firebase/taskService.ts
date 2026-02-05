@@ -244,6 +244,31 @@ export async function deleteTask(
   await deleteDoc(ref);
 }
 
+const BATCH_LIMIT = 500;
+
+/**
+ * Delete all tasks for a household (e.g. when resetting / clearing data).
+ */
+export async function deleteAllTasks(householdId: string): Promise<void> {
+  const db = getDb();
+  const ref = getTasksRef(householdId);
+  if (!db || !ref) {
+    throw new Error('Firestore is not configured');
+  }
+
+  const snapshot = await getDocs(ref);
+  if (snapshot.empty) return;
+
+  for (let i = 0; i < snapshot.docs.length; i += BATCH_LIMIT) {
+    const chunk = snapshot.docs.slice(i, i + BATCH_LIMIT);
+    const batch = writeBatch(db);
+    for (const docSnap of chunk) {
+      batch.delete(docSnap.ref);
+    }
+    await batch.commit();
+  }
+}
+
 /**
  * Delete multiple tasks by template ID from a specific day onwards
  */

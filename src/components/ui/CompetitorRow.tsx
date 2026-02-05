@@ -106,7 +106,7 @@ export function CompetitorRow({
             style={[
               typography.body,
               styles.nameInput,
-              { color: colors.textPrimary },
+              { color: colors.textPrimary, letterSpacing: 0 },
             ]}
             value={competitor.name}
             onChangeText={onNameChange}

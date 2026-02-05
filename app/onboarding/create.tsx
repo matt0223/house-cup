@@ -194,20 +194,21 @@ export default function OnboardingCreateScreen() {
           Your name
         </Text>
         <TextInput
-          style={[
-            styles.input,
-            typography.body,
-            {
-              backgroundColor: colors.surface,
-              color: colors.textPrimary,
-              borderRadius: radius.medium,
-              paddingHorizontal: spacing.sm,
-              paddingVertical: spacing.xs,
-            },
-          ]}
-          value={yourName}
-          onChangeText={setYourName}
-          placeholder="Enter your name"
+            style={[
+              styles.input,
+              typography.body,
+              {
+                backgroundColor: colors.surface,
+                color: colors.textPrimary,
+                borderRadius: radius.medium,
+                paddingHorizontal: spacing.sm,
+                paddingVertical: spacing.xs,
+                letterSpacing: 0,
+              },
+            ]}
+            value={yourName}
+            onChangeText={setYourName}
+            placeholder="Enter your name"
           placeholderTextColor={colors.textSecondary}
           autoFocus
           autoCapitalize="words"
@@ -262,6 +263,7 @@ export default function OnboardingCreateScreen() {
               borderRadius: radius.medium,
               paddingHorizontal: spacing.sm,
               paddingVertical: spacing.xs,
+              letterSpacing: 0,
             },
           ]}
           value={housemateName}
@@ -370,6 +372,7 @@ export default function OnboardingCreateScreen() {
                 color: colors.textPrimary,
                 paddingHorizontal: spacing.sm,
                 paddingVertical: spacing.xs,
+                letterSpacing: 0,
               },
             ]}
             value={prize}

@@ -2,10 +2,7 @@
  * Firebase Authentication Service (JS SDK)
  *
  * Handles user authentication for the House Cup app.
- * Supports:
- * - Anonymous auth for frictionless onboarding
- * - Sign in with Apple for account recovery and persistence
- * - Linking Apple to anonymous accounts (preserves data)
+ * Apple Sign-In is required for all users.
  */
 
 import {
@@ -15,7 +12,6 @@ import {
   onAuthStateChanged,
   OAuthProvider,
   signInWithCredential,
-  linkWithCredential,
   Unsubscribe,
 } from 'firebase/auth';
 import * as AppleAuthentication from 'expo-apple-authentication';
@@ -88,22 +84,6 @@ export async function ensureAuthenticated(): Promise<User> {
 }
 
 /**
- * Check if Sign in with Apple is available on this device
- */
-export async function isAppleAuthAvailable(): Promise<boolean> {
-  return AppleAuthentication.isAvailableAsync();
-}
-
-/**
- * Check if the current user has Apple account linked
- */
-export function isAppleLinked(): boolean {
-  const user = getCurrentUser();
-  if (!user) return false;
-  return user.providerData.some((p) => p.providerId === 'apple.com');
-}
-
-/**
  * Generate a secure random nonce for Apple sign-in
  */
 async function generateNonce(): Promise<string> {
@@ -171,54 +151,6 @@ export async function signInWithApple(): Promise<User> {
   return result.user;
 }
 
-/**
- * Link Apple account to current anonymous user
- * This preserves all existing data while adding Apple sign-in capability
- */
-export async function linkAppleAccount(): Promise<User> {
-  const auth = getFirebaseAuth();
-  if (!auth) {
-    throw new Error('Firebase Auth is not configured');
-  }
-
-  const currentUser = auth.currentUser;
-  if (!currentUser) {
-    throw new Error('No user is currently signed in');
-  }
-
-  if (isAppleLinked()) {
-    throw new Error('Apple account is already linked');
-  }
-
-  // Generate nonce for security
-  const nonce = await generateNonce();
-  const hashedNonce = await sha256(nonce);
-
-  // Request Apple sign-in
-  const appleCredential = await AppleAuthentication.signInAsync({
-    requestedScopes: [
-      AppleAuthentication.AppleAuthenticationScope.EMAIL,
-      AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-    ],
-    nonce: hashedNonce,
-  });
-
-  if (!appleCredential.identityToken) {
-    throw new Error('No identity token received from Apple');
-  }
-
-  // Create Firebase credential
-  const provider = new OAuthProvider('apple.com');
-  const credential = provider.credential({
-    idToken: appleCredential.identityToken,
-    rawNonce: nonce,
-  });
-
-  // Link to current user (preserves anonymous user's data)
-  const result = await linkWithCredential(currentUser, credential);
-  return result.user;
-}
-
 export default {
   getCurrentUser,
   getCurrentUserId,
@@ -226,8 +158,5 @@ export default {
   signOut,
   subscribeToAuthState,
   ensureAuthenticated,
-  isAppleAuthAvailable,
-  isAppleLinked,
   signInWithApple,
-  linkAppleAccount,
 };

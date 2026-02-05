@@ -382,11 +382,11 @@ export function AddTaskSheet({
     confirmModalType === 'delete'
       ? [
           { id: 'today', label: 'Today only' },
-          { id: 'future', label: 'Today and future instances', isDestructive: true },
+          { id: 'future', label: 'This and all without points', isDestructive: true },
         ]
       : [
           { id: 'today', label: 'Today only' },
-          { id: 'future', label: 'Today and future instances' },
+          { id: 'future', label: 'This and all without points' },
         ];
 
   const confirmTitle =
@@ -436,7 +436,7 @@ export function AddTaskSheet({
                   style={[
                     styles.textInput,
                     typography.body,
-                    { color: colors.textPrimary, flex: 1 },
+                    { color: colors.textPrimary, flex: 1, letterSpacing: 0 },
                   ]}
                   placeholder="e.g., Take out trash"
                   placeholderTextColor={colors.textSecondary}

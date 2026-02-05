@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { Challenge, getChallengeDayKeys } from '../domain/models/Challenge';
-import { TaskInstance, hasLocalEdits } from '../domain/models/TaskInstance';
+import { TaskInstance, hasLocalEdits, hasPoints } from '../domain/models/TaskInstance';
 import { RecurringTemplate } from '../domain/models/RecurringTemplate';
 import { SkipRecord } from '../domain/models/SkipRecord';
 import { WeekStartDay } from '../domain/models/Household';
@@ -8,6 +8,7 @@ import {
   DayKey,
   getTodayDayKey,
   getCurrentWeekWindow,
+  addDays,
   seedTasks,
   detachInstance,
   createSkipRecordForDelete,
@@ -19,6 +20,7 @@ import * as taskService from '../services/firebase/taskService';
 import * as challengeService from '../services/firebase/challengeService';
 import * as skipRecordService from '../services/firebase/skipRecordService';
 import { generateFirestoreId } from '../services/firebase/firebaseConfig';
+import { useRecurringStore } from './useRecurringStore';
 
 /**
  * Challenge store state
@@ -29,6 +31,12 @@ interface ChallengeState {
 
   /** All task instances for the current challenge */
   tasks: TaskInstance[];
+
+  /** Challenge ID for which we have received tasks from Firestore (avoids seeding before sync) */
+  tasksLoadedForChallengeId: string | null;
+
+  /** One-shot (templateId, dayKey) to skip when seeding (avoids duplicate when converting one-off to recurring) */
+  seedSkipAnchor: { templateId: string; dayKey: DayKey } | null;
 
   /** Currently selected day in the UI */
   selectedDayKey: DayKey;
@@ -92,6 +100,12 @@ interface ChallengeActions {
     fromDayKey: DayKey
   ) => void;
 
+  /**
+   * Delete recurring task: always delete the anchor task (the one the user chose),
+   * this week delete other instances without points, then all from next week onward and remove the template.
+   */
+  deleteRecurringTaskKeepingPoints: (templateId: string, anchorTaskId: string) => void;
+
   /** Link a one-off task to a template (for converting to recurring) */
   linkTaskToTemplate: (taskId: string, templateId: string) => void;
 
@@ -127,6 +141,9 @@ interface ChallengeActions {
 
   /** Set all tasks (for Firestore sync) */
   setTasks: (tasks: TaskInstance[]) => void;
+
+  /** Set skip records (for Firestore sync; keeps seeding in sync with recurring store) */
+  setSkipRecords: (skipRecords: SkipRecord[]) => void;
 }
 
 type ChallengeStore = ChallengeState & ChallengeActions;
@@ -146,6 +163,8 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
   // Initial state
   challenge: null,
   tasks: [],
+  tasksLoadedForChallengeId: null,
+  seedSkipAnchor: null,
   selectedDayKey: new Date().toISOString().split('T')[0],
   skipRecords: [],
   isLoading: false,
@@ -240,7 +259,7 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
   },
 
   updateTaskName: (taskId, name, applyToAll, templates, onTemplateUpdate) => {
-    const { tasks, skipRecords } = get();
+    const { tasks, skipRecords, syncEnabled, householdId } = get();
     const task = tasks.find((t) => t.id === taskId);
     if (!task) return;
 
@@ -272,6 +291,21 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
         : skipRecords;
 
       set({ tasks: updatedTasks, skipRecords: updatedSkipRecords });
+
+      // Persist detach (templateId + name) and skip record
+      if (syncEnabled && householdId) {
+        taskService
+          .updateTask(householdId, taskId, { templateId: null, name })
+          .catch((error) => {
+            console.error('Failed to sync task detach/rename:', error);
+            set({ error: `Sync failed: ${error.message}` });
+          });
+        if (newSkipRecord) {
+          skipRecordService.addSkipRecord(householdId, newSkipRecord).catch((error) => {
+            console.error('Failed to sync skip record:', error);
+          });
+        }
+      }
     }
   },
 
@@ -341,7 +375,7 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
   },
 
   deleteTasksForTemplateFromDay: (templateId, fromDayKey) => {
-    const { tasks, skipRecords } = get();
+    const { tasks, skipRecords, challenge, syncEnabled, householdId } = get();
 
     // Find tasks to delete (template matches and dayKey >= fromDayKey)
     const tasksToDelete = tasks.filter(
@@ -370,10 +404,79 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
       tasks: updatedTasks,
       skipRecords: [...skipRecords, ...uniqueNewSkipRecords],
     });
+
+    // Persist to Firestore
+    if (syncEnabled && householdId && challenge) {
+      taskService
+        .deleteTasksByTemplateFromDay(
+          householdId,
+          challenge.id,
+          templateId,
+          fromDayKey
+        )
+        .catch((error) => {
+          console.error('Failed to sync task deletions:', error);
+          set({ error: `Sync failed: ${error.message}` });
+        });
+      if (uniqueNewSkipRecords.length > 0) {
+        skipRecordService
+          .addSkipRecordsBatch(householdId, uniqueNewSkipRecords)
+          .catch((error) => {
+            console.error('Failed to sync skip records:', error);
+          });
+      }
+    }
+  },
+
+  deleteRecurringTaskKeepingPoints: (templateId, anchorTaskId) => {
+    const { challenge, tasks, syncEnabled, householdId } = get();
+    if (!challenge) return;
+
+    const weekDayKeys = new Set(getChallengeDayKeys(challenge));
+
+    // Always delete the task the user chose (anchor)
+    get().deleteTask(anchorTaskId);
+
+    // This week: delete other instances without points (anchor already removed)
+    const othersNoPointsInWeek = tasks.filter(
+      (t) =>
+        t.id !== anchorTaskId &&
+        t.templateId === templateId &&
+        weekDayKeys.has(t.dayKey) &&
+        !hasPoints(t)
+    );
+    for (const task of othersNoPointsInWeek) {
+      get().deleteTask(task.id);
+    }
+
+    // This week: detach kept instances (have points) so they become one-offs; template is being removed
+    const keptInWeek = get().tasks.filter(
+      (t) =>
+        t.templateId === templateId &&
+        weekDayKeys.has(t.dayKey) &&
+        hasPoints(t)
+    );
+    for (const task of keptInWeek) {
+      get().updateTask(task.id, { templateId: null });
+      if (syncEnabled && householdId) {
+        taskService
+          .updateTask(householdId, task.id, { templateId: null })
+          .catch((error) => {
+            console.error('Failed to sync task detach:', error);
+          });
+      }
+    }
+
+    // From next week onward: delete all instances and remove template
+    const firstDayNextWeek = addDays(challenge.endDayKey, 1);
+    get().deleteTasksForTemplateFromDay(templateId, firstDayNextWeek);
+    useRecurringStore.getState().deleteTemplate(templateId);
   },
 
   linkTaskToTemplate: (taskId, templateId) => {
-    const { tasks } = get();
+    const { tasks, syncEnabled, householdId } = get();
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return;
 
     const updatedTasks = tasks.map((t) =>
       t.id === taskId
@@ -386,7 +489,20 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
         : t
     );
 
-    set({ tasks: updatedTasks });
+    set({ tasks: updatedTasks, seedSkipAnchor: { templateId, dayKey: task.dayKey } });
+
+    // Persist link so the task stays recurring after sync
+    if (syncEnabled && householdId) {
+      taskService
+        .updateTask(householdId, taskId, {
+          templateId,
+          originalName: task.name,
+        })
+        .catch((error) => {
+          console.error('Failed to sync task link to template:', error);
+          set({ error: `Sync failed: ${error.message}` });
+        });
+    }
   },
 
   updateTask: (taskId, changes) => {
@@ -408,14 +524,35 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
   },
 
   seedFromTemplates: (templates) => {
-    const { challenge, tasks, skipRecords, syncEnabled, householdId } = get();
+    const { challenge, tasks, skipRecords, syncEnabled, householdId, seedSkipAnchor } = get();
     if (!challenge) return;
+
+    // Clear one-shot anchor so next seed doesn't skip
+    set({ seedSkipAnchor: null });
+
+    // Include anchor in "existing" so we never seed that slot (avoids duplicate if Firestore overwrote the link)
+    const existingForSeed =
+      seedSkipAnchor &&
+      (() => {
+        const anchor: TaskInstance = {
+          id: '',
+          challengeId: challenge.id,
+          dayKey: seedSkipAnchor.dayKey,
+          templateId: seedSkipAnchor.templateId,
+          name: '',
+          points: {},
+          createdAt: '',
+          updatedAt: '',
+        };
+        return [...tasks, anchor];
+      })();
+    const tasksForSeed = existingForSeed ?? tasks;
 
     const dayKeys = getChallengeDayKeys(challenge);
     const seedResult = seedTasks(
       dayKeys,
       templates,
-      tasks,
+      tasksForSeed,
       skipRecords,
       challenge.id
     );
@@ -500,6 +637,8 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
     set({
       challenge: null,
       tasks: [],
+      tasksLoadedForChallengeId: null,
+      seedSkipAnchor: null,
       selectedDayKey: new Date().toISOString().split('T')[0],
       skipRecords: [],
       error: null,
@@ -511,11 +650,19 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
   },
 
   setChallenge: (challenge) => {
-    set({ challenge });
+    set({ challenge, tasksLoadedForChallengeId: null });
   },
 
   setTasks: (tasks) => {
-    set({ tasks });
+    const { challenge } = get();
+    set({
+      tasks,
+      tasksLoadedForChallengeId: challenge?.id ?? null,
+    });
+  },
+
+  setSkipRecords: (skipRecords) => {
+    set({ skipRecords });
   },
 }));
 

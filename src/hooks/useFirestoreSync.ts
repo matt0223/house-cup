@@ -64,6 +64,7 @@ export function useFirestoreSync({
   const setHousehold = useHouseholdStore((s) => s.setHousehold);
   const setChallenge = useChallengeStore((s) => s.setChallenge);
   const setTasks = useChallengeStore((s) => s.setTasks);
+  const setSkipRecordsChallenge = useChallengeStore((s) => s.setSkipRecords);
   const setTemplates = useRecurringStore((s) => s.setTemplates);
   const setSkipRecords = useRecurringStore((s) => s.setSkipRecords);
 
@@ -141,11 +142,12 @@ export function useFirestoreSync({
     );
     unsubscribers.push(unsubTemplates);
 
-    // 4. Subscribe to skip records
+    // 4. Subscribe to skip records (update both stores so seeding sees latest)
     const unsubSkipRecords = subscribeToSkipRecords(
       householdId,
       (skipRecords: SkipRecord[]) => {
         setSkipRecords(skipRecords);
+        setSkipRecordsChallenge(skipRecords);
       },
       handleError('Skip records sync')
     );
@@ -160,7 +162,7 @@ export function useFirestoreSync({
       }
       setIsSyncing(false);
     };
-  }, [enabled, householdId, setHousehold, setChallenge, setTasks, setTemplates, setSkipRecords, onHouseholdNotFound]);
+  }, [enabled, householdId, setHousehold, setChallenge, setTasks, setSkipRecordsChallenge, setTemplates, setSkipRecords, onHouseholdNotFound]);
 
   return {
     isSyncing,

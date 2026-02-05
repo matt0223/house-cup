@@ -16,6 +16,7 @@ import { useFirebase } from '../src/providers/FirebaseProvider';
 import { formatDayKeyRange, getTodayDayKey, getCurrentWeekWindow } from '../src/domain/services';
 import { TaskInstance } from '../src/domain/models/TaskInstance';
 import { shareHouseholdInvite } from '../src/utils/shareInvite';
+import * as taskService from '../src/services/firebase/taskService';
 
 /**
  * Challenge screen - Main tab showing scoreboard, day strip, and task list.
@@ -34,8 +35,12 @@ export default function ChallengeScreen() {
   // Animated value for scroll-linked scoreboard collapse
   const scrollY = useRef(new Animated.Value(0)).current;
 
+  // Only re-seed when the set of template IDs actually changes (avoids duplicate seed when
+  // Firestore sync fires with same templates after our add, and task subscription had already overwrote store)
+  const lastSeededTemplateIdsRef = useRef<string | null>(null);
+
   // Firebase context for onboarding redirect
-  const { isConfigured, isAuthLoading, householdId } = useFirebase();
+  const { isConfigured, isAuthLoading, householdId, userId } = useFirebase();
 
   // Household store
   const household = useHouseholdStore((s) => s.household);
@@ -52,10 +57,14 @@ export default function ChallengeScreen() {
   const updateTask = useChallengeStore((s) => s.updateTask);
   const deleteTask = useChallengeStore((s) => s.deleteTask);
   const deleteTasksForTemplateFromDay = useChallengeStore((s) => s.deleteTasksForTemplateFromDay);
+  const deleteRecurringTaskKeepingPoints = useChallengeStore((s) => s.deleteRecurringTaskKeepingPoints);
   const linkTaskToTemplate = useChallengeStore((s) => s.linkTaskToTemplate);
   const seedFromTemplates = useChallengeStore((s) => s.seedFromTemplates);
   const getScores = useChallengeStore((s) => s.getScores);
   const updateChallengeBoundaries = useChallengeStore((s) => s.updateChallengeBoundaries);
+  const syncEnabled = useChallengeStore((s) => s.syncEnabled);
+  const householdIdFromStore = useChallengeStore((s) => s.householdId);
+  const tasksLoadedForChallengeId = useChallengeStore((s) => s.tasksLoadedForChallengeId);
 
   // Recurring store
   const templates = useRecurringStore((s) => s.templates);
@@ -88,12 +97,21 @@ export default function ChallengeScreen() {
     }
   }, [household, challenge, templates, challengeWeekStartDay]);
 
-  // Auto-seed tasks when templates change (idempotent - won't create duplicates)
+  // Auto-seed tasks when templates change. When sync is enabled, wait for initial
+  // tasks load from Firestore so we don't seed before existing tasks arrive (which would create duplicates on reload).
+  // Only run when the set of template IDs actually changed (prevents second run when Firestore sync
+  // sends same templates after our add, which would create duplicates on other days).
   useEffect(() => {
-    if (challenge && templates.length > 0) {
-      seedFromTemplates(templates);
-    }
-  }, [templates, challenge]);
+    if (!challenge || templates.length === 0) return;
+    const canSeed = !syncEnabled || tasksLoadedForChallengeId === challenge.id;
+    if (!canSeed) return;
+
+    const templateIdsKey = [...templates].map((t) => t.id).sort().join(',');
+    if (lastSeededTemplateIdsRef.current === templateIdsKey) return;
+    lastSeededTemplateIdsRef.current = templateIdsKey;
+
+    seedFromTemplates(templates);
+  }, [templates, challenge, syncEnabled, tasksLoadedForChallengeId]);
 
   // Handle invite button press on ScoreboardCard
   // Note: Must be defined before conditional returns to follow Rules of Hooks
@@ -110,8 +128,8 @@ export default function ChallengeScreen() {
     );
   }, [household]);
 
-  // Redirect to onboarding if Firebase is configured but no household exists
-  if (isConfigured && !isAuthLoading && !householdId) {
+  // Redirect to onboarding if no household or no user (can't load household without auth)
+  if (isConfigured && !isAuthLoading && (!householdId || !userId)) {
     return <Redirect href="/onboarding" />;
   }
 
@@ -156,9 +174,10 @@ export default function ChallengeScreen() {
     repeatDays: number[] | null
   ) => {
     if (repeatDays && repeatDays.length > 0) {
-      // Recurring task: create template only
-      // seedFromTemplates() will create all task instances (including today)
-      addTemplate(name, repeatDays);
+      // Recurring task: create template, then add today's instance with points.
+      // seedFromTemplates() will create instances for other days (today already has one).
+      const newTemplate = addTemplate(name, repeatDays);
+      addTask(name, points, newTemplate.id);
     } else {
       // One-off task: create task directly
       addTask(name, points, null);
@@ -189,18 +208,28 @@ export default function ChallengeScreen() {
             updateTemplate(templateId, { name: newName });
           });
         } else {
-          // Detach and update just this instance
+          // Detach and update just this instance (store persists task + skip record)
           updateTaskName(taskId, changes.name, false, templates);
         }
       } else {
-        // One-off task - just update
+        // One-off task - just update and persist
         updateTask(taskId, { name: changes.name });
+        if (syncEnabled && householdIdFromStore) {
+          taskService.updateTask(householdIdFromStore, taskId, { name: changes.name }).catch((err) => {
+            console.error('Failed to sync task name:', err);
+          });
+        }
       }
     }
 
     // Handle points change (always applies to instance)
     if (changes.points !== undefined) {
       updateTask(taskId, { points: changes.points });
+      if (syncEnabled && householdIdFromStore) {
+        taskService.updateTask(householdIdFromStore, taskId, { points: changes.points }).catch((err) => {
+          console.error('Failed to sync task points:', err);
+        });
+      }
     }
 
     // Handle schedule change
@@ -209,6 +238,11 @@ export default function ChallengeScreen() {
         // Converting recurring to one-off: delete template and detach task
         deleteTemplate(task.templateId);
         updateTask(taskId, { templateId: null });
+        if (syncEnabled && householdIdFromStore) {
+          taskService.updateTask(householdIdFromStore, taskId, { templateId: null }).catch((err) => {
+            console.error('Failed to sync task detach:', err);
+          });
+        }
       } else {
         // Just update the template's days
         updateTemplate(task.templateId, { repeatDays: changes.repeatDays });
@@ -240,9 +274,8 @@ export default function ChallengeScreen() {
     if (!task) return;
 
     if (scope === 'future' && task.templateId) {
-      // Delete template and all remaining instances
-      deleteTasksForTemplateFromDay(task.templateId, task.dayKey);
-      deleteTemplate(task.templateId);
+      // Always delete this task; this week others without points; next week onward all; then remove template
+      deleteRecurringTaskKeepingPoints(task.templateId, taskId);
     } else {
       // Delete just this instance
       deleteTask(taskId);
@@ -273,9 +306,8 @@ export default function ChallengeScreen() {
       // Delete just this instance
       deleteTask(swipeDeleteTask.id);
     } else if (optionId === 'future' && swipeDeleteTask.templateId) {
-      // Delete template and all remaining instances
-      deleteTasksForTemplateFromDay(swipeDeleteTask.templateId, swipeDeleteTask.dayKey);
-      deleteTemplate(swipeDeleteTask.templateId);
+      // Always delete this task; this week others without points; next week onward all; then remove template
+      deleteRecurringTaskKeepingPoints(swipeDeleteTask.templateId, swipeDeleteTask.id);
     }
 
     setSwipeDeleteTask(null);
@@ -370,6 +402,7 @@ export default function ChallengeScreen() {
             <TaskList
               tasks={tasksForDay}
               competitors={competitors}
+              templates={templates}
               onPointsChange={handlePointsChange}
               onTaskPress={handleTaskPress}
               onTaskDelete={handleSwipeDelete}
@@ -426,7 +459,7 @@ export default function ChallengeScreen() {
         title="Delete this task?"
         options={[
           { id: 'today', label: 'Today only' },
-          { id: 'future', label: 'Today and future instances', isDestructive: true },
+          { id: 'future', label: 'This and all without points', isDestructive: true },
         ]}
         onSelect={handleSwipeDeleteConfirm}
         onCancel={() => setSwipeDeleteTask(null)}

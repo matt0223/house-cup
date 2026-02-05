@@ -22,6 +22,9 @@ import {
   addPendingCompetitor,
   createChallenge,
   getCurrentUserId,
+  deleteAllTasks,
+  deleteAllTemplates,
+  deleteAllSkipRecords,
 } from '../services/firebase';
 import { Competitor, isPendingCompetitor } from '../domain/models/Competitor';
 import { getCurrentWeekWindow, getTodayDayKey } from '../domain/services';
@@ -77,6 +80,8 @@ interface FirebaseContextValue {
   addHousemate: (name: string, color: string) => Promise<Competitor>;
   /** Recover household after Apple sign-in (finds household by userId) */
   recoverHousehold: () => Promise<boolean>;
+  /** Delete all tasks, templates, and skip records from Firestore for this household and clear local state (for testing / fresh start) */
+  clearAllHouseholdTaskData: () => Promise<void>;
 }
 
 const FirebaseContext = createContext<FirebaseContextValue | null>(null);
@@ -140,10 +145,10 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
     setHouseholdId(null);
   }, [setHouseholdId]);
 
-  // Firestore sync (only active when we have a householdId)
+  // Firestore sync (only active when we have a householdId and an authenticated user)
   const { isSyncing, error: syncError } = useFirestoreSync({
     householdId,
-    enabled: isConfigured && !!householdId,
+    enabled: isConfigured && !!householdId && !!userId,
     onHouseholdNotFound: handleHouseholdNotFound,
   });
 
@@ -152,9 +157,9 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
   const setHouseholdInStore = useHouseholdStore((s) => s.setHousehold);
   const household = useHouseholdStore((s) => s.household);
 
-  // Enable sync in stores when we have a householdId
+  // Enable sync in stores when we have a householdId and authenticated user
   useEffect(() => {
-    if (isConfigured && householdId) {
+    if (isConfigured && householdId && userId) {
       setSyncEnabledHousehold(true);
       useChallengeStore.getState().setSyncEnabled(true, householdId);
       useRecurringStore.getState().setSyncEnabled(true, householdId);
@@ -163,7 +168,7 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
       useChallengeStore.getState().setSyncEnabled(false, null);
       useRecurringStore.getState().setSyncEnabled(false, null);
     }
-  }, [isConfigured, householdId, setSyncEnabledHousehold]);
+  }, [isConfigured, householdId, userId, setSyncEnabledHousehold]);
 
   // Update householdId from loaded household (e.g., from Firestore sync)
   useEffect(() => {
@@ -373,6 +378,21 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
     }
   }, [setHouseholdInStore, setHouseholdId]);
 
+  // Clear all tasks, templates, skip records from Firestore and reset local challenge/recurring state
+  const clearAllHouseholdTaskData = useCallback(async (): Promise<void> => {
+    if (!householdId) return;
+    try {
+      await deleteAllTasks(householdId);
+      await deleteAllTemplates(householdId);
+      await deleteAllSkipRecords(householdId);
+      useChallengeStore.getState().reset();
+      useRecurringStore.getState().reset();
+    } catch (error) {
+      console.error('Failed to clear household task data:', error);
+      throw error;
+    }
+  }, [householdId]);
+
   const value: FirebaseContextValue = {
     isConfigured,
     userId,
@@ -387,6 +407,7 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
     markInviteSent,
     addHousemate,
     recoverHousehold,
+    clearAllHouseholdTaskData,
   };
 
   return (

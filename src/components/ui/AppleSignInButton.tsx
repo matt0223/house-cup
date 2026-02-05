@@ -41,7 +41,7 @@ export function AppleSignInButton({
   disabled = false,
   width = '100%',
 }: AppleSignInButtonProps) {
-  const { colors, spacing, radius } = useTheme();
+  const { colors, spacing, radius, isDark } = useTheme();
 
   // Map mode to Apple button type
   const getButtonType = () => {
@@ -61,7 +61,11 @@ export function AppleSignInButton({
       <View style={[styles.container, { width }]}>
         <AppleAuthentication.AppleAuthenticationButton
           buttonType={getButtonType()}
-          buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+          buttonStyle={
+            isDark
+              ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
+              : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
+          }
           cornerRadius={radius.medium}
           style={[styles.button, { opacity: disabled ? 0.5 : 1 }]}
           onPress={disabled ? undefined : onPress}

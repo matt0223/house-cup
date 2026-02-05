@@ -2,13 +2,13 @@
  * Auth Hook (JS SDK)
  *
  * Manages Firebase authentication state and provides auth-related actions.
+ * Does not create anonymous users; auth state is restored from persistence (e.g. Apple Sign-In).
  */
 
 import { useState, useEffect, useCallback } from 'react';
 import { User } from 'firebase/auth';
 import {
   subscribeToAuthState,
-  ensureAuthenticated,
   signOut as firebaseSignOut,
 } from '../services/firebase';
 import { isFirebaseConfigured } from '../services/firebase/firebaseConfig';
@@ -31,14 +31,14 @@ interface UseAuthResult {
 /**
  * Hook to manage Firebase authentication state.
  *
- * Automatically signs in anonymously if no user is authenticated.
+ * Auth state is restored from persistence (e.g. Apple Sign-In). No anonymous users are created.
  *
  * Usage:
  * ```tsx
  * const { user, userId, isLoading, error } = useAuth();
  *
  * if (isLoading) return <LoadingScreen />;
- * if (!userId) return <ErrorScreen />;
+ * if (!userId) return <OnboardingScreen />;
  * ```
  */
 export function useAuth(): UseAuthResult {
@@ -48,28 +48,34 @@ export function useAuth(): UseAuthResult {
 
   const isConfigured = isFirebaseConfigured();
 
-  // Subscribe to auth state changes
+  // Subscribe to auth state changes (persistence restores Apple user on reload).
+  // When the first callback is null, delay "loading done" briefly so persistence can restore the user.
   useEffect(() => {
     if (!isConfigured) {
       setIsLoading(false);
       return;
     }
 
+    let persistenceTimeout: ReturnType<typeof setTimeout> | null = null;
+
     const unsubscribe = subscribeToAuthState((authUser) => {
-      setUser(authUser);
-      setIsLoading(false);
+      if (authUser) {
+        if (persistenceTimeout) clearTimeout(persistenceTimeout);
+        setUser(authUser);
+        setIsLoading(false);
+      } else {
+        // Null: give persistence a moment to restore (e.g. Apple user on iOS)
+        persistenceTimeout = setTimeout(() => {
+          setUser(null);
+          setIsLoading(false);
+        }, 1500);
+      }
     });
 
-    // Ensure authenticated on mount
-    ensureAuthenticated()
-      .then(setUser)
-      .catch((err) => {
-        console.error('Auth error:', err);
-        setError(`Authentication failed: ${err.message}`);
-        setIsLoading(false);
-      });
-
-    return unsubscribe;
+    return () => {
+      if (persistenceTimeout) clearTimeout(persistenceTimeout);
+      unsubscribe();
+    };
   }, [isConfigured]);
 
   const signOut = useCallback(async () => {

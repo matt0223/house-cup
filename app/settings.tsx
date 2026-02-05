@@ -20,7 +20,6 @@ import {
   SettingsRow,
   CompetitorRow,
   OptionPickerModal,
-  AppleSignInButton,
 } from '../src/components/ui';
 import { useHouseholdStore } from '../src/store';
 import { WeekStartDay } from '../src/domain/models/Household';
@@ -54,9 +53,9 @@ const THEME_OPTIONS: { id: ThemePreference; label: string }[] = [
  * Settings screen - Configure competitors, challenge settings, and app preferences.
  */
 export default function SettingsScreen() {
-  const { colors, typography, spacing, radius } = useTheme();
+  const { colors, typography, spacing, radius, isDark } = useTheme();
   const router = useRouter();
-  const { markInviteSent, addHousemate, setHouseholdId } = useFirebase();
+  const { markInviteSent, addHousemate, setHouseholdId, clearAllHouseholdTaskData, isConfigured } = useFirebase();
   const { signOut } = useAuth();
 
   // Household store
@@ -83,18 +82,12 @@ export default function SettingsScreen() {
   const [isHousemateNameFocused, setIsHousemateNameFocused] = useState(false);
   const [isSendingInvite, setIsSendingInvite] = useState(false);
 
-  // Apple auth for account linking
-  const {
-    isAvailable: isAppleAvailable,
-    isLinked: isAppleLinked,
-    isLoading: isAppleLinking,
-    error: appleError,
-    linkAccount: linkAppleAccount,
-    clearError: clearAppleError,
-  } = useAppleAuth();
+  // Apple auth state (used for display only - sign-in is required during onboarding)
+  useAppleAuth();
 
   // Sign out state
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [isClearingData, setIsClearingData] = useState(false);
 
   // Handle sign out
   const handleSignOut = useCallback(() => {
@@ -128,6 +121,33 @@ export default function SettingsScreen() {
       ]
     );
   }, [signOut, clearHousehold, setHouseholdId, router]);
+
+  // Clear all tasks, templates, skip records from Firestore and local state
+  const handleClearAllTaskData = useCallback(() => {
+    Alert.alert(
+      'Clear All Task Data',
+      'This will permanently delete all tasks, templates, and skip records from the database and clear them from this device. Your household and competitors are not affected. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear All',
+          style: 'destructive',
+          onPress: async () => {
+            setIsClearingData(true);
+            try {
+              await clearAllHouseholdTaskData();
+              Alert.alert('Done', 'All task data has been cleared.');
+            } catch (error) {
+              console.error('Clear task data error:', error);
+              Alert.alert('Error', 'Failed to clear data. Please try again.');
+            } finally {
+              setIsClearingData(false);
+            }
+          },
+        },
+      ]
+    );
+  }, [clearAllHouseholdTaskData]);
 
   // Handle sharing invite for existing pending competitor
   const handleShareInvite = useCallback(async () => {
@@ -398,7 +418,7 @@ export default function SettingsScreen() {
                     style={[
                       typography.body,
                       styles.prizeInput,
-                      { color: colors.textPrimary },
+                      { color: colors.textPrimary, letterSpacing: 0 },
                     ]}
                     value={prizeText}
                     onChangeText={setPrizeText}
@@ -471,64 +491,16 @@ export default function SettingsScreen() {
 
         {/* Account Section */}
         <SettingsSection title="Account">
-          {isAppleLinked ? (
-            <SettingsRow
-              label="Signed in with Apple"
-              icon="logo-apple"
-              iconColor={colors.textPrimary}
-              showDivider={false}
-              rightElement={
-                <Ionicons name="checkmark-circle" size={22} color={colors.success} />
-              }
-            />
-          ) : isAppleAvailable ? (
-            <View style={{ paddingVertical: spacing.sm, paddingHorizontal: spacing.sm }}>
-              <Text
-                style={[
-                  typography.callout,
-                  { color: colors.textSecondary, marginBottom: spacing.sm },
-                ]}
-              >
-                Link your Apple ID to recover your household if you reinstall the app or switch devices.
-              </Text>
-              {appleError && (
-                <Text
-                  style={[
-                    typography.callout,
-                    { color: colors.error, marginBottom: spacing.sm },
-                  ]}
-                >
-                  {appleError}
-                </Text>
-              )}
-              {isAppleLinking ? (
-                <View style={{ alignItems: 'center', paddingVertical: spacing.md }}>
-                  <ActivityIndicator size="small" color={colors.primary} />
-                  <Text
-                    style={[
-                      typography.callout,
-                      { color: colors.textSecondary, marginTop: spacing.xs },
-                    ]}
-                  >
-                    Linking account...
-                  </Text>
-                </View>
-              ) : (
-                <AppleSignInButton
-                  onPress={linkAppleAccount}
-                  mode="link"
-                />
-              )}
-            </View>
-          ) : (
-            <SettingsRow
-              label="Sign in with Apple"
-              icon="logo-apple"
-              iconColor={colors.textPrimary}
-              showDivider={false}
-              value="Not available"
-            />
-          )}
+          <SettingsRow
+            label="Signed in with Apple"
+            icon="logo-apple"
+            iconColor={isDark ? '#FFFFFF' : '#000000'}
+            iconTint={isDark ? '#000000' : '#FFFFFF'}
+            showDivider={false}
+            rightElement={
+              <Ionicons name="checkmark-circle" size={22} color={colors.success} />
+            }
+          />
         </SettingsSection>
 
         {/* About Section */}
@@ -541,6 +513,25 @@ export default function SettingsScreen() {
             showDivider={false}
           />
         </SettingsSection>
+
+        {/* Data Section - only when Firebase is configured */}
+        {isConfigured && (
+          <SettingsSection title="Data">
+            <SettingsRow
+              label="Clear all tasks and templates"
+              icon="trash-outline"
+              iconColor={colors.error}
+              showDivider={false}
+              onPress={handleClearAllTaskData}
+              disabled={isClearingData}
+              rightElement={
+                isClearingData ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : undefined
+              }
+            />
+          </SettingsSection>
+        )}
 
         {/* Sign Out Section */}
         <SettingsSection title="">

@@ -23,8 +23,10 @@ export interface SettingsRowProps {
   showDivider?: boolean;
   /** Icon name (Ionicons) */
   icon?: keyof typeof Ionicons.glyphMap;
-  /** Icon color */
+  /** Icon background color */
   iconColor?: string;
+  /** Icon tint/foreground color (defaults to white) */
+  iconTint?: string;
   /** Override label text color */
   labelColor?: string;
 }
@@ -45,6 +47,7 @@ export function SettingsRow({
   showDivider = true,
   icon,
   iconColor,
+  iconTint = '#FFFFFF',
   labelColor,
 }: SettingsRowProps) {
   const { colors, typography, spacing } = useTheme();
@@ -70,7 +73,7 @@ export function SettingsRow({
               },
             ]}
           >
-            <Ionicons name={icon} size={18} color="#FFFFFF" />
+            <Ionicons name={icon} size={18} color={iconTint} />
           </View>
         )}
         <View style={styles.labelContainer}>

@@ -31,7 +31,6 @@ export default function OnboardingWelcomeScreen() {
   const router = useRouter();
   const { householdId, recoverHousehold, setHouseholdId } = useFirebase();
   const {
-    isAvailable: isAppleAvailable,
     isLoading: isAppleLoading,
     error: appleError,
     signIn: signInWithApple,
@@ -161,59 +160,38 @@ export default function OnboardingWelcomeScreen() {
 
       {/* Actions */}
       <View style={[styles.actions, { gap: spacing.md }]}>
-        {isAppleAvailable ? (
-          <>
-            <AppleSignInButton
-              onPress={handleAppleSignIn}
-              mode="continue"
-            />
-            
-            {appleError && (
-              <Text
-                style={[
-                  typography.callout,
-                  { color: colors.error, textAlign: 'center' },
-                ]}
-              >
-                {appleError}
-              </Text>
-            )}
-
-            <View style={styles.dividerContainer}>
-              <View style={[styles.divider, { backgroundColor: colors.border }]} />
-              <Text style={[typography.caption, { color: colors.textSecondary, marginHorizontal: spacing.sm }]}>
-                or
-              </Text>
-              <View style={[styles.divider, { backgroundColor: colors.border }]} />
-            </View>
-
-            <TouchableOpacity
-              onPress={handleJoinCodePress}
-              style={styles.joinLink}
-            >
-              <Text style={[typography.callout, { color: colors.primary }]}>
-                Enter a join code
-              </Text>
-            </TouchableOpacity>
-          </>
-        ) : (
-          // Fallback if Apple Sign-In not available
-          <>
-            <Button
-              label="Get Started"
-              onPress={() => router.push('/onboarding/create')}
-              fullWidth
-            />
-            <TouchableOpacity
-              onPress={() => router.push('/onboarding/join')}
-              style={styles.joinLink}
-            >
-              <Text style={[typography.callout, { color: colors.textSecondary }]}>
-                Have a join code?
-              </Text>
-            </TouchableOpacity>
-          </>
+        <AppleSignInButton
+          onPress={handleAppleSignIn}
+          mode="continue"
+        />
+        
+        {appleError && (
+          <Text
+            style={[
+              typography.callout,
+              { color: colors.error, textAlign: 'center' },
+            ]}
+          >
+            {appleError}
+          </Text>
         )}
+
+        <View style={styles.dividerContainer}>
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+          <Text style={[typography.caption, { color: colors.textSecondary, marginHorizontal: spacing.sm }]}>
+            or
+          </Text>
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+        </View>
+
+        <TouchableOpacity
+          onPress={handleJoinCodePress}
+          style={styles.joinLink}
+        >
+          <Text style={[typography.callout, { color: colors.primary }]}>
+            Enter a join code
+          </Text>
+        </TouchableOpacity>
       </View>
     </View>
   );

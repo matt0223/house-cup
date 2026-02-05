@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
 import { PointsChip } from '../ui/PointsChip';
 import { TaskInstance } from '../../domain/models/TaskInstance';
+import { RecurringTemplate } from '../../domain/models/RecurringTemplate';
 import { Competitor } from '../../domain/models/Competitor';
 
 export interface TaskRowProps {
@@ -11,6 +12,8 @@ export interface TaskRowProps {
   task: TaskInstance;
   /** Competitors to show chips for */
   competitors: Competitor[];
+  /** Recurring templates (used to show icon only when task is actually recurring) */
+  templates?: RecurringTemplate[];
   /** Called when points chip is tapped */
   onPointsChange: (competitorId: string, newPoints: number) => void;
   /** Called when task row is tapped (for editing) */
@@ -19,16 +22,22 @@ export interface TaskRowProps {
 
 /**
  * A row displaying a task with points chips for each competitor.
+ * Shows the recurring icon only when the task is linked to a template that has repeat days.
  */
 export function TaskRow({
   task,
   competitors,
+  templates = [],
   onPointsChange,
   onPress,
 }: TaskRowProps) {
   const { colors, typography, spacing } = useTheme();
 
-  const isRecurring = Boolean(task.templateId);
+  const isRecurring =
+    Boolean(task.templateId) &&
+    templates.some(
+      (t) => t.id === task.templateId && (t.repeatDays?.length ?? 0) > 0
+    );
 
   const handlePointsTap = (competitor: Competitor) => {
     const currentPoints = task.points[competitor.id] ?? 0;

@@ -154,10 +154,10 @@ export const useRecurringStore = create<RecurringStore>((set, get) => ({
   deleteTemplate: (templateId) => {
     const { syncEnabled, householdId } = get();
 
-    // Optimistic update
+    // Optimistic update: remove template and its skip records (avoid orphaned data)
     set((state) => ({
       templates: state.templates.filter((t) => t.id !== templateId),
-      // Keep skip records for historical data
+      skipRecords: state.skipRecords.filter((sr) => sr.templateId !== templateId),
     }));
 
     // Persist to Firestore
@@ -167,6 +167,11 @@ export const useRecurringStore = create<RecurringStore>((set, get) => ({
         .catch((error) => {
           console.error('Failed to sync template deletion:', error);
           set({ error: `Sync failed: ${error.message}` });
+        });
+      skipRecordService
+        .removeSkipRecordsForTemplate(householdId, templateId)
+        .catch((error) => {
+          console.error('Failed to sync skip records removal:', error);
         });
     }
   },

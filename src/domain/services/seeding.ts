@@ -125,6 +125,11 @@ export interface ReconcileResult {
 /**
  * Reconcile existing instances after template repeat days change.
  *
+ * For future use: when the app wants "change repeat days → auto-remove/detach
+ * out-of-pattern instances", call this with the template, old/new repeat days,
+ * and all instances for that template, then apply the result (remove tasks,
+ * update detached tasks, add skip records, persist).
+ *
  * For instances that are now out of pattern:
  * - If untouched (0 points, not renamed) → remove
  * - If has local edits → detach (templateId = null) + create SkipRecord
