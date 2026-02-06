@@ -51,7 +51,7 @@
       }
     },
     "production": {
-      "autoIncrement": true,
+      "autoIncrement": false,
       "env": {
         "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyAmz8uv_VR-m0KymecHPKy5GOUXIG0qEic",
         "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "house-cup-3e1d7.firebaseapp.com",

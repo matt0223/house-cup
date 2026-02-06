@@ -1,5 +1,5 @@
 import React, { useEffect, useCallback, useRef } from 'react';
-import { View, StyleSheet, Text, ActivityIndicator, Animated } from 'react-native';
+import { View, StyleSheet, Text, ActivityIndicator, Animated, ScrollView, Easing } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -34,6 +34,35 @@ export default function ChallengeScreen() {
 
   // Animated value for scroll-linked scoreboard collapse
   const scrollY = useRef(new Animated.Value(0)).current;
+  const scrollViewRef = useRef<ScrollView>(null);
+  const currentScrollOffset = useRef(0);
+  const scrollViewHeight = useRef(0);
+  const scrollContentHeight = useRef(0);
+  const isAnimatingDayChange = useRef(false);
+
+  // Track scroll offset via scrollY listener (captures both native events and Animated.timing)
+  useEffect(() => {
+    const id = scrollY.addListener(({ value }) => {
+      currentScrollOffset.current = value;
+    });
+    return () => scrollY.removeListener(id);
+  }, [scrollY]);
+
+  // Manual scroll handler: blocks scrollY updates during day-change animation
+  // to prevent the native scroll clamp (→ 0) from flashing the header to expanded
+  const handleScroll = useCallback((event: any) => {
+    if (!isAnimatingDayChange.current) {
+      scrollY.setValue(event.nativeEvent.contentOffset.y);
+    }
+  }, [scrollY]);
+
+  // Track scroll view dimensions for day-change scroll logic
+  const handleScrollLayout = useCallback((e: any) => {
+    scrollViewHeight.current = e.nativeEvent.layout.height;
+  }, []);
+  const handleContentSizeChange = useCallback((_w: number, h: number) => {
+    scrollContentHeight.current = h;
+  }, []);
 
   // Only re-seed when the set of template IDs actually changes (avoids duplicate seed when
   // Firestore sync fires with same templates after our add, and task subscription had already overwrote store)
@@ -112,6 +141,50 @@ export default function ChallengeScreen() {
 
     seedFromTemplates(templates);
   }, [templates, challenge, syncEnabled, tasksLoadedForChallengeId]);
+
+  // Select day: maintain scroll position for long days, smoothly expand for short days.
+  // Animation starts immediately with a fast-start easing, then the re-render is deferred
+  // by one frame so the animation visually begins before the heavy re-render blocks JS.
+  const handleDaySelect = useCallback((dayKey: string) => {
+    const savedOffset = currentScrollOffset.current;
+
+    if (savedOffset <= 0) {
+      setSelectedDay(dayKey);
+      return; // Already at top, nothing to manage
+    }
+
+    // Block native scroll events from resetting scrollY during the re-render
+    isAnimatingDayChange.current = true;
+
+    // Start expanding immediately with fast-start easing (visible movement on first frame)
+    Animated.timing(scrollY, {
+      toValue: 0,
+      duration: 250,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start(({ finished }) => {
+      if (finished) isAnimatingDayChange.current = false;
+    });
+
+    // Defer re-render by one frame so the animation starts before JS gets blocked
+    requestAnimationFrame(() => {
+      setSelectedDay(dayKey);
+
+      // After re-render: if new content is long enough, cancel expand and restore position
+      requestAnimationFrame(() => {
+        const maxScroll = Math.max(0, scrollContentHeight.current - scrollViewHeight.current);
+
+        if (maxScroll >= savedOffset) {
+          // New day has enough content — cancel expand, restore collapsed position
+          scrollY.stopAnimation();
+          isAnimatingDayChange.current = false;
+          scrollY.setValue(savedOffset);
+          scrollViewRef.current?.scrollTo({ y: savedOffset, animated: false });
+        }
+        // Short content: animation already running, let it finish
+      });
+    });
+  }, [setSelectedDay, scrollY]);
 
   // Handle invite button press on ScoreboardCard
   // Note: Must be defined before conditional returns to follow Rules of Hooks
@@ -354,48 +427,97 @@ export default function ChallengeScreen() {
     ? formatDayKeyRange(challenge.startDayKey, challenge.endDayKey)
     : '';
 
+  // Option A: Header + scoreboard scroll together inside a clipping container
+  // Include CollapsibleScoreboard paddingTop (8) so prize circle bottom isn't clipped
+  const HEADER_HEIGHT = 52;
+  const HEADER_EXIT_SCROLL = 65; // header exits over 65px of scroll (~20% slower than content)
+  const EXPANDED_SCOREBOARD_HEIGHT = 140 + 8; // MorphingScoreboard 140 + paddingTop
+  const COLLAPSED_SCOREBOARD_HEIGHT = 100 + 8;
+  const SCOREBOARD_COLLAPSE_THRESHOLD = 110;
+  // Day strip overlay: top padding (12) + chip height (36) + bottom padding (8) so tasks scroll behind
+  const DAY_STRIP_ZONE_HEIGHT = spacing.xs + 36 + spacing.xxs;
+
+  // Header exits with subtle parallax: 52px of movement spread over 65px of scroll
+  const headerTranslateY = scrollY.interpolate({
+    inputRange: [0, HEADER_EXIT_SCROLL],
+    outputRange: [0, -HEADER_HEIGHT],
+    extrapolate: 'clamp',
+  });
+
+  // Clip height = visible header + scoreboard (both shrink independently)
+  // This eliminates the empty gap when the header scrolls out
+  const headerVisibleHeight = scrollY.interpolate({
+    inputRange: [0, HEADER_EXIT_SCROLL],
+    outputRange: [HEADER_HEIGHT, 0],
+    extrapolate: 'clamp',
+  });
+  // Ease the scoreboard height to match the eased MorphingScoreboard structural animations
+  const sbDelta = (EXPANDED_SCOREBOARD_HEIGHT - COLLAPSED_SCOREBOARD_HEIGHT) * 0.08;
+  const scoreboardAnimatedHeight = scrollY.interpolate({
+    inputRange: [0, SCOREBOARD_COLLAPSE_THRESHOLD * 0.15, SCOREBOARD_COLLAPSE_THRESHOLD * 0.85, SCOREBOARD_COLLAPSE_THRESHOLD],
+    outputRange: [EXPANDED_SCOREBOARD_HEIGHT, EXPANDED_SCOREBOARD_HEIGHT - sbDelta, COLLAPSED_SCOREBOARD_HEIGHT + sbDelta, COLLAPSED_SCOREBOARD_HEIGHT],
+    extrapolate: 'clamp',
+  });
+  const clipContainerHeight = Animated.add(headerVisibleHeight, scoreboardAnimatedHeight);
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <AppHeader
-        title={dateRange || 'This Week'}
-        rightActions={[
-          { icon: 'trending-up-outline', onPress: () => router.push('/history') },
-          { icon: 'settings-outline', onPress: () => router.push('/settings') },
-        ]}
-      />
+      {/* Clipping container: header + scoreboard scroll up together; content outside clip is hidden */}
+      <Animated.View style={[styles.clipContainer, { height: clipContainerHeight }]}>
+        <Animated.View style={[styles.headerScoreboardBlock, { transform: [{ translateY: headerTranslateY }] }]}>
+          <AppHeader
+            title={dateRange || 'This Week'}
+            rightActions={[
+              { icon: 'trending-up-outline', onPress: () => router.push('/history') },
+              { icon: 'settings-outline', onPress: () => router.push('/settings') },
+            ]}
+          />
+          {/* 16px total less space above scoreboard (move scoreboard and prize circle up) */}
+          <View style={styles.scoreboardWrap}>
+            <CollapsibleScoreboard
+              scrollY={scrollY}
+              competitorA={competitorA}
+              competitorB={competitorB}
+              scoreA={scoreA}
+              scoreB={scoreB}
+              prize={household?.prize || 'Set a prize!'}
+              onInvitePress={handleInvitePress}
+            />
+          </View>
+        </Animated.View>
+      </Animated.View>
 
-      {/* Collapsible Scoreboard - Animates based on scroll */}
-      <CollapsibleScoreboard
-        scrollY={scrollY}
-        competitorA={competitorA}
-        competitorB={competitorB}
-        scoreA={scoreA}
-        scoreB={scoreB}
-        prize={household?.prize || 'Set a prize!'}
-        onInvitePress={handleInvitePress}
-      />
-
-      <Animated.ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: false }
-        )}
-        scrollEventThrottle={16}
-      >
-        {/* Day Strip */}
-        <View style={{ marginTop: spacing.xxxs }}>
+      {/* Scroll area: day strip overlays top so tasks scroll behind it */}
+      <View style={styles.scrollAreaWrap}>
+        <View
+          style={[
+            styles.dayStripOverlay,
+            {
+              paddingTop: spacing.xs,
+              paddingBottom: spacing.xxs,
+              backgroundColor: colors.background,
+            },
+          ]}
+          pointerEvents="box-none"
+        >
           <DayStrip
             dayKeys={weekDayKeys}
             selectedDayKey={selectedDayKey}
             todayDayKey={todayKey}
-            onSelectDay={setSelectedDay}
+            onSelectDay={handleDaySelect}
           />
         </View>
-
+        <Animated.ScrollView
+          ref={scrollViewRef}
+          style={styles.scrollView}
+          contentContainerStyle={[styles.scrollContent, { paddingTop: DAY_STRIP_ZONE_HEIGHT }]}
+          showsVerticalScrollIndicator={false}
+          alwaysBounceVertical={false}
+          onScroll={handleScroll}
+          onLayout={handleScrollLayout}
+          onContentSizeChange={handleContentSizeChange}
+          scrollEventThrottle={16}
+        >
         {/* Content Area */}
         {tasksForDay.length > 0 ? (
           <View style={{ marginTop: spacing.md, paddingHorizontal: spacing.sm }}>
@@ -428,7 +550,8 @@ export default function ChallengeScreen() {
             </Text>
           </View>
         )}
-      </Animated.ScrollView>
+        </Animated.ScrollView>
+      </View>
 
       {/* Floating Add Task Button */}
       <AddTaskButton onPress={() => setIsAddSheetVisible(true)} />
@@ -476,6 +599,26 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  clipContainer: {
+    overflow: 'hidden',
+  },
+  headerScoreboardBlock: {
+    // No fixed height; children define height (AppHeader + CollapsibleScoreboard)
+  },
+  scoreboardWrap: {
+    marginTop: -16,
+  },
+  scrollAreaWrap: {
+    flex: 1,
+    position: 'relative',
+  },
+  dayStripOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 1,
   },
   scrollView: {
     flex: 1,
