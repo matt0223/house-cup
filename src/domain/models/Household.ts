@@ -37,9 +37,6 @@ export interface Household {
   /** Default prize for new challenges */
   prize?: string;
 
-  /** User's theme preference */
-  themePreference?: ThemePreference;
-
   /** Short code for partner to join */
   joinCode?: string;
 

@@ -107,36 +107,15 @@ For account recovery, users can link their Apple ID:
 
 ## Step 6: Set Up Security Rules
 
-For development, the test mode rules work fine. For production, use these rules:
+Rules are defined in **`firestore.rules`** in the repo. Deploy them (for both dev and prod projects) from the **`rn-app`** directory:
 
-1. Go to **Firestore Database** → **Rules** tab
-2. Replace with:
-
-```javascript
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    // Households collection
-    match /households/{householdId} {
-      // Allow read/write if user is a member
-      allow read, write: if request.auth != null 
-        && request.auth.uid in resource.data.memberIds;
-      
-      // Allow creation if user will be a member
-      allow create: if request.auth != null 
-        && request.auth.uid in request.resource.data.memberIds;
-      
-      // Subcollections inherit parent access
-      match /{subcollection}/{docId} {
-        allow read, write: if request.auth != null 
-          && request.auth.uid in get(/databases/$(database)/documents/households/$(householdId)).data.memberIds;
-      }
-    }
-  }
-}
+```bash
+cd rn-app
+firebase use house-cup-dev          # or house-cup-3e1d7 for production
+firebase deploy --only firestore:rules
 ```
 
-3. Click **Publish**
+Alternatively, open **Firestore Database** → **Rules** in the Firebase Console, paste the contents of `firestore.rules`, and click **Publish**. You must add the rules to **each** Firebase project (house-cup-dev and house-cup-3e1d7).
 
 ## Step 7: Deploy Firestore indexes (when needed)
 
@@ -201,6 +180,10 @@ The app will work in **offline mode** (local data only) if Firebase isn't config
 The app uses this Firestore structure:
 
 ```
+users/
+  {userId}/                    # document ID = Firebase Auth uid
+    - themePreference: string  # 'system' | 'light' | 'dark' (per-user theme)
+
 households/
   {householdId}/
     - competitors: [Competitor, Competitor]

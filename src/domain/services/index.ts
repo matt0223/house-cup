@@ -52,3 +52,10 @@ export {
   getMaxPossiblePoints,
   calculateDayCompletion,
 } from './scoring';
+
+// Narrative generation
+export {
+  type WeekNarrative,
+  generateWeekNarrative,
+  generateCelebrationNarrative,
+} from './narrativeService';

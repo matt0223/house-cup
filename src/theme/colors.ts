@@ -10,7 +10,7 @@
 // Light mode colors
 export const lightColors = {
   // Backgrounds
-  background: '#FAF8F5', // Warm cream
+  background: '#F5F3EB', // Warm notebook cream (slight paper tint, not gray)
   surface: '#FFFFFF', // Cards, sheets
 
   // Accent colors
@@ -21,9 +21,9 @@ export const lightColors = {
   textPrimary: '#1A1A1A',
   textSecondary: '#8E8E93',
 
-  // UI colors
-  border: '#E5E5E5',
-  divider: '#E5E5E5',
+  // UI colors (warm gray to match notebook background; works with all competitor accent colors)
+  border: '#E3E1DB',
+  divider: '#E3E1DB',
 
   // Tab bar
   tabActive: '#E8836D',

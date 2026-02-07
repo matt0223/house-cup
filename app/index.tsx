@@ -1,11 +1,12 @@
-import React, { useEffect, useCallback, useRef } from 'react';
+import React, { useEffect, useCallback, useRef, useState } from 'react';
 import { View, StyleSheet, Text, ActivityIndicator, Animated, ScrollView, Easing } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../src/theme/useTheme';
 import { AppHeader, DayStrip, AddTaskButton, TaskAddedToast } from '../src/components/ui';
-import { CollapsibleScoreboard, TaskList, AddTaskSheet, TaskChanges, ChangeScope } from '../src/components/features';
+import { CollapsibleScoreboard, TaskList, AddTaskSheet, TaskChanges, ChangeScope, WeekCelebration } from '../src/components/features';
 import { ConfirmationModal } from '../src/components/ui';
 import {
   useHouseholdStore,
@@ -13,8 +14,9 @@ import {
   useRecurringStore,
 } from '../src/store';
 import { useFirebase } from '../src/providers/FirebaseProvider';
-import { formatDayKeyRange, getTodayDayKey, getCurrentWeekWindow } from '../src/domain/services';
+import { formatDayKeyRange, getTodayDayKey, getCurrentWeekWindow, generateCelebrationNarrative } from '../src/domain/services';
 import { TaskInstance } from '../src/domain/models/TaskInstance';
+import { WeekNarrative } from '../src/domain/services/narrativeService';
 import { shareHouseholdInvite } from '../src/utils/shareInvite';
 import * as taskService from '../src/services/firebase/taskService';
 
@@ -31,6 +33,11 @@ export default function ChallengeScreen() {
   const [swipeDeleteTask, setSwipeDeleteTask] = React.useState<TaskInstance | null>(null);
   // Track the weekStartDay used to create the current challenge
   const [challengeWeekStartDay, setChallengeWeekStartDay] = React.useState<number | null>(null);
+
+  // Celebration overlay state
+  const [showCelebration, setShowCelebration] = useState(false);
+  const [celebrationNarrative, setCelebrationNarrative] = useState<WeekNarrative | null>(null);
+  const celebrationCheckedRef = useRef<string | null>(null);
 
   // Animated value for scroll-linked scoreboard collapse
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -125,6 +132,26 @@ export default function ChallengeScreen() {
       }
     }
   }, [household, challenge, templates, challengeWeekStartDay]);
+
+  // Detect challenge completion and show celebration overlay (once per challenge)
+  useEffect(() => {
+    if (!challenge || !challenge.isCompleted) return;
+    if (celebrationCheckedRef.current === challenge.id) return;
+    celebrationCheckedRef.current = challenge.id;
+
+    const key = `celebration-seen-${challenge.id}`;
+    AsyncStorage.getItem(key).then((seen) => {
+      if (seen) return; // Already shown for this challenge
+
+      const competitors = household?.competitors ?? [];
+      if (competitors.length === 0) return;
+
+      const narrative = generateCelebrationNarrative(challenge, tasks, competitors);
+      setCelebrationNarrative(narrative);
+      setShowCelebration(true);
+      AsyncStorage.setItem(key, 'true').catch(() => {});
+    });
+  }, [challenge?.id, challenge?.isCompleted, household?.competitors, tasks]);
 
   // Auto-seed tasks when templates change. When sync is enabled, wait for initial
   // tasks load from Firestore so we don't seed before existing tasks arrive (which would create duplicates on reload).
@@ -468,7 +495,7 @@ export default function ChallengeScreen() {
           <AppHeader
             title={dateRange || 'This Week'}
             rightActions={[
-              { icon: 'trending-up-outline', onPress: () => router.push('/history') },
+              { icon: 'sparkles-outline', onPress: () => router.push('/history') },
               { icon: 'settings-outline', onPress: () => router.push('/settings') },
             ]}
           />
@@ -587,6 +614,22 @@ export default function ChallengeScreen() {
         onSelect={handleSwipeDeleteConfirm}
         onCancel={() => setSwipeDeleteTask(null)}
       />
+
+      {/* Week Celebration Overlay */}
+      {showCelebration && challenge && celebrationNarrative && (
+        <WeekCelebration
+          challenge={challenge}
+          competitors={competitors}
+          scoreA={scoreA}
+          scoreB={scoreB}
+          narrative={celebrationNarrative}
+          onViewInsights={() => {
+            setShowCelebration(false);
+            router.push('/history');
+          }}
+          onDismiss={() => setShowCelebration(false)}
+        />
+      )}
     </SafeAreaView>
   );
 }

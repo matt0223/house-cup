@@ -21,8 +21,8 @@ import {
   CompetitorRow,
   OptionPickerModal,
 } from '../src/components/ui';
-import { useHouseholdStore } from '../src/store';
-import { WeekStartDay } from '../src/domain/models/Household';
+import { useHouseholdStore, useUserProfileStore, useThemePreference } from '../src/store';
+import { WeekStartDay, ThemePreference } from '../src/domain/models/Household';
 import { isPendingCompetitor, hasBeenInvited, availableCompetitorColors } from '../src/domain/models/Competitor';
 import { useFirebase } from '../src/providers/FirebaseProvider';
 import { useAppleAuth } from '../src/hooks/useAppleAuth';
@@ -42,7 +42,6 @@ const DAY_OPTIONS: { id: string; label: string }[] = [
 ];
 
 /** Theme options */
-import { ThemePreference } from '../src/domain/models/Household';
 const THEME_OPTIONS: { id: ThemePreference; label: string }[] = [
   { id: 'system', label: 'System' },
   { id: 'light', label: 'Light' },
@@ -55,7 +54,7 @@ const THEME_OPTIONS: { id: ThemePreference; label: string }[] = [
 export default function SettingsScreen() {
   const { colors, typography, spacing, radius, isDark } = useTheme();
   const router = useRouter();
-  const { markInviteSent, addHousemate, setHouseholdId, clearAllHouseholdTaskData, isConfigured } = useFirebase();
+  const { markInviteSent, addHousemate, setHouseholdId, clearAllHouseholdTaskData, isConfigured, userId } = useFirebase();
   const { signOut } = useAuth();
 
   // Household store
@@ -217,8 +216,9 @@ export default function SettingsScreen() {
     }
   }, [household, newHousemateName, newHousemateColor, isSendingInvite, addHousemate]);
 
-  // Theme from household store
-  const selectedTheme = household?.themePreference ?? 'system';
+  // Theme from current user's profile (per-user, not per-household)
+  const selectedTheme = useThemePreference();
+  const setThemePreference = useUserProfileStore((s) => s.setThemePreference);
 
   const competitorA = household?.competitors[0];
   const competitorB = household?.competitors[1];
@@ -594,7 +594,7 @@ export default function SettingsScreen() {
         options={THEME_OPTIONS}
         selectedId={selectedTheme}
         onSelect={(id) => {
-          updateSettings({ themePreference: id });
+          setThemePreference(id as ThemePreference, userId ?? null);
           setShowThemePicker(false);
         }}
         onClose={() => setShowThemePicker(false)}

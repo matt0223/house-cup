@@ -29,3 +29,6 @@ export * from './templateService';
 
 // Skip record operations
 export * from './skipRecordService';
+
+// User profile (per-user preferences, e.g. theme)
+export * from './userService';

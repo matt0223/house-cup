@@ -69,6 +69,7 @@ function docToChallenge(
     isTie: data.isTie ?? false,
     isCompleted: data.isCompleted ?? false,
     createdAt: data.createdAt?.toDate?.()?.toISOString() ?? data.createdAt,
+    ...(data.narrative ? { narrative: data.narrative } : {}),
   };
 }
 

@@ -29,6 +29,13 @@ export interface Challenge {
 
   /** When the challenge was created */
   createdAt: string;
+
+  /** LLM-generated narrative (written by Cloud Function after completion) */
+  narrative?: {
+    headline: string;
+    body: string;
+    insightTip?: string;
+  };
 }
 
 /**

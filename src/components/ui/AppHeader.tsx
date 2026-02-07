@@ -16,6 +16,8 @@ export interface HeaderAction {
 export interface AppHeaderProps {
   /** Header title */
   title: string;
+  /** Optional subtitle displayed below the title */
+  subtitle?: string;
   /** Optional left action (e.g., back button) */
   leftAction?: HeaderAction;
   /** Optional array of right-side actions */
@@ -30,6 +32,7 @@ export interface AppHeaderProps {
  */
 export function AppHeader({
   title,
+  subtitle,
   leftAction,
   rightActions = [],
   style,
@@ -46,9 +49,22 @@ export function AppHeader({
             accessibilityLabel={leftAction.accessibilityLabel}
           />
         )}
-        <Text style={[typography.title, { color: colors.textPrimary }]}>
-          {title}
-        </Text>
+        <View>
+          <Text style={[typography.title, { color: colors.textPrimary }]}>
+            {title}
+          </Text>
+          {subtitle ? (
+            <Text
+              style={[
+                typography.caption,
+                { color: colors.textSecondary, marginTop: 2 },
+              ]}
+              numberOfLines={1}
+            >
+              {subtitle}
+            </Text>
+          ) : null}
+        </View>
       </View>
 
       <View style={styles.actions}>

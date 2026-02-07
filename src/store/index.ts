@@ -24,3 +24,14 @@ export {
   useTemplates,
   useSkipRecords,
 } from './useRecurringStore';
+
+export { useUserProfileStore, useThemePreference } from './useUserProfileStore';
+
+export {
+  useInsightsStore,
+  useInsightWeeks,
+  useInsightsLoading,
+  useInsightsTotalTasks,
+  useInsightsTotalWeeks,
+  type EnrichedChallenge,
+} from './useInsightsStore';

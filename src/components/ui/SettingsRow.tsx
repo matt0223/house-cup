@@ -2,6 +2,7 @@ import React, { ReactNode } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Switch } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
+import { SettingsDivider } from './SettingsDivider';
 
 export interface SettingsRowProps {
   /** Row label */
@@ -152,14 +153,8 @@ export function SettingsRow({
         content
       )}
       {showDivider && (
-        <View
-          style={[
-            styles.divider,
-            {
-              backgroundColor: colors.divider,
-              marginLeft: icon ? spacing.sm + 32 + spacing.xs : spacing.sm,
-            },
-          ]}
+        <SettingsDivider
+          marginLeft={icon ? spacing.sm + 32 + spacing.xs : spacing.sm}
         />
       )}
     </>
@@ -191,9 +186,6 @@ const styles = StyleSheet.create({
   rightSection: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
   },
 });
 

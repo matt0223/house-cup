@@ -121,7 +121,7 @@ export function formatDayKeyRange(
     day: 'numeric',
   });
 
-  return `${formatter.format(start)} - ${formatter.format(end)}`;
+  return `${formatter.format(start)} \u2013 ${formatter.format(end)}`;
 }
 
 /** Single-letter labels for each day of week (0=Sunday, 6=Saturday) */

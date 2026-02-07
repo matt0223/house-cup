@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-nativ
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
 import { ColorPicker } from './ColorPicker';
+import { SettingsDivider } from './SettingsDivider';
 import { Competitor } from '../../domain/models/Competitor';
 
 export interface CompetitorRowProps {
@@ -159,17 +160,8 @@ export function CompetitorRow({
         </View>
       )}
 
-      {/* Divider */}
       {showDivider && !isExpanded && (
-        <View
-          style={[
-            styles.divider,
-            {
-              backgroundColor: colors.divider,
-              marginLeft: spacing.sm + 40 + spacing.xs,
-            },
-          ]}
-        />
+        <SettingsDivider marginLeft={spacing.sm + 40 + spacing.xs} />
       )}
     </View>
   );
@@ -211,9 +203,6 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   colorPickerContainer: {},
-  divider: {
-    height: StyleSheet.hairlineWidth,
-  },
 });
 
 export default CompetitorRow;

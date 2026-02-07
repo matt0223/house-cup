@@ -21,6 +21,7 @@ export { ConfirmationModal, type ConfirmationModalProps, type ConfirmationOption
 export { KebabButton, type KebabButtonProps } from './KebabButton';
 export { SettingsSection, type SettingsSectionProps } from './SettingsSection';
 export { SettingsRow, type SettingsRowProps } from './SettingsRow';
+export { SettingsDivider, type SettingsDividerProps } from './SettingsDivider';
 export { ColorPicker, type ColorPickerProps } from './ColorPicker';
 export { CompetitorRow, type CompetitorRowProps } from './CompetitorRow';
 export { OnboardingHeader, type OnboardingHeaderProps } from './OnboardingHeader';

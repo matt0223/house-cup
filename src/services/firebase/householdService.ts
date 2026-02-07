@@ -20,7 +20,7 @@ import {
   Unsubscribe,
 } from 'firebase/firestore';
 import { getDb } from './firebaseConfig';
-import { Household, ThemePreference, WeekStartDay } from '../../domain/models/Household';
+import { Household, WeekStartDay } from '../../domain/models/Household';
 import { Competitor } from '../../domain/models/Competitor';
 
 const COLLECTION = 'households';
@@ -53,7 +53,6 @@ function docToHousehold(
     timezone: data.timezone,
     weekStartDay: data.weekStartDay as WeekStartDay,
     prize: data.prize,
-    themePreference: data.themePreference as ThemePreference | undefined,
     joinCode: data.joinCode,
     createdAt: data.createdAt?.toDate?.()?.toISOString() ?? data.createdAt,
   };
@@ -105,9 +104,7 @@ export async function createHousehold(
  */
 export async function updateHousehold(
   householdId: string,
-  updates: Partial<
-    Pick<Household, 'timezone' | 'weekStartDay' | 'prize' | 'themePreference'>
-  >
+  updates: Partial<Pick<Household, 'timezone' | 'weekStartDay' | 'prize'>>
 ): Promise<void> {
   const ref = getHouseholdRef(householdId);
   if (!ref) {
@@ -219,7 +216,6 @@ export async function addPendingCompetitor(
     timezone: data.timezone,
     weekStartDay: data.weekStartDay,
     prize: data.prize,
-    themePreference: data.themePreference,
     joinCode: data.joinCode,
     createdAt: data.createdAt?.toDate?.()?.toISOString() ?? data.createdAt,
   };
@@ -289,7 +285,6 @@ export async function claimCompetitorSlot(
     timezone: data.timezone,
     weekStartDay: data.weekStartDay,
     prize: data.prize,
-    themePreference: data.themePreference,
     joinCode: data.joinCode,
     createdAt: data.createdAt?.toDate?.()?.toISOString() ?? data.createdAt,
   };

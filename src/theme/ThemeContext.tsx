@@ -1,6 +1,6 @@
 import React, { createContext, useContext, ReactNode } from 'react';
 import { useColorScheme, ColorSchemeName } from 'react-native';
-import { useThemePreference } from '../store/useHouseholdStore';
+import { useThemePreference } from '../store/useUserProfileStore';
 import { ThemePreference } from '../domain/models/Household';
 
 /**

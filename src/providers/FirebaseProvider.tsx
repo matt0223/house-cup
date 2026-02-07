@@ -12,6 +12,7 @@ import { useFirestoreSync } from '../hooks/useFirestoreSync';
 import { useHouseholdStore } from '../store/useHouseholdStore';
 import { useChallengeStore } from '../store/useChallengeStore';
 import { useRecurringStore } from '../store/useRecurringStore';
+import { useUserProfileStore } from '../store/useUserProfileStore';
 import {
   isFirebaseConfigured,
   createHousehold as createHouseholdInFirestore,
@@ -25,6 +26,7 @@ import {
   deleteAllTasks,
   deleteAllTemplates,
   deleteAllSkipRecords,
+  subscribeToUserProfile,
 } from '../services/firebase';
 import { Competitor, isPendingCompetitor } from '../domain/models/Competitor';
 import { getCurrentWeekWindow, getTodayDayKey } from '../domain/services';
@@ -169,6 +171,20 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
       useRecurringStore.getState().setSyncEnabled(false, null);
     }
   }, [isConfigured, householdId, userId, setSyncEnabledHousehold]);
+
+  // Subscribe to current user's profile (e.g. theme preference); clear when signed out
+  useEffect(() => {
+    if (!isConfigured || !userId) {
+      useUserProfileStore.getState().clearUserProfile();
+      return;
+    }
+    const unsub = subscribeToUserProfile(userId, (profile) => {
+      useUserProfileStore.getState().setThemePreferenceFromSync(
+        profile?.themePreference ?? 'system'
+      );
+    });
+    return () => unsub();
+  }, [isConfigured, userId]);
 
   // Update householdId from loaded household (e.g., from Firestore sync)
   useEffect(() => {
