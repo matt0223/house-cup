@@ -308,7 +308,7 @@ export const onChallengeCompleted = onDocumentUpdated(
         .filter((d) => d.id !== challengeId)
         .slice(0, 5);
 
-      // Fetch tasks for previous challenges (for context)
+      // Fetch tasks for previous challenges (for context, frequency baselines, and prior tips)
       const previousData: Array<{
         startDayKey: string;
         endDayKey: string;
@@ -317,6 +317,8 @@ export const onChallengeCompleted = onDocumentUpdated(
         totalTasks: number;
         scores: Record<string, number>;
       }> = [];
+      const previousWeekFreqs: Array<Record<string, number>> = [];
+      const previousInsightTips: string[] = [];
 
       for (const prevDoc of previousChallenges) {
         const prevChallenge = prevDoc.data() as ChallengeDoc;
@@ -338,6 +340,19 @@ export const onChallengeCompleted = onDocumentUpdated(
           totalTasks: prevTasks.length,
           scores,
         });
+
+        // Compute task frequency for this previous week (for baseline comparison)
+        const prevFreq: Record<string, number> = {};
+        for (const task of prevTasks) {
+          const name = task.name.toLowerCase().trim();
+          prevFreq[name] = (prevFreq[name] ?? 0) + 1;
+        }
+        previousWeekFreqs.push(prevFreq);
+
+        // Collect previous insight tips (to avoid repetition)
+        if (prevChallenge.narrative?.insightTip) {
+          previousInsightTips.push(prevChallenge.narrative.insightTip);
+        }
       }
 
       // Build current week's data for the prompt
@@ -363,11 +378,47 @@ export const onChallengeCompleted = onDocumentUpdated(
         }
       }
 
-      // Task frequency analysis
+      // Task frequency analysis — raw counts
       const taskFreq: Record<string, number> = {};
       for (const task of tasks) {
         const name = task.name.toLowerCase().trim();
         taskFreq[name] = (taskFreq[name] ?? 0) + 1;
+      }
+
+      // Filter to only NEW or SPIKING tasks (skip stable baseline tasks)
+      const notableTasks: Record<
+        string,
+        { count: number; context: string }
+      > = {};
+      for (const [name, count] of Object.entries(taskFreq)) {
+        if (count < 3) continue; // minimum threshold
+
+        // How often did this task appear in previous weeks?
+        const prevCounts = previousWeekFreqs
+          .map((freq) => freq[name] ?? 0)
+          .filter((c) => c > 0);
+
+        if (prevCounts.length === 0) {
+          // Never seen before → new
+          notableTasks[name] = { count, context: "new this week" };
+        } else if (prevCounts.length === 1) {
+          // Only appeared once before → still relatively new
+          notableTasks[name] = {
+            count,
+            context: "only appeared in 1 prior week",
+          };
+        } else {
+          // Appeared regularly → only flag if significantly spiking (50%+)
+          const avg =
+            prevCounts.reduce((a, b) => a + b, 0) / prevCounts.length;
+          if (count > avg * 1.5) {
+            notableTasks[name] = {
+              count,
+              context: `up from avg ${Math.round(avg)}/week`,
+            };
+          }
+          // Otherwise: baseline task → skip entirely
+        }
       }
 
       // Winner name
@@ -387,7 +438,8 @@ export const onChallengeCompleted = onDocumentUpdated(
         currentScores,
         totalTasks: tasks.length,
         dailyBreakdown,
-        taskFrequency: taskFreq,
+        notableTasks,
+        previousInsightTips,
         previousWeeks: previousData.map((p) => ({
           dates: `${p.startDayKey} to ${p.endDayKey}`,
           scores: p.scores,
@@ -488,7 +540,12 @@ Examples of good output:
 Return a JSON object:
 - "headline": 2-5 words. The angle. Examples: "Over by Tuesday", "The Thursday surge", "Death by dishes"
 - "body": 1 sentence, max 20 words. The insight. Dry, specific, slightly amused.
-- "insightTip": (optional) ONLY if a specific task appeared 4+ times this week. Must reference the exact task name and count. Before including a tip, self-check: would this suggestion DIRECTLY cause the named task to happen fewer times next week? If you can't explain the causal link in one obvious step, omit the tip entirely. For example: "Dishes 7 times" → "A dishwasher run right after dinner could consolidate that into one daily reset" is valid (directly reduces frequency). "Dishes 7 times" → "Try meal prepping" is INVALID (meal prep doesn't reduce dish frequency). When in doubt, omit.`;
+- "insightTip": (optional) DEFAULT IS TO OMIT. Most weeks should have NO tip. Only include one if ALL of these are true:
+  1. The "Notable Task Changes" section lists a task that is NEW or SPIKING. If that section is empty, there is NO tip. Period.
+  2. Your suggestion would DIRECTLY cause the named task to happen fewer times next week. If you can't explain the causal link in one obvious step, omit.
+  3. The tip has NOT been given before (check "Previously Given Insight Tips" if present).
+  4. The task is NOT a daily essential (cooking, dinner, dishes, feeding kids/pets, making beds, etc.). These happen every day — that's normal life, not a problem to solve.
+  No tip is always better than a mediocre, obvious, or repeated tip. When in doubt, omit.`;
 
 interface PromptData {
   startDayKey: string;
@@ -504,7 +561,8 @@ interface PromptData {
     string,
     { tasks: string[]; scores: Record<string, number> }
   >;
-  taskFrequency: Record<string, number>;
+  notableTasks: Record<string, { count: number; context: string }>;
+  previousInsightTips: string[];
   previousWeeks: Array<{
     dates: string;
     scores: Record<string, number>;
@@ -546,15 +604,31 @@ function buildPrompt(data: PromptData): string {
   }
   lines.push("");
 
-  // Task frequency
-  const frequentTasks = Object.entries(data.taskFrequency)
-    .filter(([, count]) => count >= 3)
-    .sort(([, a], [, b]) => b - a);
+  // Notable task changes (only new or spiking — stable baseline tasks are omitted)
+  const notable = Object.entries(data.notableTasks)
+    .sort(([, a], [, b]) => b.count - a.count);
 
-  if (frequentTasks.length > 0) {
-    lines.push("### Recurring Tasks");
-    for (const [name, count] of frequentTasks) {
-      lines.push(`- "${name}" appeared ${count} times`);
+  if (notable.length > 0) {
+    lines.push("### Notable Task Changes This Week");
+    lines.push(
+      "(Only tasks that are NEW or significantly increased vs. prior weeks." +
+        " Stable recurring tasks like daily dinner, dishes, etc. are omitted — they are baseline.)"
+    );
+    for (const [name, info] of notable) {
+      lines.push(`- "${name}" appeared ${info.count} times (${info.context})`);
+    }
+    lines.push("");
+  } else {
+    lines.push("### Notable Task Changes This Week");
+    lines.push("None — all tasks this week are consistent with prior weeks.");
+    lines.push("");
+  }
+
+  // Previously given insight tips (to avoid repetition)
+  if (data.previousInsightTips.length > 0) {
+    lines.push("### Previously Given Insight Tips (DO NOT repeat these)");
+    for (const tip of data.previousInsightTips) {
+      lines.push(`- "${tip}"`);
     }
     lines.push("");
   }
