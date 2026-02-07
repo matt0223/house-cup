@@ -21,6 +21,7 @@ import * as challengeService from '../services/firebase/challengeService';
 import * as skipRecordService from '../services/firebase/skipRecordService';
 import { generateFirestoreId } from '../services/firebase/firebaseConfig';
 import { useRecurringStore } from './useRecurringStore';
+import { useHouseholdStore } from './useHouseholdStore';
 
 /**
  * Challenge store state
@@ -652,9 +653,17 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
   setChallenge: (challenge) => {
     const prev = get().challenge;
     // Clear tasks when switching to a different challenge or clearing challenge
-    const shouldClearTasks = !challenge || (prev && challenge && prev.id !== challenge.id);
-    const tasks = shouldClearTasks ? [] : get().tasks;
-    set({ challenge, tasks, tasksLoadedForChallengeId: null });
+    const isNewChallenge = !challenge || (prev && challenge && prev.id !== challenge.id);
+    const tasks = isNewChallenge ? [] : get().tasks;
+
+    // Reset selected day to today when switching to a different challenge
+    if (isNewChallenge && challenge) {
+      const household = useHouseholdStore.getState().household;
+      const timezone = household?.timezone ?? 'America/New_York';
+      set({ challenge, tasks, tasksLoadedForChallengeId: null, selectedDayKey: getTodayDayKey(timezone) });
+    } else {
+      set({ challenge, tasks, tasksLoadedForChallengeId: null });
+    }
   },
 
   setTasks: (tasks) => {

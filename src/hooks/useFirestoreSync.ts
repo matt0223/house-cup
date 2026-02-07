@@ -12,6 +12,7 @@ import {
   subscribeToTasks,
   subscribeToTemplates,
   subscribeToSkipRecords,
+  completeExpiredChallenge,
 } from '../services/firebase';
 import { useHouseholdStore } from '../store/useHouseholdStore';
 import { useChallengeStore } from '../store/useChallengeStore';
@@ -21,6 +22,7 @@ import { Challenge } from '../domain/models/Challenge';
 import { TaskInstance } from '../domain/models/TaskInstance';
 import { RecurringTemplate } from '../domain/models/RecurringTemplate';
 import { SkipRecord } from '../domain/models/SkipRecord';
+import { getTodayDayKey } from '../domain/services/dayKey';
 
 interface UseFirestoreSyncOptions {
   /** Household ID to sync */
@@ -115,17 +117,38 @@ export function useFirestoreSync({
         }
 
         if (challenge) {
-          setChallenge(challenge);
+          // Check if the challenge has expired (endDayKey < today)
+          const household = useHouseholdStore.getState().household;
+          const today = household ? getTodayDayKey(household.timezone) : null;
 
-          // Subscribe to tasks for this challenge
-          unsubTasks = subscribeToTasks(
-            householdId,
-            challenge.id,
-            (tasks: TaskInstance[]) => {
-              setTasks(tasks);
-            },
-            handleError('Tasks sync')
-          );
+          if (!challenge.isCompleted && today && challenge.endDayKey < today) {
+            // Expired challenge — clear UI immediately, complete in background
+            setChallenge(null);
+            setTasks([]);
+            completeExpiredChallenge(
+              householdId,
+              challenge,
+              household!.competitors,
+              household!.timezone,
+              household!.weekStartDay,
+              household!.prize ?? 'Winner picks!'
+            ).catch((err) =>
+              console.error('Failed to complete expired challenge:', err)
+            );
+            // Don't subscribe to tasks — subscription will re-fire with new challenge
+          } else {
+            setChallenge(challenge);
+
+            // Subscribe to tasks for this challenge
+            unsubTasks = subscribeToTasks(
+              householdId,
+              challenge.id,
+              (tasks: TaskInstance[]) => {
+                setTasks(tasks);
+              },
+              handleError('Tasks sync')
+            );
+          }
         } else {
           // No current challenge (e.g., old one completed, new one not yet created)
           // Clear stale data so UI doesn't show old scores
