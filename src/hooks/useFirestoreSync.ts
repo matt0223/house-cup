@@ -126,6 +126,11 @@ export function useFirestoreSync({
             },
             handleError('Tasks sync')
           );
+        } else {
+          // No current challenge (e.g., old one completed, new one not yet created)
+          // Clear stale data so UI doesn't show old scores
+          setChallenge(null);
+          setTasks([]);
         }
       },
       handleError('Challenge sync')

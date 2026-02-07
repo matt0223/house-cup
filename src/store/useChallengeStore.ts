@@ -136,8 +136,8 @@ interface ChallengeActions {
   /** Enable/disable Firebase sync */
   setSyncEnabled: (enabled: boolean, householdId: string | null) => void;
 
-  /** Set challenge (for Firestore sync) */
-  setChallenge: (challenge: Challenge) => void;
+  /** Set challenge (for Firestore sync; null clears the challenge) */
+  setChallenge: (challenge: Challenge | null) => void;
 
   /** Set all tasks (for Firestore sync) */
   setTasks: (tasks: TaskInstance[]) => void;
@@ -650,7 +650,11 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
   },
 
   setChallenge: (challenge) => {
-    set({ challenge, tasksLoadedForChallengeId: null });
+    const prev = get().challenge;
+    // Clear tasks when switching to a different challenge or clearing challenge
+    const shouldClearTasks = !challenge || (prev && challenge && prev.id !== challenge.id);
+    const tasks = shouldClearTasks ? [] : get().tasks;
+    set({ challenge, tasks, tasksLoadedForChallengeId: null });
   },
 
   setTasks: (tasks) => {

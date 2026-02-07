@@ -98,6 +98,7 @@ export default function ChallengeScreen() {
   const linkTaskToTemplate = useChallengeStore((s) => s.linkTaskToTemplate);
   const seedFromTemplates = useChallengeStore((s) => s.seedFromTemplates);
   const getScores = useChallengeStore((s) => s.getScores);
+  const setTasks = useChallengeStore((s) => s.setTasks);
   const updateChallengeBoundaries = useChallengeStore((s) => s.updateChallengeBoundaries);
   const syncEnabled = useChallengeStore((s) => s.syncEnabled);
   const householdIdFromStore = useChallengeStore((s) => s.householdId);
@@ -130,6 +131,10 @@ export default function ChallengeScreen() {
         // Challenge exists but week setting changed - update boundaries only (preserves tasks/points)
         updateChallengeBoundaries(household.timezone, household.weekStartDay);
         setChallengeWeekStartDay(household.weekStartDay);
+      } else if (!challenge.isCompleted && challenge.endDayKey < getTodayDayKey(household.timezone)) {
+        // Challenge expired but Cloud Function hasn't run yet — clear stale tasks
+        // so the UI doesn't show last week's scores while we wait for the transition
+        setTasks([]);
       }
     }
   }, [household, challenge, templates, challengeWeekStartDay]);
