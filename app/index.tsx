@@ -1,6 +1,6 @@
 import React, { useEffect, useCallback, useRef, useState } from 'react';
 import { View, StyleSheet, Text, ActivityIndicator, Animated, ScrollView, Easing } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -26,6 +26,7 @@ import * as taskService from '../src/services/firebase/taskService';
 export default function ChallengeScreen() {
   const { colors, spacing, typography } = useTheme();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [isAddSheetVisible, setIsAddSheetVisible] = React.useState(false);
   const [showToast, setShowToast] = React.useState(false);
   const [toastKey, setToastKey] = React.useState(0);
@@ -488,7 +489,7 @@ export default function ChallengeScreen() {
   const clipContainerHeight = Animated.add(headerVisibleHeight, scoreboardAnimatedHeight);
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       {/* Clipping container: header + scoreboard scroll up together; content outside clip is hidden */}
       <Animated.View style={[styles.clipContainer, { height: clipContainerHeight }]}>
         <Animated.View style={[styles.headerScoreboardBlock, { transform: [{ translateY: headerTranslateY }] }]}>
@@ -537,7 +538,7 @@ export default function ChallengeScreen() {
         <Animated.ScrollView
           ref={scrollViewRef}
           style={styles.scrollView}
-          contentContainerStyle={[styles.scrollContent, { paddingTop: DAY_STRIP_ZONE_HEIGHT }]}
+          contentContainerStyle={[styles.scrollContent, { paddingTop: DAY_STRIP_ZONE_HEIGHT, paddingBottom: 120 + insets.bottom }]}
           showsVerticalScrollIndicator={false}
           alwaysBounceVertical={false}
           onScroll={handleScroll}
@@ -581,7 +582,7 @@ export default function ChallengeScreen() {
       </View>
 
       {/* Floating Add Task Button */}
-      <AddTaskButton onPress={() => setIsAddSheetVisible(true)} />
+      <AddTaskButton onPress={() => setIsAddSheetVisible(true)} bottom={insets.bottom + 16} />
 
       {/* Add/Edit Task Sheet */}
       <AddTaskSheet
@@ -668,7 +669,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: 225,
   },
   emptyState: {
     flex: 1,

@@ -142,22 +142,16 @@ export function MorphingScoreboard({
     outputRange: [1, TROPHY_COLLAPSED / TROPHY_EXPANDED],
   });
 
-  // Expanded: trophy+text group centered in circle (tight gap). Collapsed: trophy alone moves to circle center.
-  const trophyTranslateY = progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [-12, 0],
-    extrapolate: 'clamp',
-  });
-
   const prizeTextOpacity = progress.interpolate({
     inputRange: [0, 0.6],
     outputRange: [1, 0],
     extrapolate: 'clamp',
   });
 
-  const prizeTextScale = progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1, 0],
+  // Collapse text height to 0 so flex centering keeps trophy centered when text is hidden
+  const prizeTextMaxHeight = progress.interpolate({
+    inputRange: [0, 0.6],
+    outputRange: [60, 0],
     extrapolate: 'clamp',
   });
 
@@ -477,27 +471,21 @@ export function MorphingScoreboard({
           },
         ]}
       >
+        {/* Flex column: trophy + text centered as a group regardless of text line count */}
         <Animated.View
-          style={[
-            styles.trophyCenter,
-            {
-              transform: [
-                { translateY: trophyTranslateY },
-                { scale: trophyScale },
-              ],
-            },
-          ]}
+          style={{
+            transform: [{ scale: trophyScale }],
+          }}
         >
           <Ionicons name="trophy-outline" size={TROPHY_EXPANDED} color={colors.prize} />
         </Animated.View>
         <Animated.View
-          style={[
-            styles.prizeTextWrap,
-            {
-              opacity: prizeTextOpacity,
-              transform: [{ scale: prizeTextScale }],
-            },
-          ]}
+          style={{
+            opacity: prizeTextOpacity,
+            maxHeight: prizeTextMaxHeight,
+            overflow: 'hidden',
+            marginTop: 2,
+          }}
           pointerEvents="none"
         >
           <Text
@@ -507,7 +495,6 @@ export function MorphingScoreboard({
                 color: colors.textSecondary,
                 textAlign: 'center',
                 paddingHorizontal: spacing.xs,
-                paddingVertical: 0,
               },
             ]}
             numberOfLines={3}
@@ -599,26 +586,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
-  },
-  trophyCenter: {
-    position: 'absolute',
-    left: '50%',
-    top: '50%',
-    marginLeft: -(TROPHY_EXPANDED / 2),
-    marginTop: -(TROPHY_EXPANDED / 2),
-    width: TROPHY_EXPANDED,
-    height: TROPHY_EXPANDED,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  prizeTextWrap: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: '50%',
-    marginTop: 4,
-    alignItems: 'center',
-    alignSelf: 'center',
   },
   inviteButtonExpanded: {
     alignItems: 'center',
