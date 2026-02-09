@@ -18,6 +18,8 @@ export interface TaskRowProps {
   onPointsChange: (competitorId: string, newPoints: number) => void;
   /** Called when task row is tapped (for editing) */
   onPress?: () => void;
+  /** Show pulse nudge on score circles (for onboarding) */
+  showScoreNudge?: boolean;
 }
 
 /**
@@ -30,6 +32,7 @@ export function TaskRow({
   templates = [],
   onPointsChange,
   onPress,
+  showScoreNudge = false,
 }: TaskRowProps) {
   const { colors, typography, spacing } = useTheme();
 
@@ -70,12 +73,13 @@ export function TaskRow({
       </View>
 
       <View style={styles.chipsContainer}>
-        {competitors.map((competitor) => (
+        {competitors.map((competitor, index) => (
           <PointsChip
             key={competitor.id}
             competitor={competitor}
             points={task.points[competitor.id] ?? 0}
             onPress={() => handlePointsTap(competitor)}
+            showNudge={showScoreNudge && index === 0}
           />
         ))}
       </View>

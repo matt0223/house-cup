@@ -21,6 +21,8 @@ export interface TaskListProps {
   onTaskPress?: (task: TaskInstance) => void;
   /** Called when a task is deleted via swipe */
   onTaskDelete?: (task: TaskInstance) => void;
+  /** Show pulse nudge on the first task's score circle (for onboarding) */
+  showScoreNudge?: boolean;
 }
 
 /**
@@ -33,6 +35,7 @@ export function TaskList({
   onPointsChange,
   onTaskPress,
   onTaskDelete,
+  showScoreNudge = false,
 }: TaskListProps) {
   const { colors } = useTheme();
 
@@ -51,6 +54,7 @@ export function TaskList({
         }
         onPress={onTaskPress ? () => onTaskPress(item) : undefined}
         onDelete={onTaskDelete ?? (() => {})}
+        showScoreNudge={showScoreNudge && index === 0}
       />
       {index < tasks.length - 1 && (
         <View

@@ -75,12 +75,9 @@ export function ScoreboardCard({
       );
     }
 
-    // Fallback: No competitor B at all - show "Housemate" label + Add button
+    // Fallback: No competitor B at all - show "Add housemate" button
     return (
       <View style={[styles.competitorColumn, styles.rightColumn]}>
-        <Text style={[typography.callout, { color: colors.textSecondary }]}>
-          Housemate
-        </Text>
         <TouchableOpacity
           style={[
             styles.inviteButton,
@@ -90,6 +87,7 @@ export function ScoreboardCard({
               paddingVertical: spacing.xs,
               borderRadius: radius.pill,
               flexDirection: 'row',
+              alignItems: 'center',
               gap: spacing.xxxs,
               marginTop: spacing.xxs,
             },
@@ -99,11 +97,11 @@ export function ScoreboardCard({
         >
           <Ionicons
             name="person-add-outline"
-            size={20}
+            size={18}
             color={colors.primary}
           />
           <Text style={[typography.callout, { color: colors.primary }]}>
-            Add
+            Add housemate
           </Text>
         </TouchableOpacity>
       </View>

@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   TouchableOpacity,
   View,
   Text,
   StyleSheet,
   ViewStyle,
+  Animated,
 } from 'react-native';
 import { useTheme } from '../../theme/useTheme';
 import { Competitor, getCompetitorInitial } from '../../domain/models/Competitor';
@@ -20,6 +21,8 @@ export interface PointsChipProps {
   size?: 'small' | 'medium';
   /** Disable interaction */
   isDisabled?: boolean;
+  /** Show a pulse animation to draw attention (one-time nudge) */
+  showNudge?: boolean;
 }
 
 const SIZE_CONFIG = {
@@ -42,8 +45,31 @@ export function PointsChip({
   onPress,
   size = 'medium',
   isDisabled = false,
+  showNudge = false,
 }: PointsChipProps) {
   const { typography } = useTheme();
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  // Pulse animation when nudge is active
+  useEffect(() => {
+    if (!showNudge) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.25,
+          duration: 600,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 600,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [showNudge, pulseAnim]);
 
   const config = SIZE_CONFIG[size];
   const normalizedPoints = Math.max(0, Math.min(3, points));
@@ -65,7 +91,7 @@ export function PointsChip({
     justifyContent: 'center',
   };
 
-  return (
+  const chipContent = (
     <TouchableOpacity
       onPress={onPress}
       disabled={isDisabled}
@@ -107,6 +133,16 @@ export function PointsChip({
       </View>
     </TouchableOpacity>
   );
+
+  if (showNudge) {
+    return (
+      <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+        {chipContent}
+      </Animated.View>
+    );
+  }
+
+  return chipContent;
 }
 
 const styles = StyleSheet.create({

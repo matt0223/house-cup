@@ -1,5 +1,5 @@
 import React, { useEffect, useCallback, useRef, useState } from 'react';
-import { View, StyleSheet, Text, ActivityIndicator, Animated, ScrollView, Easing } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, ActivityIndicator, Animated, ScrollView, Easing } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, Redirect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -19,11 +19,21 @@ import { WeekNarrative } from '../src/domain/services/narrativeService';
 import { shareHouseholdInvite } from '../src/utils/shareInvite';
 import * as taskService from '../src/services/firebase/taskService';
 
+/** Common household task suggestions for the empty state */
+const TASK_SUGGESTIONS = [
+  'Cook dinner',
+  'Clean kitchen',
+  'Laundry',
+  'Exercise',
+  'Groceries',
+  'Take out trash',
+];
+
 /**
  * Challenge screen - Main tab showing scoreboard, day strip, and task list.
  */
 export default function ChallengeScreen() {
-  const { colors, spacing, typography } = useTheme();
+  const { colors, spacing, typography, radius } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [isAddSheetVisible, setIsAddSheetVisible] = React.useState(false);
@@ -34,6 +44,16 @@ export default function ChallengeScreen() {
   const [swipeDeleteTask, setSwipeDeleteTask] = React.useState<TaskInstance | null>(null);
   // Track the weekStartDay used to create the current challenge
   const [challengeWeekStartDay, setChallengeWeekStartDay] = React.useState<number | null>(null);
+
+  // Scoring nudge state (one-time pulse on first task's score circle)
+  const [hasEverScored, setHasEverScored] = useState(true); // Default true to avoid flash
+
+  // Check if user has ever scored on mount
+  useEffect(() => {
+    AsyncStorage.getItem('@housecup/hasEverScored').then((val) => {
+      if (val !== 'true') setHasEverScored(false);
+    });
+  }, []);
 
   // Celebration overlay state
   const [showCelebration, setShowCelebration] = useState(false);
@@ -294,6 +314,14 @@ export default function ChallengeScreen() {
     setShowToast(true);
   };
 
+  // Handle tapping a suggestion chip in the empty state
+  const handleSuggestionTap = (name: string) => {
+    addTask(name, {}, null); // One-off task, no points, no template
+    setToastMessage('Task added');
+    setToastKey((k) => k + 1);
+    setShowToast(true);
+  };
+
   // Handle updating a task from the sheet (edit mode)
   const handleUpdateTask = (
     taskId: string,
@@ -460,6 +488,12 @@ export default function ChallengeScreen() {
     points: number
   ) => {
     updateTaskPoints(taskId, competitorId, points);
+
+    // Dismiss the scoring nudge on first score
+    if (!hasEverScored && points > 0) {
+      setHasEverScored(true);
+      AsyncStorage.setItem('@housecup/hasEverScored', 'true');
+    }
   };
 
   // Loading state - only require household and competitorA (competitorB may not have joined yet)
@@ -580,6 +614,7 @@ export default function ChallengeScreen() {
               onPointsChange={handlePointsChange}
               onTaskPress={handleTaskPress}
               onTaskDelete={handleSwipeDelete}
+              showScoreNudge={!hasEverScored}
             />
           </View>
         ) : (
@@ -587,10 +622,10 @@ export default function ChallengeScreen() {
             <Text
               style={[
                 typography.headline,
-                { color: colors.textPrimary },
+                { color: colors.textPrimary, textAlign: 'center' },
               ]}
             >
-              Start by adding your first task
+              What did you get done today?
             </Text>
             <Text
               style={[
@@ -598,8 +633,30 @@ export default function ChallengeScreen() {
                 { color: colors.textSecondary, marginTop: spacing.xs, textAlign: 'center' },
               ]}
             >
-              Tap the + button to get started
+              Tap a suggestion or press + to add your own
             </Text>
+            <View style={[styles.chipGrid, { marginTop: spacing.lg }]}>
+              {TASK_SUGGESTIONS.map((suggestion) => (
+                <TouchableOpacity
+                  key={suggestion}
+                  style={[
+                    styles.suggestionChip,
+                    {
+                      borderColor: colors.primary + '55',
+                      borderRadius: radius.pill,
+                      paddingHorizontal: spacing.md,
+                      paddingVertical: spacing.sm,
+                    },
+                  ]}
+                  activeOpacity={0.7}
+                  onPress={() => handleSuggestionTap(suggestion)}
+                >
+                  <Text style={[typography.callout, { color: colors.primary }]}>
+                    {suggestion}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
         )}
         </Animated.ScrollView>
@@ -700,5 +757,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 32,
+  },
+  chipGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  suggestionChip: {
+    borderWidth: 1.5,
   },
 });
