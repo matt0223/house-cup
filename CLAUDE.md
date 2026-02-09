@@ -12,7 +12,27 @@ The repository contains the React Native app code. Push changes to `main` branch
 
 ## What is House Cup?
 
-A React Native mobile app for iOS that gamifies household chores between two partners. Each week is a "challenge" where partners earn points for completing tasks, competing for a prize.
+A React Native mobile app for iOS that gamifies household chores between two housemates. Each week is a "challenge" where housemates earn points for completing tasks, competing for a fun prize.
+
+### How the Core Loop Works
+
+1. **Tasks** are shared — either housemate can add a task, and both see the same list for each day. Tasks can be pre-planned (like a to-do) or logged after the fact (like a journal entry). They are a hybrid.
+
+2. **Scoring** happens per-task, per-competitor. Each task row shows two tappable score circles (one per competitor, displaying their initial). Tapping cycles through **0 → 1 → 2 → 3 → 0** points. Both competitors can independently score the same task (e.g., if they collaborated on cooking). The point value represents effort/time spent — a quick microwave dinner might be 1 point, an elaborate meal might be 3.
+
+3. **The scoreboard** at the top of the challenge screen shows each competitor's total points for the week, with the prize in the center. It collapses when scrolling through a long task list.
+
+4. **At the end of the week**, the competitor with the most points wins the prize. The app generates an AI-powered narrative recap with insights about the week's patterns.
+
+### The Aha Moment
+
+The magical moment is a **two-beat sequence**:
+- **Beat 1**: The user adds their first task (taps a suggestion chip or the "+ Add task" button). A task appears on the list with score circles visible.
+- **Beat 2**: The user taps their score circle on that task, cycling it to 1. The scoreboard updates from 0 to 1. This is when the user "gets it" — this isn't a to-do app, it's a game. They're putting points on the board.
+
+The empty competitor score sitting at 0 next to their 1 creates an implicit question: *who's going to catch up?*
+
+**Every design decision should minimize the time between sign-in and this aha moment.**
 
 ## Tech Stack Quick Reference
 
@@ -116,6 +136,8 @@ export { MyNewComponent } from './MyNewComponent';
 | Firestore sync hook | `src/hooks/useFirestoreSync.ts` |
 | Firebase provider | `src/providers/FirebaseProvider.tsx` |
 | Household service | `src/services/firebase/householdService.ts` |
+| History screen | `app/history.tsx` |
+| Cloud Functions | `functions/src/index.ts` |
 | Firebase setup guide | `docs/FIREBASE_SETUP.md` |
 
 ## Common Tasks
@@ -149,8 +171,18 @@ eas submit --platform ios
 ```
 Then approve in App Store Connect TestFlight tab.
 
-## Design Opinions (Follow These)
+## Product Principles (Follow These)
 
+### Experience Principles
+1. **Get to the aha moment fast** — Every screen, field, or step between sign-in and the first scored task is friction. Eliminate or defer anything that isn't essential to reaching that moment.
+2. **Value before commitment** — Let users experience the product before asking them to invest (invite a housemate, set a prize, configure settings). Show, don't tell.
+3. **Progressive disclosure** — Don't front-load configuration. Introduce features contextually when the user needs them, not all at once during onboarding.
+4. **Smart defaults over explicit choices** — Default the prize, default the color, pre-fill the name from Apple. Let users customize later from Settings. The best onboarding question is the one you don't ask.
+5. **Everything presented must be highly valuable** — No filler content, no mediocre insights, no repeated tips. If it's not genuinely useful or delightful, omit it entirely. An empty state is better than a low-quality one.
+6. **Collaborative competition, not adversarial** — The tone is playful, not hostile. The real goal is household momentum: visibility into what's getting done, motivation to contribute, and insights to improve efficiency. The competition is the vehicle, not the destination.
+7. **The product IS the onboarding** — The best way to teach a user how the app works is to let them use it. Contextual guidance within the real UI beats tutorial screens every time.
+
+### Design Opinions
 1. **Warm, inviting aesthetic** - Cream backgrounds, coral accent
 2. **Simple and delightful** - Minimal UI, clear hierarchy
 3. **iOS-first** - Follow iOS Human Interface Guidelines
@@ -158,12 +190,13 @@ Then approve in App Store Connect TestFlight tab.
 5. **Competitor colors are user-chosen** - Orange is reserved for app accent
 6. **Typography: 6 variants only** - title, display, headline, body, callout, caption
 
-## Current State (March 2026)
+## Current State (February 2026)
 
 ### Auth & Onboarding
 - **Sign in with Apple only** - No guest mode, no "Link Apple Account" in Settings. User must sign in with Apple before seeing the household (onboarding and join flow both require Apple Sign-In). Keeps identity simple and avoids orphaned anonymous users.
 - Onboarding: Create (3 steps) or Join (enter code → Apple Sign-In → set profile). No "Continue as Guest."
 - Sign out in Settings clears local household and navigates to onboarding.
+- **Onboarding redesign planned** — Current 3-step wizard (name → housemate → prize) is being replaced to get users to the aha moment faster.
 
 ### Recurring Tasks (Important for UX and Bugs)
 - **New recurring task with points:** We create the template, then **one anchor task** for the selected day with points via `addTask(name, points, templateId)`. Seeding fills other days; seeding never overwrites existing `(templateId, dayKey)`.
@@ -179,7 +212,7 @@ Then approve in App Store Connect TestFlight tab.
 ### Completed
 - Scoreboard with weekly competition (collapsible with scroll animation)
 - Day strip navigation
-- Task list with point circles
+- Task list with point circles (tap to cycle 0→1→2→3→0 per competitor)
 - Add/edit task bottom sheet
 - Recurring tasks (with anchor + seed, convert one-off, no duplicates)
 - Swipe-to-delete (recurring: "This and all without points" option)
@@ -189,9 +222,14 @@ Then approve in App Store Connect TestFlight tab.
 - **Dev/Prod Firebase separation** - Two Firebase projects with distinct bundle IDs
 - **TestFlight deployment** - App is live on TestFlight
 - **Sign out** - In Settings
+- **History & Insights screen** - Weekly history cards with AI-generated narratives
+- **Firebase Cloud Functions** - `completeExpiredChallenges` (hourly backup) and `onChallengeCompleted` (OpenAI narrative generation via gpt-4o-mini)
+- **Client-side challenge completion** - Detects expired challenges on app open, completes them atomically, creates next week's challenge
+- **Smart insight tips** - Only surfaces tips for new/spiking tasks (not baseline recurring tasks), avoids repetition across weeks
+- **Contextual toast notifications** - "Task added", "Task updated", "Task deleted", "Settings updated", "Invite sent"
 
 ### In Progress
-- Stats & History screen
+- Onboarding V2 (simplified flow to reach aha moment faster)
 
 ### Planned
 - Push notifications for reminders
