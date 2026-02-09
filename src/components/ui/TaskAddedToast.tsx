@@ -8,6 +8,8 @@ export interface TaskAddedToastProps {
   visible: boolean;
   /** Called when the toast finishes hiding */
   onHidden: () => void;
+  /** Custom message to display (defaults to "Task added") */
+  message?: string;
 }
 
 const ANIMATION_DURATION = 200;
@@ -18,7 +20,7 @@ const TRANSLATE_DISTANCE = 10;
  * Floating pill toast that shows "Task added" with fade+slide animations.
  * Positioned at the top of the screen, horizontally centered.
  */
-export function TaskAddedToast({ visible, onHidden }: TaskAddedToastProps) {
+export function TaskAddedToast({ visible, onHidden, message = 'Task added' }: TaskAddedToastProps) {
   const { colors, typography, spacing, radius, shadows } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -124,7 +126,7 @@ export function TaskAddedToast({ visible, onHidden }: TaskAddedToastProps) {
       pointerEvents="none"
     >
       <Text style={[typography.body, { color: colors.textPrimary }]}>
-        Task added
+        {message}
       </Text>
     </Animated.View>
   );

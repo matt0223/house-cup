@@ -30,6 +30,7 @@ export default function ChallengeScreen() {
   const [isAddSheetVisible, setIsAddSheetVisible] = React.useState(false);
   const [showToast, setShowToast] = React.useState(false);
   const [toastKey, setToastKey] = React.useState(0);
+  const [toastMessage, setToastMessage] = React.useState('Task added');
   const [editingTask, setEditingTask] = React.useState<TaskInstance | null>(null);
   const [swipeDeleteTask, setSwipeDeleteTask] = React.useState<TaskInstance | null>(null);
   // Track the weekStartDay used to create the current challenge
@@ -227,6 +228,10 @@ export default function ChallengeScreen() {
       pendingCompetitor?.name,
       household.joinCode || ''
     );
+
+    setToastMessage('Invite sent');
+    setToastKey((k) => k + 1);
+    setShowToast(true);
   }, [household]);
 
   // Redirect to onboarding if no household or no user (can't load household without auth)
@@ -285,6 +290,7 @@ export default function ChallengeScreen() {
     }
     
     // Show toast (increment key to force new instance if already visible)
+    setToastMessage('Task added');
     setToastKey((k) => k + 1);
     setShowToast(true);
   };
@@ -299,18 +305,20 @@ export default function ChallengeScreen() {
     if (!task) return;
 
     const isRecurring = task.templateId !== null;
+    const hasNameChange = changes.name !== undefined && changes.name !== task.name;
+    const hasScheduleChange = changes.repeatDays !== undefined;
 
     // Handle name change
-    if (changes.name !== undefined && changes.name !== task.name) {
+    if (hasNameChange) {
       if (isRecurring && task.templateId) {
         if (scope === 'future') {
           // Update template name + all linked instances
-          updateTaskName(taskId, changes.name, true, templates, (templateId, newName) => {
+          updateTaskName(taskId, changes.name!, true, templates, (templateId, newName) => {
             updateTemplate(templateId, { name: newName });
           });
         } else {
           // Detach and update just this instance (store persists task + skip record)
-          updateTaskName(taskId, changes.name, false, templates);
+          updateTaskName(taskId, changes.name!, false, templates);
         }
       } else {
         // One-off task - just update and persist
@@ -334,8 +342,8 @@ export default function ChallengeScreen() {
     }
 
     // Handle schedule change
-    if (changes.repeatDays !== undefined && isRecurring && task.templateId) {
-      if (changes.repeatDays.length === 0) {
+    if (hasScheduleChange && isRecurring && task.templateId) {
+      if (changes.repeatDays!.length === 0) {
         // Converting recurring to one-off: delete template and detach task
         deleteTemplate(task.templateId);
         updateTask(taskId, { templateId: null });
@@ -346,23 +354,26 @@ export default function ChallengeScreen() {
         }
       } else {
         // Just update the template's days
-        updateTemplate(task.templateId, { repeatDays: changes.repeatDays });
+        updateTemplate(task.templateId, { repeatDays: changes.repeatDays! });
       }
     }
 
     // Handle converting one-off to recurring
     if (
-      changes.repeatDays !== undefined &&
-      changes.repeatDays.length > 0 &&
+      hasScheduleChange &&
+      changes.repeatDays!.length > 0 &&
       !isRecurring
     ) {
-      const newTemplate = addTemplate(task.name, changes.repeatDays);
+      const newTemplate = addTemplate(task.name, changes.repeatDays!);
       linkTaskToTemplate(taskId, newTemplate.id);
     }
 
-    // Show toast
-    setToastKey((k) => k + 1);
-    setShowToast(true);
+    // Show toast only for name or schedule changes (not point-only changes)
+    if (hasNameChange || hasScheduleChange) {
+      setToastMessage('Task updated');
+      setToastKey((k) => k + 1);
+      setShowToast(true);
+    }
 
     // Close sheet
     setEditingTask(null);
@@ -382,6 +393,11 @@ export default function ChallengeScreen() {
       deleteTask(taskId);
     }
 
+    // Show toast
+    setToastMessage('Task deleted');
+    setToastKey((k) => k + 1);
+    setShowToast(true);
+
     // Close sheet
     setEditingTask(null);
     setIsAddSheetVisible(false);
@@ -396,6 +412,10 @@ export default function ChallengeScreen() {
     } else {
       // Delete one-off task directly
       deleteTask(task.id);
+      // Show toast
+      setToastMessage('Task deleted');
+      setToastKey((k) => k + 1);
+      setShowToast(true);
     }
   };
 
@@ -410,6 +430,11 @@ export default function ChallengeScreen() {
       // Always delete this task; this week others without points; next week onward all; then remove template
       deleteRecurringTaskKeepingPoints(swipeDeleteTask.templateId, swipeDeleteTask.id);
     }
+
+    // Show toast
+    setToastMessage('Task deleted');
+    setToastKey((k) => k + 1);
+    setShowToast(true);
 
     setSwipeDeleteTask(null);
   };
@@ -597,11 +622,12 @@ export default function ChallengeScreen() {
         weekStartDay={household?.weekStartDay ?? 0}
       />
 
-      {/* Task Added Toast */}
+      {/* Toast notification */}
       <TaskAddedToast
         key={toastKey}
         visible={showToast}
         onHidden={handleToastHidden}
+        message={toastMessage}
       />
 
       {/* Swipe Delete Confirmation Modal */}

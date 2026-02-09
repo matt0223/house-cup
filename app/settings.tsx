@@ -20,6 +20,7 @@ import {
   SettingsRow,
   CompetitorRow,
   OptionPickerModal,
+  TaskAddedToast,
 } from '../src/components/ui';
 import { useHouseholdStore, useUserProfileStore, useThemePreference } from '../src/store';
 import { WeekStartDay, ThemePreference } from '../src/domain/models/Household';
@@ -83,6 +84,23 @@ export default function SettingsScreen() {
 
   // Apple auth state (used for display only - sign-in is required during onboarding)
   useAppleAuth();
+
+  // Toast state
+  const [showToast, setShowToast] = useState(false);
+  const [toastKey, setToastKey] = useState(0);
+  const [toastMessage, setToastMessage] = useState('Settings updated');
+
+  const showSettingsToast = () => {
+    setToastMessage('Settings updated');
+    setToastKey((k) => k + 1);
+    setShowToast(true);
+  };
+
+  const showInviteToast = () => {
+    setToastMessage('Invite sent');
+    setToastKey((k) => k + 1);
+    setShowToast(true);
+  };
 
   // Sign out state
   const [isSigningOut, setIsSigningOut] = useState(false);
@@ -168,6 +186,8 @@ export default function SettingsScreen() {
       pendingCompetitor.name,
       household.joinCode || ''
     );
+
+    showInviteToast();
   }, [household, markInviteSent]);
 
   // Handle sending invite for new housemate (creates competitor first)
@@ -191,6 +211,8 @@ export default function SettingsScreen() {
       
       // Clear the input
       setNewHousemateName('');
+
+      showInviteToast();
     } catch (err) {
       console.error('Failed to send invite:', err);
     } finally {
@@ -243,7 +265,7 @@ export default function SettingsScreen() {
 
   const currentEndDay = household ? getEndDay(household.weekStartDay) : 6;
 
-  // Handle competitor name change
+  // Handle competitor name change (fires on every keystroke — no toast here)
   const handleNameChange = (competitorId: string, name: string) => {
     updateCompetitor(competitorId, { name });
   };
@@ -251,6 +273,7 @@ export default function SettingsScreen() {
   // Handle competitor color change
   const handleColorChange = (competitorId: string, color: string) => {
     updateCompetitor(competitorId, { color });
+    showSettingsToast();
   };
 
   // Handle end day change
@@ -258,12 +281,14 @@ export default function SettingsScreen() {
     const weekStartDay = getWeekStartFromEndDay(endDay);
     updateSettings({ weekStartDay });
     setShowEndDayPicker(false);
+    showSettingsToast();
   };
 
   // Handle prize save
   const handlePrizeSave = () => {
     updateSettings({ prize: prizeText });
     setEditingPrize(false);
+    showSettingsToast();
   };
 
   const appVersion = Constants.expoConfig?.version ?? '1.0.0';
@@ -302,6 +327,7 @@ export default function SettingsScreen() {
               }
               unavailableColors={[competitorB?.color ?? newHousemateColor]}
               showDivider={true}
+              onBlur={showSettingsToast}
             />
           )}
           {competitorB ? (
@@ -317,6 +343,7 @@ export default function SettingsScreen() {
               }
               unavailableColors={[competitorA?.color ?? '']}
               showDivider={false}
+              onBlur={showSettingsToast}
               statusLabel={
                 isPendingHousemate
                   ? hasInviteBeenSent
@@ -596,8 +623,17 @@ export default function SettingsScreen() {
         onSelect={(id) => {
           setThemePreference(id as ThemePreference, userId ?? null);
           setShowThemePicker(false);
+          showSettingsToast();
         }}
         onClose={() => setShowThemePicker(false)}
+      />
+
+      {/* Settings Toast */}
+      <TaskAddedToast
+        key={toastKey}
+        visible={showToast}
+        onHidden={() => setShowToast(false)}
+        message={toastMessage}
       />
     </SafeAreaView>
   );
