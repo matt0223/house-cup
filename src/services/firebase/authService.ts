@@ -16,7 +16,10 @@ import {
 } from 'firebase/auth';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Crypto from 'expo-crypto';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getFirebaseAuth } from './firebaseConfig';
+
+const APPLE_GIVEN_NAME_KEY = '@housecup/appleGivenName';
 
 /**
  * Get the current authenticated user
@@ -148,8 +151,19 @@ export async function signInWithApple(): Promise<AppleSignInResult> {
     throw new Error('No identity token received from Apple');
   }
 
-  // Capture givenName before it's lost — Apple only sends this on first sign-in
-  const givenName = appleCredential.fullName?.givenName ?? undefined;
+  // Capture givenName before it's lost — Apple only sends this on first sign-in.
+  // Persist to AsyncStorage IMMEDIATELY so it survives if anything fails downstream.
+  let givenName = appleCredential.fullName?.givenName ?? undefined;
+
+  if (givenName) {
+    await AsyncStorage.setItem(APPLE_GIVEN_NAME_KEY, givenName).catch(() => {});
+  } else {
+    // Apple didn't send the name — try to recover from a previous attempt
+    const saved = await AsyncStorage.getItem(APPLE_GIVEN_NAME_KEY).catch(() => null);
+    if (saved) {
+      givenName = saved;
+    }
+  }
 
   // Create Firebase credential
   const provider = new OAuthProvider('apple.com');
