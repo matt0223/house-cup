@@ -199,6 +199,8 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
   }, [household, householdId, isConfigured]);
 
   // Create a new household (with your profile and optionally a pending housemate)
+  // Note: reads userId directly from Firebase Auth (not React state) to avoid
+  // race conditions when called immediately after sign-in.
   const createHousehold = useCallback(
     async (
       yourName: string,
@@ -207,7 +209,8 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
       housemateColor?: string,
       prize?: string
     ): Promise<string> => {
-      if (!userId) {
+      const currentUserId = getCurrentUserId() || userId;
+      if (!currentUserId) {
         throw new Error('Must be authenticated to create household');
       }
 
@@ -217,7 +220,7 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
 
       // Create competitors array
       const competitors: Competitor[] = [
-        { id: `competitor-${timestamp}-1`, name: yourName, color: yourColor, userId },
+        { id: `competitor-${timestamp}-1`, name: yourName, color: yourColor, userId: currentUserId },
       ];
 
       // If housemate info provided, create a pending competitor (no userId)
@@ -234,7 +237,7 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
         competitors,
         timezone,
         weekStartDay: 0, // Default to Sunday
-        memberIds: [userId],
+        memberIds: [currentUserId],
         joinCode,
         prize: prize || 'Winner picks dinner!',
       });
@@ -266,9 +269,12 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
   );
 
   // Join an existing household by code (claims pending competitor slot)
+  // Note: reads userId directly from Firebase Auth (not React state) to avoid
+  // race conditions when called immediately after sign-in.
   const joinHousehold = useCallback(
     async (code: string, yourName: string, yourColor: string): Promise<void> => {
-      if (!userId) {
+      const currentUserId = getCurrentUserId() || userId;
+      if (!currentUserId) {
         throw new Error('Must be authenticated to join household');
       }
 
@@ -296,7 +302,7 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
       const updatedHousehold = await claimCompetitorSlot(
         foundHousehold.id,
         pendingCompetitor.id,
-        userId,
+        currentUserId,
         { name: yourName, color: yourColor }
       );
 
