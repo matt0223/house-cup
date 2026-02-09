@@ -18,18 +18,19 @@ import { Button, AppleSignInButton } from '../../src/components/ui';
 import { useAppleAuth } from '../../src/hooks/useAppleAuth';
 import { useFirebase } from '../../src/providers/FirebaseProvider';
 import { findHouseholdByJoinCode } from '../../src/services/firebase';
-import { isPendingCompetitor } from '../../src/domain/models/Competitor';
+import { isPendingCompetitor, availableCompetitorColors } from '../../src/domain/models/Competitor';
 
-type ViewState = 'welcome' | 'signing-in' | 'choice' | 'join-code';
+type ViewState = 'welcome' | 'signing-in' | 'join-code';
 
 /**
  * Onboarding welcome screen.
- * Apple Sign-In first approach - identity before actions.
+ * Zero-screen onboarding: Apple Sign-In → auto-create household → challenge page.
+ * No wizard, no choice screen, no name/color form.
  */
 export default function OnboardingWelcomeScreen() {
   const { colors, spacing, typography, radius } = useTheme();
   const router = useRouter();
-  const { householdId, recoverHousehold, setHouseholdId } = useFirebase();
+  const { householdId, recoverHousehold, setHouseholdId, createHousehold } = useFirebase();
   const {
     isLoading: isAppleLoading,
     error: appleError,
@@ -37,7 +38,7 @@ export default function OnboardingWelcomeScreen() {
     clearError: clearAppleError,
   } = useAppleAuth();
 
-  // View state
+  // View state (no more 'choice' — we auto-create)
   const [viewState, setViewState] = useState<ViewState>('welcome');
   
   // Join code state
@@ -54,16 +55,27 @@ export default function OnboardingWelcomeScreen() {
     clearAppleError?.();
     setViewState('signing-in');
     
-    const success = await signInWithApple();
-    if (success) {
+    // signIn returns givenName on success, null on failure/cancel
+    const appleGivenName = await signInWithApple();
+    if (appleGivenName !== null) {
       // Try to recover existing household
       const recovered = await recoverHousehold();
       if (recovered) {
         // Returning user - go to main app
         router.replace('/');
       } else {
-        // New user - show create/join choice
-        setViewState('choice');
+        // New user — auto-create household with Apple name + default color
+        try {
+          const name = appleGivenName || 'You';
+          const defaultColor = availableCompetitorColors[0].hex; // Purple
+          const defaultPrize = 'Winner picks!';
+          await createHousehold(name, defaultColor, undefined, undefined, defaultPrize);
+          router.replace('/');
+        } catch (err) {
+          console.error('Failed to auto-create household:', err);
+          // Fall back to welcome so user can retry
+          setViewState('welcome');
+        }
       }
     } else {
       // Sign-in failed or cancelled
@@ -189,7 +201,7 @@ export default function OnboardingWelcomeScreen() {
           style={styles.joinLink}
         >
           <Text style={[typography.callout, { color: colors.primary }]}>
-            Enter a join code
+            Have a join code?
           </Text>
         </TouchableOpacity>
       </View>
@@ -219,49 +231,8 @@ export default function OnboardingWelcomeScreen() {
             { color: colors.textSecondary, marginTop: spacing.md },
           ]}
         >
-          Signing in...
+          Setting up...
         </Text>
-      </View>
-    </View>
-  );
-
-  // Render create/join choice (after sign-in, no household found)
-  const renderChoice = () => (
-    <View style={styles.content}>
-      <View style={styles.hero}>
-        <Ionicons
-          name="checkmark-circle"
-          size={56}
-          color={colors.success}
-          style={styles.icon}
-        />
-        <Text style={[typography.title, styles.title, { color: colors.textPrimary }]}>
-          You're signed in!
-        </Text>
-        <Text
-          style={[
-            typography.body,
-            styles.subtitle,
-            { color: colors.textSecondary },
-          ]}
-        >
-          Let's set up your household.
-        </Text>
-      </View>
-
-      <View style={[styles.actions, { gap: spacing.md }]}>
-        <Button
-          label="Create a Household"
-          onPress={() => router.push('/onboarding/create')}
-          fullWidth
-        />
-
-        <Button
-          label="Join with a Code"
-          onPress={() => router.push('/onboarding/join')}
-          variant="secondary"
-          fullWidth
-        />
       </View>
     </View>
   );
@@ -340,7 +311,6 @@ export default function OnboardingWelcomeScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       {viewState === 'welcome' && renderWelcome()}
       {viewState === 'signing-in' && renderSigningIn()}
-      {viewState === 'choice' && renderChoice()}
       {viewState === 'join-code' && renderJoinCode()}
     </SafeAreaView>
   );

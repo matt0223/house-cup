@@ -1,5 +1,5 @@
 import React, { useEffect, useCallback, useRef, useState } from 'react';
-import { View, StyleSheet, Text, ActivityIndicator, Animated, ScrollView, Easing } from 'react-native';
+import { View, StyleSheet, Text, TextInput, ActivityIndicator, Animated, ScrollView, Easing, TouchableOpacity, Keyboard } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -35,6 +35,11 @@ export default function ChallengeScreen() {
   const [swipeDeleteTask, setSwipeDeleteTask] = React.useState<TaskInstance | null>(null);
   // Track the weekStartDay used to create the current challenge
   const [challengeWeekStartDay, setChallengeWeekStartDay] = React.useState<number | null>(null);
+
+  // Inline name prompt state (shown when competitor name is "You" placeholder)
+  const [namePromptText, setNamePromptText] = useState('');
+  const [namePromptDismissed, setNamePromptDismissed] = useState(false);
+  const nameInputRef = useRef<TextInput>(null);
 
   // Celebration overlay state
   const [showCelebration, setShowCelebration] = useState(false);
@@ -82,6 +87,7 @@ export default function ChallengeScreen() {
 
   // Household store
   const household = useHouseholdStore((s) => s.household);
+  const updateCompetitor = useHouseholdStore((s) => s.updateCompetitor);
 
   // Challenge store - ALL hooks must be called before any conditional returns
   const challenge = useChallengeStore((s) => s.challenge);
@@ -233,6 +239,33 @@ export default function ChallengeScreen() {
     setToastKey((k) => k + 1);
     setShowToast(true);
   }, [household]);
+
+  // Check if name prompt was already dismissed
+  useEffect(() => {
+    AsyncStorage.getItem('@housecup/namePromptDismissed').then((val) => {
+      if (val === 'true') setNamePromptDismissed(true);
+    });
+  }, []);
+
+  // Determine if we should show the inline name prompt
+  const myCompetitor = household?.competitors.find(c => c.userId === userId);
+  const showNamePrompt = !namePromptDismissed && myCompetitor?.name === 'You';
+
+  // Handle name prompt submission
+  const handleNameSubmit = useCallback(() => {
+    const trimmed = namePromptText.trim();
+    if (!trimmed || !myCompetitor) return;
+    Keyboard.dismiss();
+    updateCompetitor(myCompetitor.id, { name: trimmed });
+    setNamePromptDismissed(true);
+    AsyncStorage.setItem('@housecup/namePromptDismissed', 'true');
+  }, [namePromptText, myCompetitor, updateCompetitor]);
+
+  // Handle name prompt dismissal (keep "You")
+  const handleNameDismiss = useCallback(() => {
+    setNamePromptDismissed(true);
+    AsyncStorage.setItem('@housecup/namePromptDismissed', 'true');
+  }, []);
 
   // Redirect to onboarding if no household or no user (can't load household without auth)
   if (isConfigured && !isAuthLoading && (!householdId || !userId)) {
@@ -571,6 +604,64 @@ export default function ChallengeScreen() {
           onContentSizeChange={handleContentSizeChange}
           scrollEventThrottle={16}
         >
+        {/* Inline name prompt — shown when Apple didn't provide givenName */}
+        {showNamePrompt && (
+          <View style={[styles.namePrompt, { backgroundColor: colors.surface, marginHorizontal: spacing.sm, marginTop: spacing.md, borderRadius: 12, padding: spacing.md }]}>
+            <View style={styles.namePromptHeader}>
+              <Text style={[typography.headline, { color: colors.textPrimary, flex: 1 }]}>
+                What should we call you?
+              </Text>
+              <TouchableOpacity onPress={handleNameDismiss} hitSlop={12}>
+                <Ionicons name="close" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            <View style={[styles.namePromptRow, { marginTop: spacing.sm }]}>
+              <TextInput
+                ref={nameInputRef}
+                style={[
+                  styles.namePromptInput,
+                  typography.body,
+                  {
+                    backgroundColor: colors.background,
+                    color: colors.textPrimary,
+                    borderRadius: 8,
+                    paddingHorizontal: spacing.sm,
+                    paddingVertical: spacing.xs,
+                    flex: 1,
+                    marginRight: spacing.sm,
+                  },
+                ]}
+                value={namePromptText}
+                onChangeText={setNamePromptText}
+                placeholder="Your name"
+                placeholderTextColor={colors.textSecondary}
+                autoCapitalize="words"
+                autoCorrect={false}
+                returnKeyType="done"
+                onSubmitEditing={handleNameSubmit}
+                maxFontSizeMultiplier={1.2}
+              />
+              <TouchableOpacity
+                onPress={handleNameSubmit}
+                disabled={namePromptText.trim().length === 0}
+                style={[
+                  styles.namePromptButton,
+                  {
+                    backgroundColor: namePromptText.trim().length > 0 ? colors.primary : colors.border,
+                    borderRadius: 8,
+                    paddingHorizontal: spacing.md,
+                    paddingVertical: spacing.xs,
+                  },
+                ]}
+              >
+                <Text style={[typography.callout, { color: namePromptText.trim().length > 0 ? '#FFFFFF' : colors.textSecondary, fontWeight: '600' }]}>
+                  Done
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         {/* Content Area */}
         {tasksForDay.length > 0 ? (
           <View style={{ marginTop: spacing.md, paddingHorizontal: spacing.sm }}>
@@ -701,5 +792,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 32,
+  },
+  namePrompt: {
+    // Dynamic styles applied inline
+  },
+  namePromptHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  namePromptRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  namePromptInput: {
+    minHeight: 40,
+  },
+  namePromptButton: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: 40,
   },
 });

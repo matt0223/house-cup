@@ -13,20 +13,22 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '../../src/theme/useTheme';
-import { Button, ColorPicker, OnboardingHeader, AppleSignInButton } from '../../src/components/ui';
+import { Button, OnboardingHeader, AppleSignInButton } from '../../src/components/ui';
 import { useFirebase } from '../../src/providers/FirebaseProvider';
 import { useAppleAuth } from '../../src/hooks/useAppleAuth';
-import { availableCompetitorColors, isPendingCompetitor } from '../../src/domain/models/Competitor';
+import { isPendingCompetitor } from '../../src/domain/models/Competitor';
 import { findHouseholdByJoinCode } from '../../src/services/firebase';
 import { useStepAnimation } from '../../src/hooks';
 import { Household } from '../../src/domain/models/Household';
 
 /**
  * Onboarding join screen.
+ * Zero-screen join: Enter code → Apple Sign-In → auto-join → challenge page.
+ * No name/color form — uses Apple givenName (or invite placeholder) + invite color.
+ *
  * Flow:
  *   Step 1: Enter 6-character code (skipped if code passed via param)
- *   Step 2: Sign in with Apple (if not already signed in)
- *   Step 3: Set up your profile (name pre-filled from invite, pick color)
+ *   Step 2: Sign in with Apple → auto-join immediately
  */
 export default function OnboardingJoinScreen() {
   const { colors, spacing, typography, radius } = useTheme();
@@ -51,16 +53,16 @@ export default function OnboardingJoinScreen() {
   // Validated household data
   const [validatedHousehold, setValidatedHousehold] = useState<Household | null>(null);
 
-  // Step 3: Profile setup
-  const [yourName, setYourName] = useState('');
-  const [yourColor, setYourColor] = useState(availableCompetitorColors[0].hex);
+  // Pending competitor info (from invite)
+  const [pendingName, setPendingName] = useState('');
+  const [pendingColor, setPendingColor] = useState('');
   const [inviterName, setInviterName] = useState<string | null>(null);
-  const [inviterColor, setInviterColor] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Join state
+  const [isJoining, setIsJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const inputRef = useRef<TextInput>(null);
-  const nameInputRef = useRef<TextInput>(null);
 
   // Animation for step transitions
   const { fadeAnim, animateStepChange } = useStepAnimation();
@@ -71,6 +73,13 @@ export default function OnboardingJoinScreen() {
       validateCode(params.code);
     }
   }, [params.code]);
+
+  // If already signed in and we have a validated household, auto-join immediately
+  useEffect(() => {
+    if (userId && validatedHousehold && step === 2) {
+      autoJoin(undefined);
+    }
+  }, [userId, validatedHousehold, step]);
 
   const goToStep = (newStep: number) => {
     animateStepChange(() => setStep(newStep));
@@ -107,30 +116,26 @@ export default function OnboardingJoinScreen() {
         return;
       }
 
-      // Store validated household data
+      // Store validated household data and pending competitor info
       setValidatedHousehold(household);
       setCode(codeToValidate.toUpperCase());
+      setPendingName(pendingCompetitor.name);
+      setPendingColor(pendingCompetitor.color);
 
       // Find the inviter
       const inviter = household.competitors.find(c => c.userId);
       if (inviter) {
         setInviterName(inviter.name);
-        setInviterColor(inviter.color);
       }
-
-      // Pre-fill name and color from pending competitor
-      setYourName(pendingCompetitor.name);
-      setYourColor(pendingCompetitor.color);
 
       setIsValidating(false);
       setIsInitializing(false);
 
-      // If already signed in, go straight to profile
-      // Otherwise, go to Apple sign-in step
       if (userId) {
-        goToStep(3);
-        setTimeout(() => nameInputRef.current?.focus(), 200);
+        // Already signed in — auto-join immediately
+        await autoJoin(undefined);
       } else {
+        // Go to Apple Sign-In step
         goToStep(2);
       }
     } catch (err) {
@@ -139,6 +144,27 @@ export default function OnboardingJoinScreen() {
       setIsValidating(false);
       setIsInitializing(false);
       setStep(1);
+    }
+  };
+
+  // Auto-join the household after Apple Sign-In
+  const autoJoin = async (appleGivenName: string | undefined) => {
+    setIsJoining(true);
+    setError(null);
+
+    try {
+      // Use Apple givenName if available, otherwise fall back to invite placeholder name
+      const name = appleGivenName || pendingName || 'You';
+      const color = pendingColor;
+
+      await joinHousehold(code, name, color);
+      router.replace('/');
+    } catch (err) {
+      console.error('Failed to join household:', err);
+      const message = err instanceof Error ? err.message : 'Something went wrong';
+      setError(message);
+      setIsJoining(false);
+      // Stay on step 2 so user can retry
     }
   };
 
@@ -151,12 +177,8 @@ export default function OnboardingJoinScreen() {
   const handleBack = () => {
     if (step === 1) {
       router.back();
-    } else if (step === 2) {
-      // Go back to code entry
-      goToStep(1);
     } else {
-      // Go back to sign-in (or code if already signed in)
-      goToStep(userId ? 1 : 2);
+      goToStep(1);
     }
   };
 
@@ -167,38 +189,15 @@ export default function OnboardingJoinScreen() {
   };
 
   const handleAppleSignIn = async () => {
-    const success = await signInWithApple();
-    if (success) {
-      // Move to profile setup
-      goToStep(3);
-      setTimeout(() => nameInputRef.current?.focus(), 200);
-    }
-  };
-
-  const handleJoin = async () => {
-    if (yourName.trim().length === 0) return;
-
-    Keyboard.dismiss();
-    setIsSubmitting(true);
-    setError(null);
-
-    try {
-      await joinHousehold(code, yourName.trim(), yourColor);
-      router.replace('/');
-    } catch (err) {
-      console.error('Failed to join household:', err);
-      const message = err instanceof Error ? err.message : 'Something went wrong';
-      setError(message);
-      setIsSubmitting(false);
+    // signIn returns givenName on success, null on failure/cancel
+    const appleGivenName = await signInWithApple();
+    if (appleGivenName !== null) {
+      // Auto-join immediately after sign-in
+      await autoJoin(appleGivenName || undefined);
     }
   };
 
   const canValidate = code.length === 6;
-  const canJoin = yourName.trim().length > 0;
-
-  // Determine total steps based on auth state
-  const totalSteps = userId ? 2 : 3; // Skip sign-in step if already authed
-  const displayStep = userId ? (step === 3 ? 2 : step) : step;
 
   // Show loading while initializing with code param
   if (isInitializing) {
@@ -273,110 +272,51 @@ export default function OnboardingJoinScreen() {
 
   const renderStep2 = () => (
     <Animated.View style={[styles.content, { opacity: fadeAnim, paddingHorizontal: spacing.lg }]}>
-      <Text style={[typography.title, { color: colors.textPrimary, marginBottom: spacing.xs }]}>
-        Sign in to continue
-      </Text>
-      <Text style={[typography.body, { color: colors.textSecondary, marginBottom: spacing.xl }]}>
-        {inviterName 
-          ? `Sign in with Apple to join ${inviterName}'s household.`
-          : 'Sign in with Apple to join this household.'}
-      </Text>
-
-      {appleError && (
-        <Text
-          style={[
-            typography.callout,
-            { color: colors.error, marginBottom: spacing.md, textAlign: 'center' },
-          ]}
-        >
-          {appleError}
-        </Text>
-      )}
-
-      {isAppleLoading ? (
+      {isJoining ? (
+        // Joining in progress after Apple Sign-In
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing.md }]}>
-            Signing in...
+            Joining{inviterName ? ` ${inviterName}'s` : ''} household...
           </Text>
         </View>
       ) : (
-        <AppleSignInButton
-          onPress={handleAppleSignIn}
-          mode="sign-in"
-        />
+        <>
+          <Text style={[typography.title, { color: colors.textPrimary, marginBottom: spacing.xs }]}>
+            Sign in to join
+          </Text>
+          <Text style={[typography.body, { color: colors.textSecondary, marginBottom: spacing.xl }]}>
+            {inviterName 
+              ? `Sign in with Apple to join ${inviterName}'s household.`
+              : 'Sign in with Apple to join this household.'}
+          </Text>
+
+          {(appleError || error) && (
+            <Text
+              style={[
+                typography.callout,
+                { color: colors.error, marginBottom: spacing.md, textAlign: 'center' },
+              ]}
+            >
+              {error || appleError}
+            </Text>
+          )}
+
+          {isAppleLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing.md }]}>
+                Signing in...
+              </Text>
+            </View>
+          ) : (
+            <AppleSignInButton
+              onPress={handleAppleSignIn}
+              mode="sign-in"
+            />
+          )}
+        </>
       )}
-    </Animated.View>
-  );
-
-  const renderStep3 = () => (
-    <Animated.View style={[styles.content, { opacity: fadeAnim, paddingHorizontal: spacing.lg }]}>
-      <Text style={[typography.title, { color: colors.textPrimary, marginBottom: spacing.xs }]}>
-        Welcome!
-      </Text>
-      <Text style={[typography.body, { color: colors.textSecondary, marginBottom: spacing.lg }]}>
-        {inviterName ? `${inviterName} invited you to join their household.` : 'Almost there! Just a few details.'}
-      </Text>
-
-      <View style={[styles.inputContainer, { marginBottom: spacing.lg }]}>
-        <Text style={[typography.callout, { color: colors.textSecondary, marginBottom: spacing.xs }]}>
-          Your name
-        </Text>
-        <TextInput
-          ref={nameInputRef}
-          style={[
-            styles.input,
-            typography.body,
-            {
-              backgroundColor: colors.surface,
-              color: colors.textPrimary,
-              borderRadius: radius.medium,
-              paddingHorizontal: spacing.sm,
-              paddingVertical: spacing.xs,
-              letterSpacing: 0,
-            },
-          ]}
-          value={yourName}
-          onChangeText={setYourName}
-          placeholder="Enter your name"
-          placeholderTextColor={colors.textSecondary}
-          autoCapitalize="words"
-          autoCorrect={false}
-          returnKeyType="done"
-          onSubmitEditing={() => canJoin && handleJoin()}
-          maxFontSizeMultiplier={1.2}
-        />
-      </View>
-
-      <View style={{ marginBottom: spacing.xl }}>
-        <Text style={[typography.callout, { color: colors.textSecondary, marginBottom: spacing.sm }]}>
-          Pick your color
-        </Text>
-        <ColorPicker
-          selectedColor={yourColor}
-          onColorSelect={setYourColor}
-          unavailableColors={inviterColor ? [inviterColor] : []}
-        />
-      </View>
-
-      {error && (
-        <Text
-          style={[
-            typography.callout,
-            { color: colors.error, marginBottom: spacing.md, textAlign: 'center' },
-          ]}
-        >
-          {error}
-        </Text>
-      )}
-
-      <Button
-        label="Join Household"
-        onPress={handleJoin}
-        fullWidth
-        isDisabled={!canJoin}
-        isLoading={isSubmitting}
-      />
     </Animated.View>
   );
 
@@ -384,8 +324,8 @@ export default function OnboardingJoinScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <OnboardingHeader 
         onBack={handleBack}
-        currentStep={displayStep}
-        totalSteps={totalSteps}
+        currentStep={step}
+        totalSteps={2}
       />
 
       <KeyboardAvoidingView
@@ -394,7 +334,6 @@ export default function OnboardingJoinScreen() {
       >
         {step === 1 && renderStep1()}
         {step === 2 && renderStep2()}
-        {step === 3 && renderStep3()}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -425,9 +364,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 24,
     fontWeight: '600',
-  },
-  inputContainer: {},
-  input: {
-    minHeight: 48,
   },
 });

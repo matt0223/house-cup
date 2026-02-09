@@ -100,6 +100,13 @@ async function sha256(input: string): Promise<string> {
   return Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, input);
 }
 
+/** Result of Apple Sign-In including the Firebase user and optional first name */
+export interface AppleSignInResult {
+  user: User;
+  /** First name from Apple credential (only provided on first sign-in for this Apple ID + app) */
+  givenName?: string;
+}
+
 /**
  * Sign in with Apple (for returning users)
  * This signs in directly with Apple credentials.
@@ -107,8 +114,11 @@ async function sha256(input: string): Promise<string> {
  * Important: This signs out any current user first to ensure
  * we properly authenticate with the Apple credential and get
  * the correct Firebase user (the one linked to this Apple ID).
+ * 
+ * Returns the Firebase user and the givenName from Apple (if available).
+ * Apple only provides the name on the FIRST sign-in for a given Apple ID + app combo.
  */
-export async function signInWithApple(): Promise<User> {
+export async function signInWithApple(): Promise<AppleSignInResult> {
   const auth = getFirebaseAuth();
   if (!auth) {
     throw new Error('Firebase Auth is not configured');
@@ -138,6 +148,9 @@ export async function signInWithApple(): Promise<User> {
     throw new Error('No identity token received from Apple');
   }
 
+  // Capture givenName before it's lost — Apple only sends this on first sign-in
+  const givenName = appleCredential.fullName?.givenName ?? undefined;
+
   // Create Firebase credential
   const provider = new OAuthProvider('apple.com');
   const credential = provider.credential({
@@ -148,7 +161,7 @@ export async function signInWithApple(): Promise<User> {
   // Sign in to Firebase - this will sign in as the existing Apple user
   // if the credential is already linked, or create a new user if not
   const result = await signInWithCredential(auth, credential);
-  return result.user;
+  return { user: result.user, givenName };
 }
 
 export default {
