@@ -1,11 +1,11 @@
-import React, { useEffect, useCallback, useRef, useState } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, ActivityIndicator, Animated, ScrollView, Easing } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, StyleSheet, Text, ActivityIndicator, Animated } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, Redirect } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../src/theme/useTheme';
 import { AppHeader, DayStrip, AddTaskButton, TaskAddedToast } from '../src/components/ui';
-import { CollapsibleScoreboard, TaskList, AddTaskSheet, TaskChanges, ChangeScope, WeekCelebration } from '../src/components/features';
+import { CollapsibleScoreboard, TaskList, AddTaskSheet, AddPrizeSheet, AddHousemateSheet, CompetitorSheet, TaskChanges, ChangeScope } from '../src/components/features';
 import { ConfirmationModal } from '../src/components/ui';
 import {
   useHouseholdStore,
@@ -13,94 +13,38 @@ import {
   useRecurringStore,
 } from '../src/store';
 import { useFirebase } from '../src/providers/FirebaseProvider';
-import { formatDayKeyRange, getTodayDayKey, getCurrentWeekWindow, generateCelebrationNarrative } from '../src/domain/services';
+import { formatDayKeyRange, getTodayDayKey, getCurrentWeekWindow } from '../src/domain/services';
 import { TaskInstance } from '../src/domain/models/TaskInstance';
-import { WeekNarrative } from '../src/domain/services/narrativeService';
 import { shareHouseholdInvite } from '../src/utils/shareInvite';
-import * as taskService from '../src/services/firebase/taskService';
-
-/** Common household task suggestions for the empty state */
-const TASK_SUGGESTIONS = [
-  'Cook dinner',
-  'Clean kitchen',
-  'Laundry',
-  'Exercise',
-  'Groceries',
-  'Take out trash',
-];
 
 /**
  * Challenge screen - Main tab showing scoreboard, day strip, and task list.
  */
 export default function ChallengeScreen() {
-  const { colors, spacing, typography, radius } = useTheme();
-  const router = useRouter();
+  const { colors, spacing, typography } = useTheme();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const [isAddSheetVisible, setIsAddSheetVisible] = React.useState(false);
+  const [isPrizeSheetVisible, setIsPrizeSheetVisible] = React.useState(false);
+  const [isHousemateSheetVisible, setIsHousemateSheetVisible] = React.useState(false);
+  const [selectedCompetitorId, setSelectedCompetitorId] = React.useState<string | null>(null);
   const [showToast, setShowToast] = React.useState(false);
   const [toastKey, setToastKey] = React.useState(0);
-  const [toastMessage, setToastMessage] = React.useState('Task added');
   const [editingTask, setEditingTask] = React.useState<TaskInstance | null>(null);
   const [swipeDeleteTask, setSwipeDeleteTask] = React.useState<TaskInstance | null>(null);
   // Track the weekStartDay used to create the current challenge
   const [challengeWeekStartDay, setChallengeWeekStartDay] = React.useState<number | null>(null);
 
-  // Scoring nudge state (one-time pulse on first task's score circle)
-  const [hasEverScored, setHasEverScored] = useState(true); // Default true to avoid flash
+  // Scroll position for collapsible scoreboard animation
+  const scrollY = React.useRef(new Animated.Value(0)).current;
 
-  // Check if user has ever scored on mount
-  useEffect(() => {
-    AsyncStorage.getItem('@housecup/hasEverScored').then((val) => {
-      if (val !== 'true') setHasEverScored(false);
-    });
-  }, []);
-
-  // Celebration overlay state
-  const [showCelebration, setShowCelebration] = useState(false);
-  const [celebrationNarrative, setCelebrationNarrative] = useState<WeekNarrative | null>(null);
-  const celebrationCheckedRef = useRef<string | null>(null);
-
-  // Animated value for scroll-linked scoreboard collapse
-  const scrollY = useRef(new Animated.Value(0)).current;
-  const scrollViewRef = useRef<ScrollView>(null);
-  const currentScrollOffset = useRef(0);
-  const scrollViewHeight = useRef(0);
-  const scrollContentHeight = useRef(0);
-  const isAnimatingDayChange = useRef(false);
-
-  // Track scroll offset via scrollY listener (captures both native events and Animated.timing)
-  useEffect(() => {
-    const id = scrollY.addListener(({ value }) => {
-      currentScrollOffset.current = value;
-    });
-    return () => scrollY.removeListener(id);
-  }, [scrollY]);
-
-  // Manual scroll handler: blocks scrollY updates during day-change animation
-  // to prevent the native scroll clamp (→ 0) from flashing the header to expanded
-  const handleScroll = useCallback((event: any) => {
-    if (!isAnimatingDayChange.current) {
-      scrollY.setValue(event.nativeEvent.contentOffset.y);
-    }
-  }, [scrollY]);
-
-  // Track scroll view dimensions for day-change scroll logic
-  const handleScrollLayout = useCallback((e: any) => {
-    scrollViewHeight.current = e.nativeEvent.layout.height;
-  }, []);
-  const handleContentSizeChange = useCallback((_w: number, h: number) => {
-    scrollContentHeight.current = h;
-  }, []);
-
-  // Only re-seed when the set of template IDs actually changes (avoids duplicate seed when
-  // Firestore sync fires with same templates after our add, and task subscription had already overwrote store)
-  const lastSeededTemplateIdsRef = useRef<string | null>(null);
-
-  // Firebase context for onboarding redirect
-  const { isConfigured, isAuthLoading, householdId, userId } = useFirebase();
+  // Firebase context for onboarding redirect and housemate invite
+  const { isConfigured, isAuthLoading, userId, householdId, addHousemate, markInviteSent } = useFirebase();
 
   // Household store
   const household = useHouseholdStore((s) => s.household);
+  const updateSettings = useHouseholdStore((s) => s.updateSettings);
+  const updateCompetitor = useHouseholdStore((s) => s.updateCompetitor);
 
   // Challenge store - ALL hooks must be called before any conditional returns
   const challenge = useChallengeStore((s) => s.challenge);
@@ -114,14 +58,9 @@ export default function ChallengeScreen() {
   const updateTask = useChallengeStore((s) => s.updateTask);
   const deleteTask = useChallengeStore((s) => s.deleteTask);
   const deleteTasksForTemplateFromDay = useChallengeStore((s) => s.deleteTasksForTemplateFromDay);
-  const deleteRecurringTaskKeepingPoints = useChallengeStore((s) => s.deleteRecurringTaskKeepingPoints);
   const linkTaskToTemplate = useChallengeStore((s) => s.linkTaskToTemplate);
   const seedFromTemplates = useChallengeStore((s) => s.seedFromTemplates);
   const getScores = useChallengeStore((s) => s.getScores);
-  const updateChallengeBoundaries = useChallengeStore((s) => s.updateChallengeBoundaries);
-  const syncEnabled = useChallengeStore((s) => s.syncEnabled);
-  const householdIdFromStore = useChallengeStore((s) => s.householdId);
-  const tasksLoadedForChallengeId = useChallengeStore((s) => s.tasksLoadedForChallengeId);
 
   // Recurring store
   const templates = useRecurringStore((s) => s.templates);
@@ -134,11 +73,12 @@ export default function ChallengeScreen() {
   // When Firebase is configured, data comes from Firestore
   // When offline, FirebaseProvider loads sample data
 
-  // Initialize challenge when household is ready, or update boundaries when weekStartDay changes
+  // Initialize challenge when household is ready, or reinitialize when weekStartDay changes
   useEffect(() => {
     if (household && templates.length > 0) {
-      if (!challenge) {
-        // No challenge - initialize fresh
+      // Initialize if no challenge, or reinitialize if weekStartDay changed
+      const needsInit = !challenge || challengeWeekStartDay !== household.weekStartDay;
+      if (needsInit) {
         initializeChallenge(
           household.timezone,
           household.weekStartDay,
@@ -146,114 +86,19 @@ export default function ChallengeScreen() {
           skipRecords
         );
         setChallengeWeekStartDay(household.weekStartDay);
-      } else if (challengeWeekStartDay !== household.weekStartDay) {
-        // Challenge exists but week setting changed - update boundaries only (preserves tasks/points)
-        updateChallengeBoundaries(household.timezone, household.weekStartDay);
-        setChallengeWeekStartDay(household.weekStartDay);
       }
     }
   }, [household, challenge, templates, challengeWeekStartDay]);
 
-  // Detect challenge completion and show celebration overlay (once per challenge)
+  // Auto-seed tasks when templates change (idempotent - won't create duplicates)
   useEffect(() => {
-    if (!challenge || !challenge.isCompleted) return;
-    if (celebrationCheckedRef.current === challenge.id) return;
-    celebrationCheckedRef.current = challenge.id;
-
-    const key = `celebration-seen-${challenge.id}`;
-    AsyncStorage.getItem(key).then((seen) => {
-      if (seen) return; // Already shown for this challenge
-
-      const competitors = household?.competitors ?? [];
-      if (competitors.length === 0) return;
-
-      const narrative = generateCelebrationNarrative(challenge, tasks, competitors);
-      setCelebrationNarrative(narrative);
-      setShowCelebration(true);
-      AsyncStorage.setItem(key, 'true').catch(() => {});
-    });
-  }, [challenge?.id, challenge?.isCompleted, household?.competitors, tasks]);
-
-  // Auto-seed tasks when templates change. When sync is enabled, wait for initial
-  // tasks load from Firestore so we don't seed before existing tasks arrive (which would create duplicates on reload).
-  // Only run when the set of template IDs actually changed (prevents second run when Firestore sync
-  // sends same templates after our add, which would create duplicates on other days).
-  useEffect(() => {
-    if (!challenge || templates.length === 0) return;
-    const canSeed = !syncEnabled || tasksLoadedForChallengeId === challenge.id;
-    if (!canSeed) return;
-
-    const templateIdsKey = [...templates].map((t) => t.id).sort().join(',');
-    if (lastSeededTemplateIdsRef.current === templateIdsKey) return;
-    lastSeededTemplateIdsRef.current = templateIdsKey;
-
-    seedFromTemplates(templates);
-  }, [templates, challenge, syncEnabled, tasksLoadedForChallengeId]);
-
-  // Select day: maintain scroll position for long days, smoothly expand for short days.
-  // Animation starts immediately with a fast-start easing, then the re-render is deferred
-  // by one frame so the animation visually begins before the heavy re-render blocks JS.
-  const handleDaySelect = useCallback((dayKey: string) => {
-    const savedOffset = currentScrollOffset.current;
-
-    if (savedOffset <= 0) {
-      setSelectedDay(dayKey);
-      return; // Already at top, nothing to manage
+    if (challenge && templates.length > 0) {
+      seedFromTemplates(templates);
     }
+  }, [templates, challenge]);
 
-    // Block native scroll events from resetting scrollY during the re-render
-    isAnimatingDayChange.current = true;
-
-    // Start expanding immediately with fast-start easing (visible movement on first frame)
-    Animated.timing(scrollY, {
-      toValue: 0,
-      duration: 250,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: false,
-    }).start(({ finished }) => {
-      if (finished) isAnimatingDayChange.current = false;
-    });
-
-    // Defer re-render by one frame so the animation starts before JS gets blocked
-    requestAnimationFrame(() => {
-      setSelectedDay(dayKey);
-
-      // After re-render: if new content is long enough, cancel expand and restore position
-      requestAnimationFrame(() => {
-        const maxScroll = Math.max(0, scrollContentHeight.current - scrollViewHeight.current);
-
-        if (maxScroll >= savedOffset) {
-          // New day has enough content — cancel expand, restore collapsed position
-          scrollY.stopAnimation();
-          isAnimatingDayChange.current = false;
-          scrollY.setValue(savedOffset);
-          scrollViewRef.current?.scrollTo({ y: savedOffset, animated: false });
-        }
-        // Short content: animation already running, let it finish
-      });
-    });
-  }, [setSelectedDay, scrollY]);
-
-  // Handle invite button press on ScoreboardCard
-  // Note: Must be defined before conditional returns to follow Rules of Hooks
-  const handleInvitePress = useCallback(() => {
-    if (!household || !household.competitors[0]) return;
-    
-    // Get pending competitor name (competitorB without userId)
-    const pendingCompetitor = household.competitors.find(c => !c.userId);
-    
-    shareHouseholdInvite(
-      household.competitors[0].name,
-      pendingCompetitor?.name,
-      household.joinCode || ''
-    );
-
-    setToastMessage('Invite sent');
-    setToastKey((k) => k + 1);
-    setShowToast(true);
-  }, [household]);
-
-  // Redirect to onboarding if no household or no user (can't load household without auth)
+  // Redirect to onboarding if Firebase is configured but user is not authenticated
+  // or has no household. Also handles stale cached householdId when auth is lost.
   if (isConfigured && !isAuthLoading && (!householdId || !userId)) {
     return <Redirect href="/onboarding" />;
   }
@@ -272,11 +117,19 @@ export default function ChallengeScreen() {
   // Derived state
   const competitors = household?.competitors ?? [];
   const competitorA = competitors[0];
-  const competitorB = competitors[1]; // May be undefined if housemate hasn't joined
+  const competitorB = competitors[1];
   const tasksForDay = tasks.filter((t) => t.dayKey === selectedDayKey);
   const scores = competitors.length > 0 ? getScores(competitors) : null;
   const scoreA = scores?.scores.find((s) => s.competitorId === competitorA?.id)?.total ?? 0;
   const scoreB = scores?.scores.find((s) => s.competitorId === competitorB?.id)?.total ?? 0;
+
+  // Selected competitor (for competitor sheet)
+  const selectedCompetitor = selectedCompetitorId
+    ? competitors.find((c) => c.id === selectedCompetitorId) ?? null
+    : null;
+  const otherCompetitor = selectedCompetitor
+    ? competitors.find((c) => c.id !== selectedCompetitor.id) ?? null
+    : null;
 
   // Get week day keys using the canonical week window service
   const weekDayKeys = household
@@ -298,26 +151,16 @@ export default function ChallengeScreen() {
     points: Record<string, number>,
     repeatDays: number[] | null
   ) => {
-    if (repeatDays && repeatDays.length > 0) {
-      // Recurring task: create template, then add today's instance with points.
-      // seedFromTemplates() will create instances for other days (today already has one).
-      const newTemplate = addTemplate(name, repeatDays);
-      addTask(name, points, newTemplate.id);
-    } else {
-      // One-off task: create task directly
-      addTask(name, points, null);
+    // Create the task for today
+    const taskId = addTask(name, points);
+    
+    // If repeat days are set, create template and link task to it
+    if (repeatDays && repeatDays.length > 0 && taskId) {
+      const template = addTemplate(name, repeatDays);
+      linkTaskToTemplate(taskId, template.id);
     }
     
     // Show toast (increment key to force new instance if already visible)
-    setToastMessage('Task added');
-    setToastKey((k) => k + 1);
-    setShowToast(true);
-  };
-
-  // Handle tapping a suggestion chip in the empty state
-  const handleSuggestionTap = (name: string) => {
-    addTask(name, {}, null); // One-off task, no points, no template
-    setToastMessage('Task added');
     setToastKey((k) => k + 1);
     setShowToast(true);
   };
@@ -332,75 +175,55 @@ export default function ChallengeScreen() {
     if (!task) return;
 
     const isRecurring = task.templateId !== null;
-    const hasNameChange = changes.name !== undefined && changes.name !== task.name;
-    const hasScheduleChange = changes.repeatDays !== undefined;
 
     // Handle name change
-    if (hasNameChange) {
+    if (changes.name !== undefined && changes.name !== task.name) {
       if (isRecurring && task.templateId) {
         if (scope === 'future') {
           // Update template name + all linked instances
-          updateTaskName(taskId, changes.name!, true, templates, (templateId, newName) => {
+          updateTaskName(taskId, changes.name, true, templates, (templateId, newName) => {
             updateTemplate(templateId, { name: newName });
           });
         } else {
-          // Detach and update just this instance (store persists task + skip record)
-          updateTaskName(taskId, changes.name!, false, templates);
+          // Detach and update just this instance
+          updateTaskName(taskId, changes.name, false, templates);
         }
       } else {
-        // One-off task - just update and persist
+        // One-off task - just update
         updateTask(taskId, { name: changes.name });
-        if (syncEnabled && householdIdFromStore) {
-          taskService.updateTask(householdIdFromStore, taskId, { name: changes.name }).catch((err) => {
-            console.error('Failed to sync task name:', err);
-          });
-        }
       }
     }
 
     // Handle points change (always applies to instance)
     if (changes.points !== undefined) {
       updateTask(taskId, { points: changes.points });
-      if (syncEnabled && householdIdFromStore) {
-        taskService.updateTask(householdIdFromStore, taskId, { points: changes.points }).catch((err) => {
-          console.error('Failed to sync task points:', err);
-        });
-      }
     }
 
     // Handle schedule change
-    if (hasScheduleChange && isRecurring && task.templateId) {
-      if (changes.repeatDays!.length === 0) {
+    if (changes.repeatDays !== undefined && isRecurring && task.templateId) {
+      if (changes.repeatDays.length === 0) {
         // Converting recurring to one-off: delete template and detach task
         deleteTemplate(task.templateId);
         updateTask(taskId, { templateId: null });
-        if (syncEnabled && householdIdFromStore) {
-          taskService.updateTask(householdIdFromStore, taskId, { templateId: null }).catch((err) => {
-            console.error('Failed to sync task detach:', err);
-          });
-        }
       } else {
         // Just update the template's days
-        updateTemplate(task.templateId, { repeatDays: changes.repeatDays! });
+        updateTemplate(task.templateId, { repeatDays: changes.repeatDays });
       }
     }
 
     // Handle converting one-off to recurring
     if (
-      hasScheduleChange &&
-      changes.repeatDays!.length > 0 &&
+      changes.repeatDays !== undefined &&
+      changes.repeatDays.length > 0 &&
       !isRecurring
     ) {
-      const newTemplate = addTemplate(task.name, changes.repeatDays!);
+      const newTemplate = addTemplate(task.name, changes.repeatDays);
       linkTaskToTemplate(taskId, newTemplate.id);
     }
 
-    // Show toast only for name or schedule changes (not point-only changes)
-    if (hasNameChange || hasScheduleChange) {
-      setToastMessage('Task updated');
-      setToastKey((k) => k + 1);
-      setShowToast(true);
-    }
+    // Show toast
+    setToastKey((k) => k + 1);
+    setShowToast(true);
 
     // Close sheet
     setEditingTask(null);
@@ -413,17 +236,13 @@ export default function ChallengeScreen() {
     if (!task) return;
 
     if (scope === 'future' && task.templateId) {
-      // Always delete this task; this week others without points; next week onward all; then remove template
-      deleteRecurringTaskKeepingPoints(task.templateId, taskId);
+      // Delete template and all remaining instances
+      deleteTasksForTemplateFromDay(task.templateId, task.dayKey);
+      deleteTemplate(task.templateId);
     } else {
       // Delete just this instance
       deleteTask(taskId);
     }
-
-    // Show toast
-    setToastMessage('Task deleted');
-    setToastKey((k) => k + 1);
-    setShowToast(true);
 
     // Close sheet
     setEditingTask(null);
@@ -439,10 +258,6 @@ export default function ChallengeScreen() {
     } else {
       // Delete one-off task directly
       deleteTask(task.id);
-      // Show toast
-      setToastMessage('Task deleted');
-      setToastKey((k) => k + 1);
-      setShowToast(true);
     }
   };
 
@@ -454,14 +269,10 @@ export default function ChallengeScreen() {
       // Delete just this instance
       deleteTask(swipeDeleteTask.id);
     } else if (optionId === 'future' && swipeDeleteTask.templateId) {
-      // Always delete this task; this week others without points; next week onward all; then remove template
-      deleteRecurringTaskKeepingPoints(swipeDeleteTask.templateId, swipeDeleteTask.id);
+      // Delete template and all remaining instances
+      deleteTasksForTemplateFromDay(swipeDeleteTask.templateId, swipeDeleteTask.dayKey);
+      deleteTemplate(swipeDeleteTask.templateId);
     }
-
-    // Show toast
-    setToastMessage('Task deleted');
-    setToastKey((k) => k + 1);
-    setShowToast(true);
 
     setSwipeDeleteTask(null);
   };
@@ -482,28 +293,55 @@ export default function ChallengeScreen() {
     setShowToast(false);
   };
 
+  // Handle prize save from AddPrizeSheet
+  const handlePrizeSave = (prize: string) => {
+    updateSettings({ prize });
+  };
+
+  // Handle housemate save from AddHousemateSheet (add only)
+  const handleHousemateSave = async (name: string, color: string) => {
+    await addHousemate(name, color);
+  };
+
+  // Handle housemate invite (add then share)
+  const handleHousemateInvite = async (name: string, color: string) => {
+    const newCompetitor = await addHousemate(name, color);
+    if (household?.joinCode) {
+      const inviterName = household.competitors[0]?.name ?? 'Your housemate';
+      const shared = await shareHouseholdInvite(inviterName, name, household.joinCode);
+      if (shared) await markInviteSent(newCompetitor.id);
+    }
+  };
+
+  // Handle share-invite (paper plane) — open native share for existing pending housemate
+  const handleShareInvitePress = async () => {
+    const compB = household?.competitors?.[1];
+    if (!household?.joinCode || !compB) return;
+    const inviterName = household.competitors[0]?.name ?? 'Your housemate';
+    const shared = await shareHouseholdInvite(inviterName, compB.name, household.joinCode);
+    if (shared) await markInviteSent(compB.id);
+  };
+
+  // Open competitor sheet when name/score is tapped on scoreboard
+  const handleCompetitorPress = (competitorId: string) => {
+    setSelectedCompetitorId(competitorId);
+  };
+
   const handlePointsChange = (
     taskId: string,
     competitorId: string,
     points: number
   ) => {
     updateTaskPoints(taskId, competitorId, points);
-
-    // Dismiss the scoring nudge on first score
-    if (!hasEverScored && points > 0) {
-      setHasEverScored(true);
-      AsyncStorage.setItem('@housecup/hasEverScored', 'true');
-    }
   };
 
-  // Loading state - only require household and competitorA (competitorB may not have joined yet)
+  // Loading state — only require household and at least one competitor.
+  // competitorB is optional (solo user hasn't added a housemate yet).
   if (!household || !competitorA) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.loading}>
-          <Text style={[typography.body, { color: colors.textSecondary }]}>
-            Loading...
-          </Text>
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       </SafeAreaView>
     );
@@ -513,157 +351,90 @@ export default function ChallengeScreen() {
     ? formatDayKeyRange(challenge.startDayKey, challenge.endDayKey)
     : '';
 
-  // Option A: Header + scoreboard scroll together inside a clipping container
-  // Include CollapsibleScoreboard paddingTop (8) so prize circle bottom isn't clipped
-  const HEADER_HEIGHT = 52;
-  const HEADER_EXIT_SCROLL = 65; // header exits over 65px of scroll (~20% slower than content)
-  const EXPANDED_SCOREBOARD_HEIGHT = 140 + 8; // MorphingScoreboard 140 + paddingTop
-  const COLLAPSED_SCOREBOARD_HEIGHT = 100 + 8;
-  const SCOREBOARD_COLLAPSE_THRESHOLD = 110;
-  // Day strip overlay: top padding (12) + chip height (36) + bottom padding (8) so tasks scroll behind
-  const DAY_STRIP_ZONE_HEIGHT = spacing.xs + 36 + spacing.xxs;
-
-  // Header exits with subtle parallax: 52px of movement spread over 65px of scroll
-  const headerTranslateY = scrollY.interpolate({
-    inputRange: [0, HEADER_EXIT_SCROLL],
-    outputRange: [0, -HEADER_HEIGHT],
-    extrapolate: 'clamp',
-  });
-
-  // Clip height = visible header + scoreboard (both shrink independently)
-  // This eliminates the empty gap when the header scrolls out
-  const headerVisibleHeight = scrollY.interpolate({
-    inputRange: [0, HEADER_EXIT_SCROLL],
-    outputRange: [HEADER_HEIGHT, 0],
-    extrapolate: 'clamp',
-  });
-  // Ease the scoreboard height to match the eased MorphingScoreboard structural animations
-  const sbDelta = (EXPANDED_SCOREBOARD_HEIGHT - COLLAPSED_SCOREBOARD_HEIGHT) * 0.08;
-  const scoreboardAnimatedHeight = scrollY.interpolate({
-    inputRange: [0, SCOREBOARD_COLLAPSE_THRESHOLD * 0.15, SCOREBOARD_COLLAPSE_THRESHOLD * 0.85, SCOREBOARD_COLLAPSE_THRESHOLD],
-    outputRange: [EXPANDED_SCOREBOARD_HEIGHT, EXPANDED_SCOREBOARD_HEIGHT - sbDelta, COLLAPSED_SCOREBOARD_HEIGHT + sbDelta, COLLAPSED_SCOREBOARD_HEIGHT],
-    extrapolate: 'clamp',
-  });
-  const clipContainerHeight = Animated.add(headerVisibleHeight, scoreboardAnimatedHeight);
-
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      {/* Clipping container: header + scoreboard scroll up together; content outside clip is hidden */}
-      <Animated.View style={[styles.clipContainer, { height: clipContainerHeight }]}>
-        <Animated.View style={[styles.headerScoreboardBlock, { transform: [{ translateY: headerTranslateY }] }]}>
-          <AppHeader
-            title={dateRange || 'This Week'}
-            rightActions={[
-              { icon: 'sparkles-outline', onPress: () => router.push('/history') },
-              { icon: 'settings-outline', onPress: () => router.push('/settings') },
-            ]}
-          />
-          {/* 16px total less space above scoreboard (move scoreboard and prize circle up) */}
-          <View style={styles.scoreboardWrap}>
-            <CollapsibleScoreboard
-              scrollY={scrollY}
-              competitorA={competitorA}
-              competitorB={competitorB}
-              scoreA={scoreA}
-              scoreB={scoreB}
-              prize={household?.prize || 'Set a prize!'}
-              onInvitePress={handleInvitePress}
-            />
-          </View>
-        </Animated.View>
-      </Animated.View>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      edges={['top', 'left', 'right']}
+    >
+      {/* Header */}
+      <AppHeader
+        title={dateRange || 'This Week'}
+        rightActions={[
+          { icon: 'trending-up-outline', onPress: () => router.push('/history') },
+          { icon: 'settings-outline', onPress: () => router.push('/settings') },
+        ]}
+      />
 
-      {/* Scroll area: day strip overlays top so tasks scroll behind it */}
-      <View style={styles.scrollAreaWrap}>
-        <View
-          style={[
-            styles.dayStripOverlay,
-            {
-              paddingTop: spacing.xs,
-              paddingBottom: spacing.xxs,
-              backgroundColor: colors.background,
-            },
-          ]}
-          pointerEvents="box-none"
-        >
+      {/* Collapsible scoreboard: morphs from expanded to collapsed as user scrolls */}
+      <View
+        style={{
+          marginTop: -16,
+          zIndex: 10,
+          elevation: 10,
+        }}
+      >
+        <CollapsibleScoreboard
+          scrollY={scrollY}
+          competitorA={competitorA}
+          competitorB={competitorB}
+          scoreA={scoreA}
+          scoreB={scoreB}
+          prize={household?.prize ?? ''}
+          onPrizePress={() => setIsPrizeSheetVisible(true)}
+          onInvitePress={() => setIsHousemateSheetVisible(true)}
+          onShareInvitePress={handleShareInvitePress}
+          onCompetitorPress={handleCompetitorPress}
+        />
+      </View>
+
+      <Animated.ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 100 + insets.bottom }]}
+        showsVerticalScrollIndicator={false}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false }
+        )}
+        scrollEventThrottle={16}
+      >
+        {/* Day Strip */}
+        <View style={{ marginTop: spacing.md + 4 }}>
           <DayStrip
             dayKeys={weekDayKeys}
             selectedDayKey={selectedDayKey}
             todayDayKey={todayKey}
-            onSelectDay={handleDaySelect}
+            onSelectDay={setSelectedDay}
           />
         </View>
-        <Animated.ScrollView
-          ref={scrollViewRef}
-          style={styles.scrollView}
-          contentContainerStyle={[styles.scrollContent, { paddingTop: DAY_STRIP_ZONE_HEIGHT, paddingBottom: 120 + insets.bottom }]}
-          showsVerticalScrollIndicator={false}
-          alwaysBounceVertical={false}
-          onScroll={handleScroll}
-          onLayout={handleScrollLayout}
-          onContentSizeChange={handleContentSizeChange}
-          scrollEventThrottle={16}
-        >
+
         {/* Content Area */}
         {tasksForDay.length > 0 ? (
           <View style={{ marginTop: spacing.md, paddingHorizontal: spacing.sm }}>
             <TaskList
               tasks={tasksForDay}
               competitors={competitors}
-              templates={templates}
               onPointsChange={handlePointsChange}
               onTaskPress={handleTaskPress}
               onTaskDelete={handleSwipeDelete}
-              showScoreNudge={!hasEverScored}
             />
           </View>
         ) : (
           <View style={styles.emptyState}>
-            <Text
-              style={[
-                typography.headline,
-                { color: colors.textPrimary, textAlign: 'center' },
-              ]}
-            >
-              What did you get done today?
-            </Text>
+            <EmptyStateIllustration />
             <Text
               style={[
                 typography.body,
-                { color: colors.textSecondary, marginTop: spacing.xs, textAlign: 'center' },
+                { color: colors.textSecondary, marginTop: spacing.sm, textAlign: 'center' },
               ]}
             >
-              Tap a suggestion or press + to add your own
+              Tap + Add task to get started
             </Text>
-            <View style={[styles.chipGrid, { marginTop: spacing.lg }]}>
-              {TASK_SUGGESTIONS.map((suggestion) => (
-                <TouchableOpacity
-                  key={suggestion}
-                  style={[
-                    styles.suggestionChip,
-                    {
-                      borderColor: colors.primary + '55',
-                      borderRadius: radius.pill,
-                      paddingHorizontal: spacing.md,
-                      paddingVertical: spacing.sm,
-                    },
-                  ]}
-                  activeOpacity={0.7}
-                  onPress={() => handleSuggestionTap(suggestion)}
-                >
-                  <Text style={[typography.callout, { color: colors.primary }]}>
-                    {suggestion}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
           </View>
         )}
-        </Animated.ScrollView>
-      </View>
+      </Animated.ScrollView>
 
       {/* Floating Add Task Button */}
-      <AddTaskButton onPress={() => setIsAddSheetVisible(true)} bottom={insets.bottom + 16} />
+      <AddTaskButton onPress={() => setIsAddSheetVisible(true)} />
 
       {/* Add/Edit Task Sheet */}
       <AddTaskSheet
@@ -678,12 +449,47 @@ export default function ChallengeScreen() {
         weekStartDay={household?.weekStartDay ?? 0}
       />
 
-      {/* Toast notification */}
+      {/* Add/Edit Prize Sheet */}
+      <AddPrizeSheet
+        isVisible={isPrizeSheetVisible}
+        onClose={() => setIsPrizeSheetVisible(false)}
+        onSave={handlePrizeSave}
+        currentPrize={household?.prize ?? ''}
+      />
+
+      {/* Add Housemate Sheet */}
+      <AddHousemateSheet
+        isVisible={isHousemateSheetVisible}
+        onClose={() => setIsHousemateSheetVisible(false)}
+        onSave={handleHousemateSave}
+        onInvite={handleHousemateInvite}
+        competitorAColor={competitorA?.color}
+      />
+
+      {/* Competitor sheet (tap name/score on scoreboard) */}
+      <CompetitorSheet
+        isVisible={selectedCompetitorId !== null}
+        onClose={() => setSelectedCompetitorId(null)}
+        competitor={selectedCompetitor ?? competitorA}
+        otherCompetitorColor={otherCompetitor?.color}
+        onNameChange={(name) =>
+          selectedCompetitor && updateCompetitor(selectedCompetitor.id, { name })
+        }
+        onColorChange={(color) =>
+          selectedCompetitor && updateCompetitor(selectedCompetitor.id, { color })
+        }
+        onInvitePress={
+          selectedCompetitor && !selectedCompetitor.userId
+            ? handleShareInvitePress
+            : undefined
+        }
+      />
+
+      {/* Task Added Toast */}
       <TaskAddedToast
         key={toastKey}
         visible={showToast}
         onHidden={handleToastHidden}
-        message={toastMessage}
       />
 
       {/* Swipe Delete Confirmation Modal */}
@@ -692,28 +498,27 @@ export default function ChallengeScreen() {
         title="Delete this task?"
         options={[
           { id: 'today', label: 'Today only' },
-          { id: 'future', label: 'This and all without points', isDestructive: true },
+          { id: 'future', label: 'Today and future instances', isDestructive: true },
         ]}
         onSelect={handleSwipeDeleteConfirm}
         onCancel={() => setSwipeDeleteTask(null)}
       />
-
-      {/* Week Celebration Overlay */}
-      {showCelebration && challenge && celebrationNarrative && (
-        <WeekCelebration
-          challenge={challenge}
-          competitors={competitors}
-          scoreA={scoreA}
-          scoreB={scoreB}
-          narrative={celebrationNarrative}
-          onViewInsights={() => {
-            setShowCelebration(false);
-            router.push('/history');
-          }}
-          onDismiss={() => setShowCelebration(false)}
-        />
-      )}
     </SafeAreaView>
+  );
+}
+
+// De-emphasized empty state icon (not button-like; keeps focus on FAB)
+function EmptyStateIllustration() {
+  const { colors } = useTheme();
+  return (
+    <View style={styles.illustration}>
+      <Ionicons
+        name="clipboard-outline"
+        size={48}
+        color={colors.textSecondary}
+        style={{ opacity: 0.35 }}
+      />
+    </View>
   );
 }
 
@@ -726,45 +531,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  clipContainer: {
-    overflow: 'hidden',
-  },
-  headerScoreboardBlock: {
-    // No fixed height; children define height (AppHeader + CollapsibleScoreboard)
-  },
-  scoreboardWrap: {
-    marginTop: -16,
-  },
-  scrollAreaWrap: {
-    flex: 1,
-    position: 'relative',
-  },
-  dayStripOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 1,
-  },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    flexGrow: 1,
+    // paddingBottom is set dynamically via inline style (100 + bottom safe area)
   },
   emptyState: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 32,
+    paddingTop: 148,
   },
-  chipGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  illustration: {
+    alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-  },
-  suggestionChip: {
-    borderWidth: 1.5,
   },
 });

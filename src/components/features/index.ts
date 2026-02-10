@@ -13,3 +13,6 @@ export { CollapsibleScoreboard, type CollapsibleScoreboardProps } from './Collap
 export { AddTaskSheet, type AddTaskSheetProps, type TaskChanges, type ChangeScope } from './AddTaskSheet';
 export { WeekStoryCard, type WeekStoryCardProps } from './WeekStoryCard';
 export { WeekCelebration, type WeekCelebrationProps } from './WeekCelebration';
+export { AddPrizeSheet, type AddPrizeSheetProps } from './AddPrizeSheet';
+export { AddHousemateSheet, type AddHousemateSheetProps } from './AddHousemateSheet';
+export { CompetitorSheet, type CompetitorSheetProps } from './CompetitorSheet';

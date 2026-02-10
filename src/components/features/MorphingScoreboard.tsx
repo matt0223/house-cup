@@ -10,6 +10,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
 import { Competitor, isPendingCompetitor } from '../../domain/models/Competitor';
 
+const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
+
 export interface MorphingScoreboardProps {
   scrollY: Animated.Value;
   competitorA: Competitor;
@@ -18,6 +20,9 @@ export interface MorphingScoreboardProps {
   scoreB: number;
   prize: string;
   onInvitePress?: () => void;
+  onShareInvitePress?: () => void;
+  onPrizePress?: () => void;
+  onCompetitorPress?: (competitorId: string) => void;
 }
 
 const COLLAPSE_THRESHOLD = 110;
@@ -55,6 +60,9 @@ const CONTENT_WRAPPER_HEIGHT_COLLAPSED = 44;
 const COLLAPSED_SCORE_TOP = 5;  // (44 - 34) / 2
 const COLLAPSED_NAME_TOP = 12;  // (44 - 20) / 2 for callout lineHeight
 
+/** Size of small circular add buttons (prize + housemate) — matches ScoreboardCard */
+const ADD_BUTTON_SIZE = 44;
+
 // Stagger: stacked name exits first, then inline name enters
 const STACKED_EXIT_END = 0.45;
 const INLINE_ENTER_START = 0.25;
@@ -74,6 +82,9 @@ export function MorphingScoreboard({
   scoreB,
   prize,
   onInvitePress,
+  onShareInvitePress,
+  onPrizePress,
+  onCompetitorPress,
 }: MorphingScoreboardProps) {
   const { colors, typography, spacing, radius } = useTheme();
 
@@ -149,9 +160,10 @@ export function MorphingScoreboard({
   });
 
   // Collapse text height to 0 so flex centering keeps trophy centered when text is hidden
+  // 80px accommodates both prize text (3 lines) and empty state (text + 44px add button)
   const prizeTextMaxHeight = progress.interpolate({
     inputRange: [0, 0.6],
-    outputRange: [60, 0],
+    outputRange: [80, 0],
     extrapolate: 'clamp',
   });
 
@@ -214,11 +226,20 @@ export function MorphingScoreboard({
     extrapolate: 'clamp',
   });
 
+  const shareHandler = onShareInvitePress ?? onInvitePress;
+  const hasPrize = !!prize && prize.length > 0;
+
   const renderRightColumn = () => {
     if (competitorB) {
       const isPending = isPendingCompetitor(competitorB);
       return (
-        <View style={[styles.column, styles.rightColumn]}>
+        <TouchableOpacity
+          style={[styles.column, styles.rightColumn]}
+          activeOpacity={onCompetitorPress ? 0.7 : 1}
+          onPress={onCompetitorPress ? () => onCompetitorPress(competitorB.id) : undefined}
+          accessibilityLabel={`${competitorB.name}, score ${scoreB}`}
+          accessibilityRole="button"
+        >
           <Animated.View
             style={[
               styles.contentWrapper,
@@ -240,9 +261,9 @@ export function MorphingScoreboard({
                 <Text style={[typography.callout, { color: colors.textSecondary }]}>
                   {competitorB.name}
                 </Text>
-                {isPending && onInvitePress && (
+                {isPending && shareHandler && (
                   <TouchableOpacity
-                    onPress={onInvitePress}
+                    onPress={shareHandler}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     style={{ marginLeft: spacing.xxs }}
                   >
@@ -280,9 +301,9 @@ export function MorphingScoreboard({
                 <Text style={[typography.callout, { color: colors.textSecondary }]}>
                   {competitorB.name}
                 </Text>
-                {isPending && onInvitePress && (
+                {isPending && shareHandler && (
                   <TouchableOpacity
-                    onPress={onInvitePress}
+                    onPress={shareHandler}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     style={{ marginLeft: spacing.xxs }}
                   >
@@ -292,7 +313,7 @@ export function MorphingScoreboard({
               </View>
             </Animated.View>
           </Animated.View>
-        </View>
+        </TouchableOpacity>
       );
     }
     return (
@@ -329,22 +350,18 @@ export function MorphingScoreboard({
           >
             <TouchableOpacity
               style={[
-                styles.inviteButtonExpanded,
+                styles.addButton,
                 {
                   backgroundColor: colors.primary + '15',
-                  paddingHorizontal: spacing.sm,
-                  paddingVertical: spacing.xs,
-                  borderRadius: radius.pill,
-                  flexDirection: 'row',
-                  gap: spacing.xxxs,
                   marginTop: spacing.xxs,
                 },
               ]}
               onPress={onInvitePress}
               activeOpacity={0.7}
+              accessibilityLabel="Add housemate"
+              accessibilityRole="button"
             >
               <Ionicons name="person-add-outline" size={20} color={colors.primary} />
-              <Text style={[typography.callout, { color: colors.primary }]}>Add</Text>
             </TouchableOpacity>
           </Animated.View>
           <Animated.View
@@ -360,14 +377,15 @@ export function MorphingScoreboard({
           >
             <TouchableOpacity
               style={[
-                styles.miniInviteButton,
-                { backgroundColor: colors.primary + '15', borderRadius: radius.pill },
+                styles.addButton,
+                { backgroundColor: colors.primary + '15' },
               ]}
               onPress={onInvitePress}
               activeOpacity={0.7}
+              accessibilityLabel="Add housemate"
+              accessibilityRole="button"
             >
-              <Ionicons name="add" size={18} color={colors.primary} />
-              <Text style={[typography.callout, { color: colors.primary }]}>Add</Text>
+              <Ionicons name="person-add-outline" size={20} color={colors.primary} />
             </TouchableOpacity>
           </Animated.View>
         </Animated.View>
@@ -393,7 +411,13 @@ export function MorphingScoreboard({
         >
           <Animated.View style={[styles.row, { height: rowHeight }]}>
             {/* Left column: content wrapper (76→44) centered in column */}
-            <View style={[styles.column, styles.leftColumn]}>
+            <TouchableOpacity
+              style={[styles.column, styles.leftColumn]}
+              activeOpacity={onCompetitorPress ? 0.7 : 1}
+              onPress={onCompetitorPress ? () => onCompetitorPress(competitorA.id) : undefined}
+              accessibilityLabel={`${competitorA.name}, score ${scoreA}`}
+              accessibilityRole="button"
+            >
               <Animated.View
                 style={[
                   styles.contentWrapper,
@@ -444,7 +468,7 @@ export function MorphingScoreboard({
                   </Text>
                 </Animated.View>
               </Animated.View>
-            </View>
+            </TouchableOpacity>
 
             {/* Center spacer: room for prize circle (circle is sibling of cardCenter, not in row) */}
             <View style={styles.centerSpacer} />
@@ -456,7 +480,11 @@ export function MorphingScoreboard({
       </View>
 
       {/* Prize circle: sibling of cardCenter, positioned relative to wrapper for bulge */}
-      <Animated.View
+      <AnimatedTouchableOpacity
+        activeOpacity={0.7}
+        onPress={onPrizePress}
+        accessibilityLabel={hasPrize ? 'Edit prize' : 'Set a prize'}
+        accessibilityRole="button"
         style={[
           styles.prizeCircle,
           {
@@ -471,38 +499,65 @@ export function MorphingScoreboard({
           },
         ]}
       >
-        {/* Flex column: trophy + text centered as a group regardless of text line count */}
-        <Animated.View
-          style={{
-            transform: [{ scale: trophyScale }],
-          }}
-        >
+        {/* Trophy icon (always visible, scales down when collapsed) */}
+        <Animated.View style={{ transform: [{ scale: trophyScale }] }}>
           <Ionicons name="trophy-outline" size={TROPHY_EXPANDED} color={colors.prize} />
         </Animated.View>
+
+        {/* Prize text or empty state — fades out when collapsed */}
         <Animated.View
           style={{
             opacity: prizeTextOpacity,
             maxHeight: prizeTextMaxHeight,
             overflow: 'hidden',
             marginTop: 2,
+            alignItems: 'center',
           }}
           pointerEvents="none"
         >
-          <Text
-            style={[
-              typography.callout,
-              {
-                color: colors.textSecondary,
-                textAlign: 'center',
-                paddingHorizontal: spacing.xs,
-              },
-            ]}
-            numberOfLines={3}
-          >
-            {prize}
-          </Text>
+          {hasPrize ? (
+            <Text
+              style={[
+                typography.callout,
+                {
+                  color: colors.textSecondary,
+                  textAlign: 'center',
+                  paddingHorizontal: spacing.xs,
+                },
+              ]}
+              numberOfLines={3}
+            >
+              {prize}
+            </Text>
+          ) : (
+            <>
+              <Text
+                style={[
+                  typography.callout,
+                  {
+                    color: colors.textSecondary,
+                    textAlign: 'center',
+                    paddingHorizontal: spacing.xs,
+                  },
+                ]}
+              >
+                Winner gets...
+              </Text>
+              <View
+                style={[
+                  styles.addButton,
+                  {
+                    backgroundColor: colors.primary + '15',
+                    marginTop: spacing.xxs,
+                  },
+                ]}
+              >
+                <Ionicons name="add" size={24} color={colors.primary} />
+              </View>
+            </>
+          )}
         </Animated.View>
-      </Animated.View>
+      </AnimatedTouchableOpacity>
     </Animated.View>
   );
 }
@@ -587,16 +642,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     zIndex: 10,
   },
-  inviteButtonExpanded: {
+  addButton: {
+    width: ADD_BUTTON_SIZE,
+    height: ADD_BUTTON_SIZE,
+    borderRadius: ADD_BUTTON_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  miniInviteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
   },
 });
 

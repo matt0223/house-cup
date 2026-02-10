@@ -198,6 +198,36 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
     }
   }, [household, householdId, isConfigured]);
 
+  // Safety net: if we have a cached householdId but the household data hasn't
+  // arrived after sync has been enabled for a few seconds, the document was
+  // likely deleted. Try a direct lookup and clear if not found.
+  useEffect(() => {
+    if (!isConfigured || !householdId || !userId || household) return;
+
+    const timeout = setTimeout(async () => {
+      // Only run if household is still null after the timeout
+      const currentHousehold = useHouseholdStore.getState().household;
+      if (currentHousehold) return;
+
+      console.log('Safety net: householdId cached but no data received, attempting recovery...');
+      try {
+        const found = await findHouseholdByUserId(userId);
+        if (found) {
+          setHouseholdInStore(found);
+          setHouseholdId(found.id);
+        } else {
+          console.log('Safety net: household not found, clearing stale householdId');
+          setHouseholdId(null);
+        }
+      } catch (err) {
+        console.error('Safety net recovery failed:', err);
+        setHouseholdId(null);
+      }
+    }, 5000);
+
+    return () => clearTimeout(timeout);
+  }, [isConfigured, householdId, userId, household, setHouseholdId, setHouseholdInStore]);
+
   // Create a new household (with your profile and optionally a pending housemate)
   // Note: reads userId directly from Firebase Auth (not React state) to avoid
   // race conditions when called immediately after sign-in.
@@ -239,7 +269,7 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
         weekStartDay: 0, // Default to Sunday
         memberIds: [currentUserId],
         joinCode,
-        prize: prize || 'Winner picks dinner!',
+        prize: prize || '',
       });
 
       // Update local state
@@ -252,7 +282,7 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
         householdId: newHousehold.id,
         startDayKey: weekWindow.startDayKey,
         endDayKey: weekWindow.endDayKey,
-        prize: prize || 'Winner picks dinner!',
+        prize: prize || '',
         winnerId: null,
         isTie: false,
         isCompleted: false,

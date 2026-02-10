@@ -16,13 +16,21 @@ export interface ScoreboardCardProps {
   scoreB: number;
   /** Prize text */
   prize: string;
-  /** Callback when invite button is pressed (for pending competitor) */
+  /** Callback when add-housemate button is pressed (no competitor B yet) */
   onInvitePress?: () => void;
+  /** Callback when share-invite button is pressed (pending competitor B) — opens native share */
+  onShareInvitePress?: () => void;
+  /** Callback when prize circle is pressed */
+  onPrizePress?: () => void;
+  /** Callback when competitor name or score is pressed (opens competitor sheet) */
+  onCompetitorPress?: (competitorId: string) => void;
 }
 
 // Constants for the prize circle
-const PRIZE_CIRCLE_SIZE = 140;
+const PRIZE_CIRCLE_SIZE = 150;
 const PRIZE_CIRCLE_BORDER_WIDTH = 4;
+/** Size of the small circular add buttons (prize + housemate) */
+const ADD_BUTTON_SIZE = 44;
 
 /**
  * Card displaying the weekly scoreboard with both competitors' scores
@@ -40,6 +48,9 @@ export function ScoreboardCard({
   scoreB,
   prize,
   onInvitePress,
+  onShareInvitePress,
+  onPrizePress,
+  onCompetitorPress,
 }: ScoreboardCardProps) {
   const { colors, typography, spacing, radius } = useTheme();
 
@@ -47,18 +58,33 @@ export function ScoreboardCard({
     if (competitorB) {
       const isPending = isPendingCompetitor(competitorB);
       
-      // Show competitor B's name + score, with paper-plane icon if pending
+      // Show competitor B's name + score; name/score tappable for sheet, paper-plane for share only
       return (
         <View style={[styles.competitorColumn, styles.rightColumn]}>
           <View style={styles.nameRow}>
-            <Text style={[typography.callout, { color: colors.textSecondary }]}>
-              {competitorB.name}
-            </Text>
-            {isPending && onInvitePress && (
+            {onCompetitorPress ? (
               <TouchableOpacity
-                onPress={onInvitePress}
+                onPress={() => onCompetitorPress(competitorB.id)}
+                activeOpacity={0.7}
+                accessibilityLabel={competitorB.name}
+                accessibilityRole="button"
+              >
+                <Text style={[typography.callout, { color: colors.textSecondary }]}>
+                  {competitorB.name}
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <Text style={[typography.callout, { color: colors.textSecondary }]}>
+                {competitorB.name}
+              </Text>
+            )}
+            {isPending && (onShareInvitePress ?? onInvitePress) && (
+              <TouchableOpacity
+                onPress={onShareInvitePress ?? onInvitePress}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 style={{ marginLeft: spacing.xxs }}
+                accessibilityLabel="Send invite"
+                accessibilityRole="button"
               >
                 <Ionicons
                   name="paper-plane-outline"
@@ -68,59 +94,96 @@ export function ScoreboardCard({
               </TouchableOpacity>
             )}
           </View>
-          <Text style={[typography.display, { color: competitorB.color }]}>
-            {scoreB}
-          </Text>
+          {onCompetitorPress ? (
+            <TouchableOpacity
+              onPress={() => onCompetitorPress(competitorB.id)}
+              activeOpacity={0.7}
+              accessibilityLabel={`Score ${scoreB}`}
+              accessibilityRole="button"
+            >
+              <Text style={[typography.display, { color: competitorB.color }]}>
+                {scoreB}
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <Text style={[typography.display, { color: competitorB.color }]}>
+              {scoreB}
+            </Text>
+          )}
         </View>
       );
     }
 
-    // Fallback: No competitor B at all - show "Add housemate" button
+    // Fallback: No competitor B at all - "Housemate" and add button both open Add Housemate sheet
     return (
       <View style={[styles.competitorColumn, styles.rightColumn]}>
         <TouchableOpacity
+          onPress={onInvitePress}
+          activeOpacity={0.7}
+          accessibilityLabel="Add housemate"
+          accessibilityRole="button"
+        >
+          <Text style={[typography.callout, { color: colors.textSecondary }]}>
+            Housemate
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
           style={[
-            styles.inviteButton,
+            styles.addButton,
             {
               backgroundColor: colors.primary + '15',
-              paddingHorizontal: spacing.sm,
-              paddingVertical: spacing.xs,
-              borderRadius: radius.pill,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: spacing.xxxs,
               marginTop: spacing.xxs,
             },
           ]}
           onPress={onInvitePress}
           activeOpacity={0.7}
+          accessibilityLabel="Add housemate"
+          accessibilityRole="button"
         >
           <Ionicons
             name="person-add-outline"
-            size={18}
+            size={20}
             color={colors.primary}
           />
-          <Text style={[typography.callout, { color: colors.primary }]}>
-            Add housemate
-          </Text>
         </TouchableOpacity>
       </View>
     );
   };
+
+  const hasPrize = !!prize && prize.length > 0;
 
   return (
     <View style={styles.wrapper}>
       {/* The card with left and right columns */}
       <Card style={{ overflow: 'visible' }} hasShadow={false}>
         <View style={styles.columnsContainer}>
-          {/* Left column: Competitor A */}
+          {/* Left column: Competitor A (tappable name + score) */}
           <View style={[styles.competitorColumn, styles.leftColumn]}>
-            <Text style={[typography.callout, { color: colors.textSecondary }]}>
-              {competitorA.name}
-            </Text>
-            <Text style={[typography.display, { color: competitorA.color }]}>
-              {scoreA}
-            </Text>
+            {onCompetitorPress ? (
+              <TouchableOpacity
+                onPress={() => onCompetitorPress(competitorA.id)}
+                activeOpacity={0.7}
+                style={styles.competitorTouchable}
+                accessibilityLabel={`${competitorA.name}, score ${scoreA}`}
+                accessibilityRole="button"
+              >
+                <Text style={[typography.callout, { color: colors.textSecondary }]}>
+                  {competitorA.name}
+                </Text>
+                <Text style={[typography.display, { color: competitorA.color }]}>
+                  {scoreA}
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <>
+                <Text style={[typography.callout, { color: colors.textSecondary }]}>
+                  {competitorA.name}
+                </Text>
+                <Text style={[typography.display, { color: competitorA.color }]}>
+                  {scoreA}
+                </Text>
+              </>
+            )}
           </View>
 
           {/* Center spacer - leaves room for the floating prize circle */}
@@ -132,7 +195,7 @@ export function ScoreboardCard({
       </Card>
 
       {/* Floating prize circle - absolutely positioned in center */}
-      <View
+      <TouchableOpacity
         style={[
           styles.prizeCircle,
           {
@@ -144,27 +207,67 @@ export function ScoreboardCard({
             borderColor: colors.background,
           },
         ]}
+        onPress={onPrizePress}
+        activeOpacity={0.7}
+        accessibilityLabel={hasPrize ? 'Edit prize' : 'Set a prize'}
+        accessibilityRole="button"
       >
-        <Ionicons
-          name="trophy-outline"
-          size={24}
-          color={colors.prize}
-        />
-        <Text
-          style={[
-            typography.callout,
-            {
-              color: colors.textSecondary,
-              marginTop: spacing.xxs,
-              textAlign: 'center',
-              paddingHorizontal: spacing.xs,
-            },
-          ]}
-          numberOfLines={3}
-        >
-          {prize}
-        </Text>
-      </View>
+        {hasPrize ? (
+          <>
+            <Ionicons
+              name="trophy-outline"
+              size={24}
+              color={colors.prize}
+            />
+            <Text
+              style={[
+                typography.callout,
+                {
+                  color: colors.textSecondary,
+                  marginTop: spacing.xxs,
+                  textAlign: 'center',
+                  paddingHorizontal: spacing.xs,
+                },
+              ]}
+              numberOfLines={3}
+            >
+              {prize}
+            </Text>
+          </>
+        ) : (
+          <>
+            <Ionicons
+              name="trophy-outline"
+              size={22}
+              color={colors.prize}
+            />
+            <Text
+              style={[
+                typography.callout,
+                {
+                  color: colors.textSecondary,
+                  textAlign: 'center',
+                  paddingHorizontal: spacing.xs,
+                  marginTop: spacing.xxxs,
+                },
+              ]}
+            >
+              Winner gets...
+            </Text>
+            <View
+              style={[
+                styles.addButton,
+                {
+                  backgroundColor: colors.primary + '15',
+                  marginTop: spacing.xxs,
+                },
+              ]}
+            >
+              <Ionicons name="add" size={24} color={colors.primary} />
+            </View>
+          </>
+        )}
+      </TouchableOpacity>
     </View>
   );
 }
@@ -172,6 +275,10 @@ export function ScoreboardCard({
 const styles = StyleSheet.create({
   wrapper: {
     position: 'relative',
+    overflow: 'visible',
+    // Just enough margin for the circle protrusion above the card.
+    // Card is ~92px tall, circle center is at ~46px, so protrusion = radius - 46.
+    marginTop: PRIZE_CIRCLE_SIZE / 2 - 44,
   },
   columnsContainer: {
     flexDirection: 'row',
@@ -180,6 +287,9 @@ const styles = StyleSheet.create({
   },
   competitorColumn: {
     justifyContent: 'center',
+  },
+  competitorTouchable: {
+    alignItems: 'flex-start',
   },
   leftColumn: {
     alignItems: 'flex-start',
@@ -206,7 +316,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     zIndex: 10,
   },
-  inviteButton: {
+  addButton: {
+    width: ADD_BUTTON_SIZE,
+    height: ADD_BUTTON_SIZE,
+    borderRadius: ADD_BUTTON_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
   },

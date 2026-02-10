@@ -13,6 +13,9 @@ export interface CollapsibleScoreboardProps {
   scoreB: number;
   prize: string;
   onInvitePress?: () => void;
+  onShareInvitePress?: () => void;
+  onPrizePress?: () => void;
+  onCompetitorPress?: (competitorId: string) => void;
 }
 
 /**
@@ -28,6 +31,9 @@ export function CollapsibleScoreboard({
   scoreB,
   prize,
   onInvitePress,
+  onShareInvitePress,
+  onPrizePress,
+  onCompetitorPress,
 }: CollapsibleScoreboardProps) {
   const { spacing } = useTheme();
 
@@ -41,6 +47,9 @@ export function CollapsibleScoreboard({
         scoreB={scoreB}
         prize={prize}
         onInvitePress={onInvitePress}
+        onShareInvitePress={onShareInvitePress}
+        onPrizePress={onPrizePress}
+        onCompetitorPress={onCompetitorPress}
       />
     </View>
   );

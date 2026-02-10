@@ -6,3 +6,4 @@ export { useFirestoreSync } from './useFirestoreSync';
 export { useAuth } from './useAuth';
 export { useHouseholdAuth } from './useHouseholdAuth';
 export { useStepAnimation } from './useStepAnimation';
+export { useBottomSheet, type UseBottomSheetReturn } from './useBottomSheet';
