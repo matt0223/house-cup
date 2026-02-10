@@ -68,7 +68,7 @@ export default function OnboardingWelcomeScreen() {
         try {
           const name = appleGivenName || 'You';
           const defaultColor = availableCompetitorColors[0].hex; // Purple
-          const defaultPrize = 'Winner picks!';
+          const defaultPrize = '';
           await createHousehold(name, defaultColor, undefined, undefined, defaultPrize);
           router.replace('/');
         } catch (err) {

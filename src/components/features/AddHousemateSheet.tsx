@@ -26,6 +26,11 @@ export interface AddHousemateSheetProps {
   competitorAColor?: string;
 }
 
+/**
+ * Bottom sheet to add a housemate.
+ * Mirrors CompetitorSheet layout: text input, compact color dot + chevron,
+ * expandable color picker, Invite + checkmark buttons.
+ */
 export function AddHousemateSheet({
   isVisible,
   onClose,
@@ -33,18 +38,20 @@ export function AddHousemateSheet({
   onInvite,
   competitorAColor,
 }: AddHousemateSheetProps) {
-  const { colors, typography, spacing, radius } = useTheme();
+  const { colors, typography, spacing } = useTheme();
   const { modalVisible, overlayOpacity, sheetTranslateY, contentBottomPadding, inputRef } =
     useBottomSheet(isVisible);
 
   // Form state
   const [name, setName] = useState('');
   const [color, setColor] = useState(availableCompetitorColors[0].hex);
+  const [isColorExpanded, setIsColorExpanded] = useState(false);
 
   // Reset form when sheet opens
   useEffect(() => {
     if (isVisible) {
       setName('');
+      setIsColorExpanded(false);
       const next = competitorAColor
         ? availableCompetitorColors.find((c) => c.hex !== competitorAColor)?.hex ?? availableCompetitorColors[0].hex
         : availableCompetitorColors[0].hex;
@@ -75,11 +82,12 @@ export function AddHousemateSheet({
       onClose={onClose}
     >
       <View style={[styles.content, { padding: spacing.md }]}>
+        {/* Name input row */}
         <View style={styles.inputRow}>
           <TextInput
             ref={inputRef}
             style={[styles.textInput, typography.body, { color: colors.textPrimary, flex: 1 }]}
-            placeholder="Housemate's name"
+            placeholder="Enter your housemate's name"
             placeholderTextColor={colors.textSecondary}
             value={name}
             onChangeText={setName}
@@ -89,35 +97,61 @@ export function AddHousemateSheet({
             maxFontSizeMultiplier={1.2}
           />
         </View>
-        <View style={{ marginTop: spacing.sm }}>
-          <Text style={[typography.caption, { color: colors.textSecondary, marginBottom: spacing.xs }]}>
-            Color
-          </Text>
-          <ColorPicker
-            selectedColor={color}
-            onColorSelect={setColor}
-            unavailableColors={competitorAColor ? [competitorAColor] : []}
-          />
-        </View>
-        <View style={[styles.actionsRow, { marginTop: spacing.md }]}>
+
+        {/* Actions row: color toggle, invite button, save button */}
+        <View style={[styles.actionsRow, { marginTop: spacing.sm }]}>
+          {/* Color circle toggle */}
           <TouchableOpacity
-            style={[styles.button, { backgroundColor: colors.primary + '15', flex: 1, marginRight: spacing.xs }]}
-            onPress={handleInvite}
-            disabled={!canSubmit}
+            style={styles.colorToggle}
+            onPress={() => setIsColorExpanded((e) => !e)}
             activeOpacity={0.7}
+            accessibilityLabel="Change color"
           >
-            <Ionicons name="paper-plane-outline" size={18} color={colors.primary} />
-            <Text style={[typography.callout, { color: colors.primary }]}>Invite</Text>
+            <View style={[styles.colorDot, { backgroundColor: color }]} />
+            <Ionicons
+              name={isColorExpanded ? 'chevron-up' : 'chevron-down'}
+              size={16}
+              color={colors.textSecondary}
+            />
           </TouchableOpacity>
+
+          <View style={{ flex: 1 }} />
+
+          {/* Invite button (visible only when name is entered) */}
+          {canSubmit && (
+            <TouchableOpacity
+              style={[styles.button, { backgroundColor: colors.primary + '15', marginRight: spacing.xs }]}
+              onPress={handleInvite}
+              activeOpacity={0.7}
+            >
+              <Text style={[typography.callout, { color: colors.primary }]}>Invite</Text>
+              <Ionicons name="paper-plane-outline" size={18} color={colors.primary} />
+            </TouchableOpacity>
+          )}
+
+          {/* Save / checkmark button */}
           <TouchableOpacity
-            style={[styles.button, styles.saveButton, { backgroundColor: canSubmit ? colors.primary : colors.border }]}
+            style={[styles.saveButton, { backgroundColor: canSubmit ? colors.primary : colors.border }]}
             onPress={handleSave}
             disabled={!canSubmit}
             activeOpacity={0.8}
+            accessibilityLabel="Save"
+            accessibilityRole="button"
           >
             <Ionicons name="checkmark" size={20} color={canSubmit ? '#FFFFFF' : colors.textSecondary} />
           </TouchableOpacity>
         </View>
+
+        {/* Expandable color picker */}
+        {isColorExpanded && (
+          <View style={{ marginTop: spacing.sm }}>
+            <ColorPicker
+              selectedColor={color}
+              onColorSelect={setColor}
+              unavailableColors={competitorAColor ? [competitorAColor] : []}
+            />
+          </View>
+        )}
       </View>
     </BottomSheetContainer>
   );
@@ -128,16 +162,31 @@ const styles = StyleSheet.create({
   inputRow: { flexDirection: 'row', alignItems: 'center' },
   textInput: { paddingVertical: 8 },
   actionsRow: { flexDirection: 'row', alignItems: 'center' },
+  colorToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  colorDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+  },
   button: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
     borderRadius: 12,
   },
   saveButton: {
     width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 

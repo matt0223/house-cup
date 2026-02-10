@@ -335,7 +335,7 @@ export function MorphingScoreboard({
               },
             ]}
           >
-            <View style={styles.nameRowRight}>
+            <View style={[styles.nameRow, styles.nameRowRight]}>
               <Text style={[typography.callout, { color: colors.textSecondary }]}>
                 Housemate
               </Text>
