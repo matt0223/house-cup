@@ -31,7 +31,7 @@ module.exports = {
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
       },
-      buildNumber: '12',
+      buildNumber: '13',
       usesAppleSignIn: true,
     },
     android: {
