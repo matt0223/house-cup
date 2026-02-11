@@ -28,14 +28,14 @@ export interface MorphingScoreboardProps {
 const COLLAPSE_THRESHOLD = 110;
 
 // Wrapper: full area for bulge; circle centered here
-const EXPANDED_WRAPPER_HEIGHT = 140;
+const EXPANDED_WRAPPER_HEIGHT = 154;
 const COLLAPSED_WRAPPER_HEIGHT = 100; // fit 95px circle with proportional bulge (see below)
 
 // Card (grey rect): shorter than circle so circle bulges evenly
-const EXPANDED_CARD_HEIGHT = 112; // 80 content + 32 padding; circle 140 → 14px bulge each side
+const EXPANDED_CARD_HEIGHT = 112; // 80 content + 32 padding; circle 154 → 21px bulge each side
 const COLLAPSED_CARD_HEIGHT = 76; // 44 content + 32 padding; card centered in 84px wrapper
 
-const PRIZE_CIRCLE_EXPANDED = 140;
+const PRIZE_CIRCLE_EXPANDED = 154;
 const PRIZE_CIRCLE_COLLAPSED = 95; // proportional to expanded: 76 * (140/112) ≈ 95, bulge ~9.5px each side
 const PRIZE_BORDER_EXPANDED = 4;
 const PRIZE_BORDER_COLLAPSED = 3;
@@ -364,20 +364,23 @@ export function MorphingScoreboard({
               <Ionicons name="person-add-outline" size={20} color={colors.primary} />
             </TouchableOpacity>
           </Animated.View>
+          {/* Collapsed state: "Housemate" label + add button (no overflow clip) */}
           <Animated.View
             style={[
-              styles.inlineNameClip,
-              styles.inlineNameClipRight,
+              styles.collapsedInviteRow,
               {
-                top: inlineNameClipTop,
+                top: 0,
                 opacity: inlineNameOpacity,
                 transform: [{ translateY: inlineNameTranslateY }],
               },
             ]}
           >
+            <Text style={[typography.callout, { color: colors.textSecondary, marginRight: spacing.xs }]}>
+              Housemate
+            </Text>
             <TouchableOpacity
               style={[
-                styles.addButton,
+                styles.collapsedAddButton,
                 { backgroundColor: colors.primary + '15' },
               ]}
               onPress={onInvitePress}
@@ -385,7 +388,7 @@ export function MorphingScoreboard({
               accessibilityLabel="Add housemate"
               accessibilityRole="button"
             >
-              <Ionicons name="person-add-outline" size={20} color={colors.primary} />
+              <Ionicons name="person-add-outline" size={16} color={colors.primary} />
             </TouchableOpacity>
           </Animated.View>
         </Animated.View>
@@ -646,6 +649,21 @@ const styles = StyleSheet.create({
     width: ADD_BUTTON_SIZE,
     height: ADD_BUTTON_SIZE,
     borderRadius: ADD_BUTTON_SIZE / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  collapsedInviteRow: {
+    position: 'absolute',
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: ROW_HEIGHT_COLLAPSED,
+    justifyContent: 'flex-end',
+  },
+  collapsedAddButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
