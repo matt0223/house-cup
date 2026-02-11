@@ -105,7 +105,7 @@ export function useBottomSheet(
     }
   }, [isVisible]);
 
-  const contentBottomPadding = keyboardHeight > 0 ? keyboardHeight - 8 : insets.bottom;
+  const contentBottomPadding = keyboardHeight > 0 ? keyboardHeight : insets.bottom;
 
   return {
     modalVisible,

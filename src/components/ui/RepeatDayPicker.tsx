@@ -11,6 +11,8 @@ export interface RepeatDayPickerProps {
   onDaysChange: (days: number[]) => void;
   /** Day the week starts (0-6) - determines display order */
   weekStartDay: WeekStartDay;
+  /** Today's day of week (0-6, where 0=Sunday). Shows an orange stroke ring when not selected. */
+  todayDay?: number;
 }
 
 const CHIP_SIZE = 36;
@@ -24,6 +26,7 @@ export function RepeatDayPicker({
   selectedDays,
   onDaysChange,
   weekStartDay,
+  todayDay,
 }: RepeatDayPickerProps) {
   const { colors, typography, spacing } = useTheme();
 
@@ -44,6 +47,7 @@ export function RepeatDayPicker({
     <View style={[styles.container, { gap: spacing.sm }]}>
       {orderedDays.map((day) => {
         const isSelected = selectedDays.includes(day);
+        const isToday = todayDay !== undefined && day === todayDay;
         const label = getDayOfWeekLabel(day);
 
         return (
@@ -55,11 +59,11 @@ export function RepeatDayPicker({
               styles.chip,
               {
                 backgroundColor: isSelected ? colors.primary : 'transparent',
-                borderWidth: isSelected ? 0 : 1,
-                borderColor: colors.border,
+                borderWidth: isSelected ? 0 : (isToday ? 2 : 1),
+                borderColor: isToday && !isSelected ? colors.primary : colors.border,
               },
             ]}
-            accessibilityLabel={`${label}${isSelected ? ', selected' : ''}`}
+            accessibilityLabel={`${label}${isToday ? ', today' : ''}${isSelected ? ', selected' : ''}`}
             accessibilityRole="button"
           >
             <Text

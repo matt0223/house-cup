@@ -109,7 +109,7 @@ export function AddPrizeSheet({
         </View>
 
         {/* Actions row: suggestion chips + save button */}
-        <View style={[styles.actionsRow, { marginTop: spacing.sm }]}>
+        <View style={[styles.actionsRow, { marginTop: spacing.sm, minHeight: 44 }]}>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -184,7 +184,7 @@ export function AddPrizeSheet({
   );
 }
 
-const SUBMIT_BUTTON_SIZE = 40;
+const SUBMIT_BUTTON_SIZE = 44;
 
 const styles = StyleSheet.create({
   content: {},

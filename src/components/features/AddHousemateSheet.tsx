@@ -29,7 +29,7 @@ export interface AddHousemateSheetProps {
 }
 
 const EXPAND_DURATION = 200;
-const COLOR_PICKER_HEIGHT = 40;
+const COLOR_PICKER_HEIGHT = 52; // 36px swatches + 12px top padding + 4px bottom buffer
 
 /**
  * Bottom sheet to add a housemate.
@@ -134,7 +134,12 @@ export function AddHousemateSheet({
         <View style={[styles.actionsRow, { marginTop: spacing.sm }]}>
           {/* Color circle toggle */}
           <TouchableOpacity
-            style={styles.colorToggle}
+            style={[styles.colorToggle, {
+              backgroundColor: colors.background,
+              borderRadius: 999,
+              paddingHorizontal: spacing.sm,
+              paddingVertical: spacing.xs,
+            }]}
             onPress={() => setIsColorExpanded((e) => !e)}
             activeOpacity={0.7}
             accessibilityLabel="Change color"
@@ -179,7 +184,6 @@ export function AddHousemateSheet({
           style={{
             height: colorPickerHeight,
             opacity: colorPickerOpacity,
-            marginTop: spacing.sm,
             overflow: 'hidden',
           }}
         >
@@ -205,9 +209,9 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   colorDot: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
   },
   button: {
     flexDirection: 'row',

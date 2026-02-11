@@ -69,8 +69,8 @@ const OVERLAY_DURATION = 250;
 const OPEN_SHEET_DURATION = 350;
 const CLOSE_SHEET_DURATION = 300;
 const EXPAND_DURATION = 200;
-const DAY_PICKER_HEIGHT = 50;
-const ACTIONS_AREA_HEIGHT = 50;
+const DAY_PICKER_HEIGHT = 66; // 36px chips + ~15px top/bottom gap (centered)
+const ACTIONS_AREA_HEIGHT = 66;
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 type ExpandedArea = 'none' | 'dayPicker' | 'actions';
@@ -396,7 +396,7 @@ export function AddTaskSheet({
 
   if (!modalVisible) return null;
 
-  const contentBottomPadding = keyboardHeight > 0 ? keyboardHeight - 8 : insets.bottom;
+  const contentBottomPadding = keyboardHeight > 0 ? keyboardHeight : insets.bottom;
 
   return (
     <Modal
@@ -502,7 +502,6 @@ export function AddTaskSheet({
                   {
                     height: expandedAreaHeight,
                     opacity: expandedAreaOpacity,
-                    marginTop: spacing.sm,
                   },
                 ]}
               >
@@ -511,6 +510,7 @@ export function AddTaskSheet({
                     selectedDays={repeatDays}
                     onDaysChange={setRepeatDays}
                     weekStartDay={weekStartDay}
+                    todayDay={new Date().getDay()}
                   />
                 )}
                 {expandedArea === 'actions' && (
@@ -557,7 +557,7 @@ export function AddTaskSheet({
   );
 }
 
-const SUBMIT_BUTTON_SIZE = 40;
+const SUBMIT_BUTTON_SIZE = 44;
 
 const styles = StyleSheet.create({
   modalContainer: {

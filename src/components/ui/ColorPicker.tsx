@@ -24,7 +24,7 @@ export function ColorPicker({
   const { spacing } = useTheme();
 
   return (
-    <View style={[styles.container, { gap: spacing.xxs }]}>
+    <View style={[styles.container, { paddingTop: spacing.xs }]}>
       {availableCompetitorColors.map((color) => {
         const isSelected = color.hex.toLowerCase() === selectedColor.toLowerCase();
         const isUnavailable = unavailableColors.some(
@@ -59,7 +59,7 @@ export function ColorPicker({
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    justifyContent: 'space-evenly',
   },
   swatch: {
     width: 36,
