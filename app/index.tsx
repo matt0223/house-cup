@@ -1,8 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, ActivityIndicator, Animated } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, StyleSheet, Text, Image, ActivityIndicator, Animated } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, Redirect } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../src/theme/useTheme';
 import { AppHeader, DayStrip, AddTaskButton, TaskAddedToast } from '../src/components/ui';
@@ -18,21 +17,14 @@ import { formatDayKeyRange, getTodayDayKey, getCurrentWeekWindow } from '../src/
 import { TaskInstance } from '../src/domain/models/TaskInstance';
 import { shareHouseholdInvite } from '../src/utils/shareInvite';
 
-/** Common household task suggestions for the empty state */
-const TASK_SUGGESTIONS = [
-  'Cook dinner',
-  'Clean kitchen',
-  'Laundry',
-  'Exercise',
-  'Groceries',
-  'Take out trash',
-];
+// NOTE: Task suggestion chips saved for future use.
+// const TASK_SUGGESTIONS = ['Cook dinner','Clean kitchen','Laundry','Exercise','Groceries','Take out trash'];
 
 /**
  * Challenge screen - Main tab showing scoreboard, day strip, and task list.
  */
 export default function ChallengeScreen() {
-  const { colors, spacing, typography, radius } = useTheme();
+  const { colors, spacing, typography } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [isAddSheetVisible, setIsAddSheetVisible] = React.useState(false);
@@ -45,15 +37,6 @@ export default function ChallengeScreen() {
   const [swipeDeleteTask, setSwipeDeleteTask] = React.useState<TaskInstance | null>(null);
   // Track the weekStartDay used to create the current challenge
   const [challengeWeekStartDay, setChallengeWeekStartDay] = React.useState<number | null>(null);
-
-  // First-time user: show suggestion chips until they create their first task
-  const [hasEverCreatedTask, setHasEverCreatedTask] = useState(true); // Default true to avoid flash
-
-  useEffect(() => {
-    AsyncStorage.getItem('@housecup/hasEverCreatedTask').then((val) => {
-      if (val !== 'true') setHasEverCreatedTask(false);
-    });
-  }, []);
 
   // Scroll position for collapsible scoreboard animation
   const scrollY = React.useRef(new Animated.Value(0)).current;
@@ -180,22 +163,7 @@ export default function ChallengeScreen() {
       linkTaskToTemplate(taskId, template.id);
     }
     
-    // Mark first task created
-    if (!hasEverCreatedTask) {
-      setHasEverCreatedTask(true);
-      AsyncStorage.setItem('@housecup/hasEverCreatedTask', 'true');
-    }
-
     // Show toast (increment key to force new instance if already visible)
-    setToastKey((k) => k + 1);
-    setShowToast(true);
-  };
-
-  // Handle tapping a suggestion chip in the empty state
-  const handleSuggestionTap = (name: string) => {
-    addTask(name, {});
-    setHasEverCreatedTask(true);
-    AsyncStorage.setItem('@housecup/hasEverCreatedTask', 'true');
     setToastKey((k) => k + 1);
     setShowToast(true);
   };
@@ -453,58 +421,21 @@ export default function ChallengeScreen() {
               onTaskDelete={handleSwipeDelete}
             />
           </View>
-        ) : !hasEverCreatedTask ? (
-          <View style={styles.emptyState}>
-            <Text
-              style={[
-                typography.headline,
-                { color: colors.textPrimary, textAlign: 'center' },
-              ]}
-            >
-              What did you get done today?
-            </Text>
-            <Text
-              style={[
-                typography.body,
-                { color: colors.textSecondary, marginTop: spacing.xs, textAlign: 'center' },
-              ]}
-            >
-              Tap a suggestion or press + to add your own
-            </Text>
-            <View style={[styles.chipGrid, { marginTop: spacing.lg }]}>
-              {TASK_SUGGESTIONS.map((suggestion) => (
-                <TouchableOpacity
-                  key={suggestion}
-                  style={[
-                    styles.suggestionChip,
-                    {
-                      borderColor: colors.primary + '55',
-                      borderRadius: radius.pill,
-                      paddingHorizontal: spacing.md,
-                      paddingVertical: spacing.sm,
-                    },
-                  ]}
-                  activeOpacity={0.7}
-                  onPress={() => handleSuggestionTap(suggestion)}
-                >
-                  <Text style={[typography.callout, { color: colors.primary }]}>
-                    {suggestion}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
         ) : (
           <View style={styles.emptyState}>
-            <EmptyStateIllustration />
             <Text
               style={[
-                typography.body,
-                { color: colors.textSecondary, marginTop: spacing.sm, textAlign: 'center' },
+                styles.emptyText,
+                { color: colors.textSecondary },
               ]}
             >
-              Tap + Add task to get started
+              What needs doing today?
             </Text>
+            <Image
+              source={require('../assets/images/arrow.png')}
+              style={styles.arrowImage}
+              resizeMode="contain"
+            />
           </View>
         )}
       </Animated.ScrollView>
@@ -583,20 +514,6 @@ export default function ChallengeScreen() {
   );
 }
 
-// De-emphasized empty state icon (not button-like; keeps focus on FAB)
-function EmptyStateIllustration() {
-  const { colors } = useTheme();
-  return (
-    <View style={styles.illustration}>
-      <Ionicons
-        name="clipboard-outline"
-        size={48}
-        color={colors.textSecondary}
-        style={{ opacity: 0.35 }}
-      />
-    </View>
-  );
-}
 
 const styles = StyleSheet.create({
   container: {
@@ -615,21 +532,21 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
+    justifyContent: 'flex-end',
+    paddingBottom: 32,
   },
-  illustration: {
-    alignItems: 'center',
-    justifyContent: 'center',
+  emptyText: {
+    fontSize: 24,
+    fontWeight: '400',
+    lineHeight: 30,
+    textAlign: 'right',
+    paddingRight: 75,
+    marginBottom: 8,
   },
-  chipGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 10,
-  },
-  suggestionChip: {
-    borderWidth: 1.5,
+  arrowImage: {
+    width: 85,
+    height: 100,
+    alignSelf: 'flex-end',
+    marginRight: 77,
   },
 });
