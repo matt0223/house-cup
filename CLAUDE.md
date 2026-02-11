@@ -130,7 +130,6 @@ export { MyNewComponent } from './MyNewComponent';
 | Challenge state | `src/store/useChallengeStore.ts` |
 | Settings screen | `app/settings.tsx` |
 | Onboarding index | `app/onboarding/index.tsx` |
-| Create household | `app/onboarding/create.tsx` |
 | Join household | `app/onboarding/join.tsx` |
 | Firebase config | `src/services/firebase/firebaseConfig.ts` |
 | Firestore sync hook | `src/hooks/useFirestoreSync.ts` |
@@ -194,9 +193,9 @@ Then approve in App Store Connect TestFlight tab.
 
 ### Auth & Onboarding
 - **Sign in with Apple only** - No guest mode, no "Link Apple Account" in Settings. User must sign in with Apple before seeing the household (onboarding and join flow both require Apple Sign-In). Keeps identity simple and avoids orphaned anonymous users.
-- Onboarding: Create (3 steps) or Join (enter code → Apple Sign-In → set profile). No "Continue as Guest."
+- Onboarding: Welcome screen → Apple Sign-In → auto-create household → main app. Or: "Have a join code?" → enter code → Apple Sign-In → auto-join household.
+- The old 3-step create wizard (`app/onboarding/create.tsx`) has been **removed** — it was dead code, never navigated to.
 - Sign out in Settings clears local household and navigates to onboarding.
-- **Onboarding redesign planned** — Current 3-step wizard (name → housemate → prize) is being replaced to get users to the aha moment faster.
 
 ### Recurring Tasks (Important for UX and Bugs)
 - **New recurring task with points:** We create the template, then **one anchor task** for the selected day with points via `addTask(name, points, templateId)`. Seeding fills other days; seeding never overwrites existing `(templateId, dayKey)`.
@@ -211,7 +210,7 @@ Then approve in App Store Connect TestFlight tab.
 
 ### Completed
 - Scoreboard with weekly competition (collapsible with scroll animation)
-- Day strip navigation
+- Day strip navigation (always visible, outside scroll area)
 - Task list with point circles (tap to cycle 0→1→2→3→0 per competitor)
 - Add/edit task bottom sheet
 - Recurring tasks (with anchor + seed, convert one-off, no duplicates)
@@ -227,9 +226,7 @@ Then approve in App Store Connect TestFlight tab.
 - **Client-side challenge completion** - Detects expired challenges on app open, completes them atomically, creates next week's challenge
 - **Smart insight tips** - Only surfaces tips for new/spiking tasks (not baseline recurring tasks), avoids repetition across weeks
 - **Contextual toast notifications** - "Task added", "Task updated", "Task deleted", "Settings updated", "Invite sent"
-
-### In Progress
-- Onboarding V2 (simplified flow to reach aha moment faster)
+- **Scrolling day picker** - Header fades out on scroll, scoreboard collapses, day strip stays pinned, task list scrolls in a rounded-corner window beneath
 
 ### Planned
 - Push notifications for reminders
@@ -324,6 +321,33 @@ Skip records prevent re-seeding of deleted task instances:
 | Seeding logic | `src/domain/services/seeding.ts` |
 | seedFromTemplates | `src/store/useChallengeStore.ts` |
 | Auto-seed trigger | `app/index.tsx` (useEffect) |
+
+## Challenge Screen Layout (Important — Regressions Happen Here)
+
+The main screen (`app/index.tsx`) has a specific scroll-linked layout that must be preserved:
+
+```
+SafeAreaView
+  ├── Header (Animated.View, height 48→0, opacity 1→0 on scroll)
+  ├── CollapsibleScoreboard (MorphingScoreboard, morphs expanded→collapsed)
+  ├── DayStrip (Animated.View, always visible, OUTSIDE ScrollView)
+  └── Rounded scroll window (View, overflow:hidden, borderTopRadius:16, surface bg)
+        └── Animated.ScrollView (tasks only)
+```
+
+### Key behaviors:
+1. **Header** fades out (opacity → 0 over first 25% of scroll) and its container collapses (height → 0 over first 60%). This is faster than the scoreboard collapse so the header is gone before the scoreboard finishes.
+2. **Scoreboard** morphs from expanded to collapsed over 110px of scroll (COLLAPSE_THRESHOLD in MorphingScoreboard.tsx). Prize circle shrinks, scores rearrange, names transition.
+3. **DayStrip** is a sibling element between the scoreboard and the scroll window — NOT inside the ScrollView. It stays visible at all times so users can switch days while scrolling.
+4. **Gap between DayStrip and tasks** is persistent (paddingBottom: 16 on DayStrip container). The gap between the scoreboard and DayStrip animates from 16→8px when collapsed.
+5. **Rounded scroll window** has `overflow: 'hidden'`, `borderTopLeftRadius` + `borderTopRightRadius` matching `radius.large` (16px), `marginHorizontal: spacing.sm`, and `backgroundColor: colors.surface`. This creates visible rounded corners where tasks scroll into view.
+6. **Task list wrapper** inside the ScrollView has NO `paddingHorizontal` or `marginTop` — the rounded window container handles the horizontal inset and the DayStrip handles the vertical gap.
+
+### Common regressions to watch for:
+- **DayStrip inside ScrollView** — If DayStrip is placed inside the ScrollView, it scrolls away and users can't switch days. It must be a sibling ABOVE the ScrollView.
+- **Missing persistent gap** — If the gap between DayStrip and tasks is inside the ScrollView (as marginTop or paddingTop on content), it scrolls away. The gap must be on the DayStrip's paddingBottom (outside scroll).
+- **Invisible rounded corners** — The scroll window needs `backgroundColor: colors.surface` and `marginHorizontal: spacing.sm` to match the Card's inset. Without these, rounded corners clip transparent space and are invisible.
+- **Header icons clipping** — The header container uses both height collapse AND opacity fade. Without the opacity fade, the settings/insights icons get visually clipped in half as the container shrinks.
 
 ## Gotchas
 

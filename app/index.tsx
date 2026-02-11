@@ -24,7 +24,7 @@ import { shareHouseholdInvite } from '../src/utils/shareInvite';
  * Challenge screen - Main tab showing scoreboard, day strip, and task list.
  */
 export default function ChallengeScreen() {
-  const { colors, spacing, typography } = useTheme();
+  const { colors, spacing, typography, radius } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [isAddSheetVisible, setIsAddSheetVisible] = React.useState(false);
@@ -40,6 +40,31 @@ export default function ChallengeScreen() {
 
   // Scroll position for collapsible scoreboard animation
   const scrollY = React.useRef(new Animated.Value(0)).current;
+
+  // Header height for scroll-based collapse (paddingVertical 12*2 + title ~24 = ~48)
+  const HEADER_HEIGHT = 48;
+  const COLLAPSE_THRESHOLD = 110; // matches MorphingScoreboard threshold
+
+  // Animate header container height from full to 0 as user scrolls
+  const headerHeight = scrollY.interpolate({
+    inputRange: [0, COLLAPSE_THRESHOLD * 0.6],
+    outputRange: [HEADER_HEIGHT, 0],
+    extrapolate: 'clamp',
+  });
+
+  // Fade header content out quickly so icons don't visually clip
+  const headerOpacity = scrollY.interpolate({
+    inputRange: [0, COLLAPSE_THRESHOLD * 0.25],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
+
+  // Reduce gap between prize circle and day strip when collapsed
+  const dayStripMarginTop = scrollY.interpolate({
+    inputRange: [0, COLLAPSE_THRESHOLD],
+    outputRange: [16, 8], // 16 expanded, 8 collapsed (8px reduction when collapsed)
+    extrapolate: 'clamp',
+  });
 
   // Firebase context for onboarding redirect and housemate invite
   const { isConfigured, isAuthLoading, userId, householdId, addHousemate, markInviteSent } = useFirebase();
@@ -359,19 +384,21 @@ export default function ChallengeScreen() {
       style={[styles.container, { backgroundColor: colors.background }]}
       edges={['top', 'left', 'right']}
     >
-      {/* Header */}
-      <AppHeader
-        title={dateRange || 'This Week'}
-        rightActions={[
-          { icon: 'trending-up-outline', onPress: () => router.push('/history') },
-          { icon: 'settings-outline', onPress: () => router.push('/settings') },
-        ]}
-      />
+      {/* Header — clips and collapses as user scrolls */}
+      <Animated.View style={{ height: headerHeight, overflow: 'hidden', opacity: headerOpacity }}>
+        <AppHeader
+          title={dateRange || 'This Week'}
+          rightActions={[
+            { icon: 'trending-up-outline', onPress: () => router.push('/history') },
+            { icon: 'settings-outline', onPress: () => router.push('/settings') },
+          ]}
+        />
+      </Animated.View>
 
       {/* Collapsible scoreboard: morphs from expanded to collapsed as user scrolls */}
       <View
         style={{
-          marginTop: -16,
+          marginTop: 0,
           zIndex: 10,
           elevation: 10,
         }}
@@ -390,6 +417,24 @@ export default function ChallengeScreen() {
         />
       </View>
 
+      {/* Day Strip — always visible, outside ScrollView */}
+      <Animated.View style={{ marginTop: dayStripMarginTop, paddingBottom: 16 }}>
+        <DayStrip
+          dayKeys={weekDayKeys}
+          selectedDayKey={selectedDayKey}
+          todayDayKey={todayKey}
+          onSelectDay={setSelectedDay}
+        />
+      </Animated.View>
+
+      <View style={{
+        flex: 1,
+        overflow: 'hidden',
+        borderTopLeftRadius: radius.large,
+        borderTopRightRadius: radius.large,
+        marginHorizontal: spacing.sm,
+        backgroundColor: colors.surface,
+      }}>
       <Animated.ScrollView
         style={styles.scrollView}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 100 + insets.bottom, flexGrow: 1 }]}
@@ -400,19 +445,9 @@ export default function ChallengeScreen() {
         )}
         scrollEventThrottle={16}
       >
-        {/* Day Strip */}
-        <View style={{ marginTop: spacing.md - 4 }}>
-          <DayStrip
-            dayKeys={weekDayKeys}
-            selectedDayKey={selectedDayKey}
-            todayDayKey={todayKey}
-            onSelectDay={setSelectedDay}
-          />
-        </View>
-
         {/* Content Area */}
         {tasksForDay.length > 0 ? (
-          <View style={{ marginTop: spacing.md, paddingHorizontal: spacing.sm }}>
+          <View>
             <TaskList
               tasks={tasksForDay}
               competitors={competitors}
@@ -439,6 +474,7 @@ export default function ChallengeScreen() {
           </View>
         )}
       </Animated.ScrollView>
+      </View>
 
       {/* Floating Add Task Button */}
       <AddTaskButton onPress={() => setIsAddSheetVisible(true)} />
