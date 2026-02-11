@@ -66,7 +66,7 @@ export function AppleSignInButton({
               ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
               : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
           }
-          cornerRadius={radius.medium}
+          cornerRadius={radius.pill}
           style={[styles.button, { opacity: disabled ? 0.5 : 1 }]}
           onPress={disabled ? undefined : onPress}
         />
@@ -83,7 +83,7 @@ export function AppleSignInButton({
         styles.fallbackButton,
         {
           backgroundColor: colors.text,
-          borderRadius: radius.medium,
+          borderRadius: radius.pill,
           paddingVertical: spacing.md,
           opacity: disabled ? 0.5 : 1,
         },

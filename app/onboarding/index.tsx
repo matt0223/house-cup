@@ -3,12 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   ActivityIndicator,
-  TextInput,
-  Keyboard,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -17,10 +12,9 @@ import { useTheme } from '../../src/theme/useTheme';
 import { Button, AppleSignInButton } from '../../src/components/ui';
 import { useAppleAuth } from '../../src/hooks/useAppleAuth';
 import { useFirebase } from '../../src/providers/FirebaseProvider';
-import { findHouseholdByJoinCode } from '../../src/services/firebase';
-import { isPendingCompetitor, availableCompetitorColors } from '../../src/domain/models/Competitor';
+import { availableCompetitorColors } from '../../src/domain/models/Competitor';
 
-type ViewState = 'welcome' | 'signing-in' | 'join-code';
+type ViewState = 'welcome' | 'signing-in';
 
 /**
  * Onboarding welcome screen.
@@ -38,13 +32,8 @@ export default function OnboardingWelcomeScreen() {
     clearError: clearAppleError,
   } = useAppleAuth();
 
-  // View state (no more 'choice' — we auto-create)
+  // View state
   const [viewState, setViewState] = useState<ViewState>('welcome');
-  
-  // Join code state
-  const [joinCode, setJoinCode] = useState('');
-  const [codeError, setCodeError] = useState<string | null>(null);
-  const [isValidatingCode, setIsValidatingCode] = useState(false);
 
   // Handle Apple sign-in (primary action)
   const handleAppleSignIn = async () => {
@@ -83,66 +72,9 @@ export default function OnboardingWelcomeScreen() {
     }
   };
 
-  // Handle join code entry from welcome screen (before sign-in)
+  // Navigate to join flow screen
   const handleJoinCodePress = () => {
-    setViewState('join-code');
-    setJoinCode('');
-    setCodeError(null);
-  };
-
-  // Handle code input change
-  const handleCodeChange = (text: string) => {
-    const cleaned = text.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
-    setJoinCode(cleaned);
-    setCodeError(null);
-  };
-
-  // Validate code and proceed to Apple sign-in + join
-  const handleValidateAndJoin = async () => {
-    if (joinCode.length !== 6) return;
-
-    Keyboard.dismiss();
-    setIsValidatingCode(true);
-    setCodeError(null);
-
-    try {
-      // First validate the code exists
-      const household = await findHouseholdByJoinCode(joinCode);
-      
-      if (!household) {
-        setCodeError("That code didn't work. Double-check with your housemate.");
-        setIsValidatingCode(false);
-        return;
-      }
-
-      // Check for pending invite
-      const pendingCompetitor = household.competitors.find(isPendingCompetitor);
-      if (!pendingCompetitor) {
-        const joinedCount = household.competitors.filter(c => c.userId).length;
-        if (joinedCount >= 2) {
-          setCodeError("This household already has two members.");
-        } else {
-          setCodeError("No pending invite found for this household.");
-        }
-        setIsValidatingCode(false);
-        return;
-      }
-
-      // Code is valid - navigate to join flow with the code
-      setIsValidatingCode(false);
-      router.push(`/onboarding/join?code=${joinCode}`);
-    } catch (err) {
-      console.error('Failed to validate code:', err);
-      setCodeError("Something went wrong. Try again.");
-      setIsValidatingCode(false);
-    }
-  };
-
-  // Handle going back from sub-views
-  const handleBack = () => {
-    setViewState('welcome');
-    setJoinCode('');
-    setCodeError(null);
+    router.push('/onboarding/join');
   };
 
   // Render the welcome view (primary)
@@ -196,14 +128,13 @@ export default function OnboardingWelcomeScreen() {
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
         </View>
 
-        <TouchableOpacity
+        <Button
+          label="Enter a join code"
           onPress={handleJoinCodePress}
-          style={styles.joinLink}
-        >
-          <Text style={[typography.callout, { color: colors.primary }]}>
-            Have a join code?
-          </Text>
-        </TouchableOpacity>
+          variant="secondary"
+          fullWidth
+          style={{ height: 50 }}
+        />
       </View>
     </View>
   );
@@ -237,90 +168,16 @@ export default function OnboardingWelcomeScreen() {
     </View>
   );
 
-  // Render join code entry view
-  const renderJoinCode = () => (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.keyboardAvoid}
-    >
-      <View style={styles.content}>
-        {/* Back button */}
-        <TouchableOpacity
-          onPress={handleBack}
-          style={[styles.backButton, { marginBottom: spacing.lg }]}
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
-
-        <Text style={[typography.title, { color: colors.textPrimary, marginBottom: spacing.xs }]}>
-          Join your household
-        </Text>
-        <Text style={[typography.body, { color: colors.textSecondary, marginBottom: spacing.xl }]}>
-          Enter the 6-character code{'\n'}from your housemate.
-        </Text>
-
-        <View style={[styles.codeInputContainer, { marginBottom: spacing.lg }]}>
-          <TextInput
-            style={[
-              styles.codeInput,
-              typography.title,
-              {
-                backgroundColor: colors.surface,
-                color: colors.textPrimary,
-                borderRadius: radius.medium,
-                letterSpacing: 8,
-              },
-            ]}
-            value={joinCode}
-            onChangeText={handleCodeChange}
-            placeholder="ABC123"
-            placeholderTextColor={colors.textSecondary + '66'}
-            autoFocus
-            autoCapitalize="characters"
-            autoCorrect={false}
-            maxLength={6}
-            returnKeyType="done"
-            onSubmitEditing={() => joinCode.length === 6 && handleValidateAndJoin()}
-            maxFontSizeMultiplier={1.2}
-          />
-        </View>
-
-        {codeError && (
-          <Text
-            style={[
-              typography.callout,
-              { color: colors.error, marginBottom: spacing.md, textAlign: 'center' },
-            ]}
-          >
-            {codeError}
-          </Text>
-        )}
-
-        <Button
-          label="Continue"
-          onPress={handleValidateAndJoin}
-          fullWidth
-          isDisabled={joinCode.length !== 6}
-          isLoading={isValidatingCode}
-        />
-      </View>
-    </KeyboardAvoidingView>
-  );
-
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       {viewState === 'welcome' && renderWelcome()}
       {viewState === 'signing-in' && renderSigningIn()}
-      {viewState === 'join-code' && renderJoinCode()}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-  },
-  keyboardAvoid: {
     flex: 1,
   },
   content: {
@@ -348,9 +205,6 @@ const styles = StyleSheet.create({
   actions: {
     alignItems: 'center',
   },
-  joinLink: {
-    paddingVertical: 12,
-  },
   dividerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -363,21 +217,5 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     alignItems: 'center',
-  },
-  backButton: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    padding: 8,
-  },
-  codeInputContainer: {
-    alignItems: 'center',
-  },
-  codeInput: {
-    width: '100%',
-    height: 56,
-    textAlign: 'center',
-    fontSize: 24,
-    fontWeight: '600',
   },
 });

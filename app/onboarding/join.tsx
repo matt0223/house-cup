@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,6 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   Platform,
-  Animated,
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,324 +15,215 @@ import { useTheme } from '../../src/theme/useTheme';
 import { Button, OnboardingHeader, AppleSignInButton } from '../../src/components/ui';
 import { useFirebase } from '../../src/providers/FirebaseProvider';
 import { useAppleAuth } from '../../src/hooks/useAppleAuth';
-import { isPendingCompetitor } from '../../src/domain/models/Competitor';
+import { isPendingCompetitor, availableCompetitorColors } from '../../src/domain/models/Competitor';
 import { findHouseholdByJoinCode } from '../../src/services/firebase';
-import { useStepAnimation } from '../../src/hooks';
-import { Household } from '../../src/domain/models/Household';
 
 /**
  * Onboarding join screen.
- * Zero-screen join: Enter code → Apple Sign-In → auto-join → challenge page.
- * No name/color form — uses Apple givenName (or invite placeholder) + invite color.
+ * Single-screen flow: Enter code → Continue (triggers Apple Sign-In + validate + join).
+ * If code is invalid after sign-in, shows error with fallback to create a new household.
  *
- * Flow:
- *   Step 1: Enter 6-character code (skipped if code passed via param)
- *   Step 2: Sign in with Apple → auto-join immediately
+ * Code validation is deferred until after authentication because Firestore
+ * security rules require an authenticated user to query households.
  */
 export default function OnboardingJoinScreen() {
   const { colors, spacing, typography, radius } = useTheme();
   const router = useRouter();
   const params = useLocalSearchParams<{ code?: string }>();
-  const { joinHousehold, userId } = useFirebase();
+  const { joinHousehold, createHousehold } = useFirebase();
   const {
     isLoading: isAppleLoading,
     error: appleError,
     signIn: signInWithApple,
   } = useAppleAuth();
 
-  // Step state - start at step 1 unless code is provided
-  const [step, setStep] = useState(1);
-  const [isInitializing, setIsInitializing] = useState(!!params.code);
+  // Code entry
+  const [code, setCode] = useState(params.code?.toUpperCase() || '');
 
-  // Step 1: Code entry
-  const [code, setCode] = useState(params.code || '');
-  const [isValidating, setIsValidating] = useState(false);
-  const [codeError, setCodeError] = useState<string | null>(null);
-
-  // Validated household data
-  const [validatedHousehold, setValidatedHousehold] = useState<Household | null>(null);
-
-  // Pending competitor info (from invite)
-  const [pendingName, setPendingName] = useState('');
-  const [pendingColor, setPendingColor] = useState('');
-  const [inviterName, setInviterName] = useState<string | null>(null);
-
-  // Join state
-  const [isJoining, setIsJoining] = useState(false);
+  // Flow state
+  const [status, setStatus] = useState<'idle' | 'signing-in' | 'joining' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [appleGivenNameRef, setAppleGivenNameRef] = useState<string | undefined>(undefined);
 
   const inputRef = useRef<TextInput>(null);
 
-  // Animation for step transitions
-  const { fadeAnim, animateStepChange } = useStepAnimation();
-
-  // If code is passed via param, validate it immediately
-  useEffect(() => {
-    if (params.code && params.code.length === 6) {
-      validateCode(params.code);
-    }
-  }, [params.code]);
-
-  // If already signed in and we have a validated household, auto-join immediately
-  useEffect(() => {
-    if (userId && validatedHousehold && step === 2) {
-      autoJoin(undefined);
-    }
-  }, [userId, validatedHousehold, step]);
-
-  const goToStep = (newStep: number) => {
-    animateStepChange(() => setStep(newStep));
-  };
-
-  const validateCode = async (codeToValidate: string) => {
-    setIsValidating(true);
-    setIsInitializing(true);
-    setCodeError(null);
+  // Validate code and join household (called after authentication)
+  const validateAndJoin = async (codeToJoin: string, appleGivenName?: string) => {
+    setStatus('joining');
+    setError(null);
 
     try {
-      const household = await findHouseholdByJoinCode(codeToValidate.toUpperCase());
-      
+      const household = await findHouseholdByJoinCode(codeToJoin.toUpperCase());
+
       if (!household) {
-        setCodeError("That code didn't work. Double-check with your housemate.");
-        setIsValidating(false);
-        setIsInitializing(false);
-        setStep(1);
+        setError("That code didn't work. Double-check with your housemate.");
+        setStatus('error');
         return;
       }
 
       const pendingCompetitor = household.competitors.find(isPendingCompetitor);
-      
+
       if (!pendingCompetitor) {
         const joinedCount = household.competitors.filter(c => c.userId).length;
         if (joinedCount >= 2) {
-          setCodeError("This household already has two members.");
+          setError("This household already has two members.");
         } else {
-          setCodeError("No pending invite found for this household.");
+          setError("No pending invite found for this household.");
         }
-        setIsValidating(false);
-        setIsInitializing(false);
-        setStep(1);
+        setStatus('error');
         return;
       }
 
-      // Store validated household data and pending competitor info
-      setValidatedHousehold(household);
-      setCode(codeToValidate.toUpperCase());
-      setPendingName(pendingCompetitor.name);
-      setPendingColor(pendingCompetitor.color);
-
-      // Find the inviter
-      const inviter = household.competitors.find(c => c.userId);
-      if (inviter) {
-        setInviterName(inviter.name);
-      }
-
-      setIsValidating(false);
-      setIsInitializing(false);
-
-      if (userId) {
-        // Already signed in — auto-join immediately
-        await autoJoin(undefined);
-      } else {
-        // Go to Apple Sign-In step
-        goToStep(2);
-      }
-    } catch (err) {
-      console.error('Failed to validate code:', err);
-      setCodeError("Something went wrong. Try again.");
-      setIsValidating(false);
-      setIsInitializing(false);
-      setStep(1);
-    }
-  };
-
-  // Auto-join the household after Apple Sign-In
-  const autoJoin = async (appleGivenName: string | undefined) => {
-    setIsJoining(true);
-    setError(null);
-
-    try {
       // Use Apple givenName if available, otherwise fall back to invite placeholder name
-      const name = appleGivenName || pendingName || 'You';
-      const color = pendingColor;
+      const name = appleGivenName || pendingCompetitor.name || 'You';
+      const color = pendingCompetitor.color;
 
-      await joinHousehold(code, name, color);
+      await joinHousehold(codeToJoin.toUpperCase(), name, color);
       router.replace('/');
     } catch (err) {
-      console.error('Failed to join household:', err);
-      const message = err instanceof Error ? err.message : 'Something went wrong';
-      setError(message);
-      setIsJoining(false);
-      // Stay on step 2 so user can retry
+      console.error('Failed to validate/join:', err);
+      // Always show a friendly message — never expose raw Firebase errors
+      setError("That code didn't work. Double-check with your housemate and try again.");
+      setStatus('error');
     }
   };
 
   const handleCodeChange = (text: string) => {
     const cleaned = text.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
     setCode(cleaned);
-    setCodeError(null);
+    if (error) {
+      setError(null);
+      setStatus('idle');
+    }
   };
 
   const handleBack = () => {
-    if (step === 1) {
-      router.back();
-    } else {
-      goToStep(1);
-    }
+    router.back();
   };
 
-  const handleValidateCode = async () => {
+  // Continue = Apple Sign-In → validate → join (all in one tap)
+  const handleContinue = async () => {
     if (code.length !== 6) return;
     Keyboard.dismiss();
-    await validateCode(code);
-  };
+    setStatus('signing-in');
+    setError(null);
 
-  const handleAppleSignIn = async () => {
-    // signIn returns givenName on success, null on failure/cancel
     const appleGivenName = await signInWithApple();
     if (appleGivenName !== null) {
-      // Auto-join immediately after sign-in
-      await autoJoin(appleGivenName || undefined);
+      setAppleGivenNameRef(appleGivenName || undefined);
+      await validateAndJoin(code, appleGivenName || undefined);
+    } else {
+      // Sign-in cancelled
+      setStatus('idle');
     }
   };
 
-  const canValidate = code.length === 6;
+  // Fallback: create a new household instead
+  const handleCreateHousehold = async () => {
+    setStatus('joining');
+    setError(null);
 
-  // Show loading while initializing with code param
-  if (isInitializing) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing.md }]}>
-            Validating code...
-          </Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
+    try {
+      const name = appleGivenNameRef || 'You';
+      const defaultColor = availableCompetitorColors[0].hex;
+      await createHousehold(name, defaultColor, undefined, undefined, '');
+      router.replace('/');
+    } catch (err) {
+      console.error('Failed to create household:', err);
+      setError('Failed to create household. Try again.');
+      setStatus('error');
+    }
+  };
 
-  const renderStep1 = () => (
-    <Animated.View style={[styles.content, { opacity: fadeAnim, paddingHorizontal: spacing.lg }]}>
-      <Text style={[typography.title, { color: colors.textPrimary, marginBottom: spacing.xs }]}>
-        Join your household
-      </Text>
-      <Text style={[typography.body, { color: colors.textSecondary, marginBottom: spacing.xl }]}>
-        Enter the 6-character code{'\n'}from your housemate.
-      </Text>
-
-      <View style={[styles.codeInputContainer, { marginBottom: spacing.lg }]}>
-        <TextInput
-          ref={inputRef}
-          style={[
-            styles.codeInput,
-            typography.title,
-            {
-              backgroundColor: colors.surface,
-              color: colors.textPrimary,
-              borderRadius: radius.medium,
-              letterSpacing: 8,
-            },
-          ]}
-          value={code}
-          onChangeText={handleCodeChange}
-          placeholder="ABC123"
-          placeholderTextColor={colors.textSecondary + '66'}
-          autoFocus
-          autoCapitalize="characters"
-          autoCorrect={false}
-          maxLength={6}
-          returnKeyType="done"
-          onSubmitEditing={() => canValidate && handleValidateCode()}
-          maxFontSizeMultiplier={1.2}
-        />
-      </View>
-
-      {codeError && (
-        <Text
-          style={[
-            typography.callout,
-            { color: colors.error, marginBottom: spacing.md, textAlign: 'center' },
-          ]}
-        >
-          {codeError}
-        </Text>
-      )}
-
-      <Button
-        label="Continue"
-        onPress={handleValidateCode}
-        fullWidth
-        isDisabled={!canValidate}
-        isLoading={isValidating}
-      />
-    </Animated.View>
-  );
-
-  const renderStep2 = () => (
-    <Animated.View style={[styles.content, { opacity: fadeAnim, paddingHorizontal: spacing.lg }]}>
-      {isJoining ? (
-        // Joining in progress after Apple Sign-In
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing.md }]}>
-            Joining{inviterName ? ` ${inviterName}'s` : ''} household...
-          </Text>
-        </View>
-      ) : (
-        <>
-          <Text style={[typography.title, { color: colors.textPrimary, marginBottom: spacing.xs }]}>
-            Sign in to join
-          </Text>
-          <Text style={[typography.body, { color: colors.textSecondary, marginBottom: spacing.xl }]}>
-            {inviterName 
-              ? `Sign in with Apple to join ${inviterName}'s household.`
-              : 'Sign in with Apple to join this household.'}
-          </Text>
-
-          {(appleError || error) && (
-            <Text
-              style={[
-                typography.callout,
-                { color: colors.error, marginBottom: spacing.md, textAlign: 'center' },
-              ]}
-            >
-              {error || appleError}
-            </Text>
-          )}
-
-          {isAppleLoading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={colors.primary} />
-              <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing.md }]}>
-                Signing in...
-              </Text>
-            </View>
-          ) : (
-            <AppleSignInButton
-              onPress={handleAppleSignIn}
-              mode="sign-in"
-            />
-          )}
-        </>
-      )}
-    </Animated.View>
-  );
+  const canContinue = code.length === 6;
+  const isBusy = status === 'signing-in' || status === 'joining';
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <OnboardingHeader 
+      <OnboardingHeader
         onBack={handleBack}
-        currentStep={step}
-        totalSteps={2}
+        currentStep={1}
+        totalSteps={1}
       />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardAvoid}
       >
-        {step === 1 && renderStep1()}
-        {step === 2 && renderStep2()}
+        {isBusy ? (
+          // Loading state while signing in or joining
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing.md }]}>
+              {status === 'signing-in' ? 'Signing in...' : 'Joining household...'}
+            </Text>
+          </View>
+        ) : (
+          <View style={[styles.content, { paddingHorizontal: spacing.lg }]}>
+            <Text style={[typography.title, { color: colors.textPrimary, marginBottom: spacing.xs }]}>
+              Join your household
+            </Text>
+            <Text style={[typography.body, { color: colors.textSecondary, marginBottom: spacing.xl }]}>
+              Enter the 6-character code{'\n'}from your housemate.
+            </Text>
+
+            <View style={[styles.codeInputContainer, { marginBottom: spacing.lg }]}>
+              <TextInput
+                ref={inputRef}
+                style={[
+                  styles.codeInput,
+                  typography.title,
+                  {
+                    backgroundColor: colors.surface,
+                    color: colors.textPrimary,
+                    borderRadius: radius.medium,
+                    letterSpacing: 8,
+                  },
+                ]}
+                value={code}
+                onChangeText={handleCodeChange}
+                placeholder="ABC123"
+                placeholderTextColor={colors.textSecondary + '66'}
+                autoFocus={!params.code}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                maxLength={6}
+                returnKeyType="done"
+                onSubmitEditing={() => canContinue && handleContinue()}
+                maxFontSizeMultiplier={1.2}
+              />
+            </View>
+
+            {(error || appleError) && (
+              <Text
+                style={[
+                  typography.callout,
+                  { color: colors.error, marginBottom: spacing.md, textAlign: 'center' },
+                ]}
+              >
+                {error || appleError}
+              </Text>
+            )}
+
+            <View style={{ gap: spacing.sm }}>
+              <Button
+                label="Continue"
+                onPress={handleContinue}
+                fullWidth
+                isDisabled={!canContinue}
+              />
+
+              {status === 'error' && (
+                <Button
+                  label="Start a new household instead"
+                  onPress={handleCreateHousehold}
+                  variant="secondary"
+                  fullWidth
+                />
+              )}
+            </View>
+          </View>
+        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
