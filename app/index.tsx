@@ -433,7 +433,6 @@ export default function ChallengeScreen() {
         borderTopLeftRadius: radius.large,
         borderTopRightRadius: radius.large,
         marginHorizontal: spacing.sm,
-        backgroundColor: colors.surface,
       }}>
       <Animated.ScrollView
         style={styles.scrollView}
@@ -451,6 +450,7 @@ export default function ChallengeScreen() {
             <TaskList
               tasks={tasksForDay}
               competitors={competitors}
+              templates={templates}
               onPointsChange={handlePointsChange}
               onTaskPress={handleTaskPress}
               onTaskDelete={handleSwipeDelete}
