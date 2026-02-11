@@ -49,7 +49,7 @@ module.exports = {
       output: 'static',
       favicon: './assets/images/favicon.png',
     },
-    plugins: ['expo-router', 'expo-apple-authentication'],
+    plugins: ['expo-router', 'expo-apple-authentication', 'expo-font'],
     experiments: {
       typedRoutes: true,
     },

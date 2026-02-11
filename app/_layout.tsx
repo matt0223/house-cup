@@ -24,6 +24,7 @@ SplashScreen.preventAutoHideAsync();
 export default function RootLayout() {
   const [loaded, error] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
+    Caveat: require('@expo-google-fonts/caveat/400Regular/Caveat_400Regular.ttf'),
     ...FontAwesome.font,
   });
 

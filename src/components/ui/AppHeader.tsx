@@ -72,6 +72,7 @@ export function AppHeader({
           <IconButton
             key={index}
             icon={action.icon}
+            size="large"
             onPress={action.onPress}
             accessibilityLabel={action.accessibilityLabel}
           />

@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   TextInput,
   Text,
   StyleSheet,
   TouchableOpacity,
+  Animated,
+  Easing,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
@@ -25,6 +27,9 @@ export interface AddHousemateSheetProps {
   /** Color already used by competitor A (unavailable for picker) */
   competitorAColor?: string;
 }
+
+const EXPAND_DURATION = 200;
+const COLOR_PICKER_HEIGHT = 40;
 
 /**
  * Bottom sheet to add a housemate.
@@ -47,17 +52,44 @@ export function AddHousemateSheet({
   const [color, setColor] = useState(availableCompetitorColors[0].hex);
   const [isColorExpanded, setIsColorExpanded] = useState(false);
 
+  // Animation values for color picker expand/collapse
+  const colorPickerHeight = useRef(new Animated.Value(0)).current;
+  const colorPickerOpacity = useRef(new Animated.Value(0)).current;
+
   // Reset form when sheet opens
   useEffect(() => {
     if (isVisible) {
       setName('');
       setIsColorExpanded(false);
+      colorPickerHeight.setValue(0);
+      colorPickerOpacity.setValue(0);
       const next = competitorAColor
         ? availableCompetitorColors.find((c) => c.hex !== competitorAColor)?.hex ?? availableCompetitorColors[0].hex
         : availableCompetitorColors[0].hex;
       setColor(next);
     }
   }, [isVisible, competitorAColor]);
+
+  // Animate color picker expand/collapse
+  useEffect(() => {
+    const targetHeight = isColorExpanded ? COLOR_PICKER_HEIGHT : 0;
+    const targetOpacity = isColorExpanded ? 1 : 0;
+
+    Animated.parallel([
+      Animated.timing(colorPickerHeight, {
+        toValue: targetHeight,
+        duration: EXPAND_DURATION,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: false,
+      }),
+      Animated.timing(colorPickerOpacity, {
+        toValue: targetOpacity,
+        duration: EXPAND_DURATION,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: false,
+      }),
+    ]).start();
+  }, [isColorExpanded]);
 
   const handleSave = useCallback(() => {
     if (!name.trim() || !color) return;
@@ -143,15 +175,20 @@ export function AddHousemateSheet({
         </View>
 
         {/* Expandable color picker */}
-        {isColorExpanded && (
-          <View style={{ marginTop: spacing.sm }}>
-            <ColorPicker
-              selectedColor={color}
-              onColorSelect={setColor}
-              unavailableColors={competitorAColor ? [competitorAColor] : []}
-            />
-          </View>
-        )}
+        <Animated.View
+          style={{
+            height: colorPickerHeight,
+            opacity: colorPickerOpacity,
+            marginTop: spacing.sm,
+            overflow: 'hidden',
+          }}
+        >
+          <ColorPicker
+            selectedColor={color}
+            onColorSelect={setColor}
+            unavailableColors={competitorAColor ? [competitorAColor] : []}
+          />
+        </Animated.View>
       </View>
     </BottomSheetContainer>
   );

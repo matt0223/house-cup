@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   TextInput,
   Text,
   StyleSheet,
   TouchableOpacity,
+  Animated,
+  Easing,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
@@ -30,6 +32,9 @@ export interface CompetitorSheetProps {
   onInvitePress?: () => void;
 }
 
+const EXPAND_DURATION = 200;
+const COLOR_PICKER_HEIGHT = 40;
+
 /**
  * Bottom sheet to view/edit a competitor's name and color.
  * Mirrors the AddHousemateSheet layout: text input, compact color toggle,
@@ -53,6 +58,10 @@ export function CompetitorSheet({
   const [color, setColor] = useState(competitor.color);
   const [isColorExpanded, setIsColorExpanded] = useState(false);
 
+  // Animation values for color picker expand/collapse
+  const colorPickerHeight = useRef(new Animated.Value(0)).current;
+  const colorPickerOpacity = useRef(new Animated.Value(0)).current;
+
   const isPending = isPendingCompetitor(competitor);
 
   // Sync local state when competitor prop changes or sheet opens
@@ -61,8 +70,31 @@ export function CompetitorSheet({
       setName(competitor.name);
       setColor(competitor.color);
       setIsColorExpanded(false);
+      colorPickerHeight.setValue(0);
+      colorPickerOpacity.setValue(0);
     }
   }, [isVisible, competitor.id]);
+
+  // Animate color picker expand/collapse
+  useEffect(() => {
+    const targetHeight = isColorExpanded ? COLOR_PICKER_HEIGHT : 0;
+    const targetOpacity = isColorExpanded ? 1 : 0;
+
+    Animated.parallel([
+      Animated.timing(colorPickerHeight, {
+        toValue: targetHeight,
+        duration: EXPAND_DURATION,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: false,
+      }),
+      Animated.timing(colorPickerOpacity, {
+        toValue: targetOpacity,
+        duration: EXPAND_DURATION,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: false,
+      }),
+    ]).start();
+  }, [isColorExpanded]);
 
   // Save changes and close
   const handleSave = useCallback(() => {
@@ -154,15 +186,20 @@ export function CompetitorSheet({
         </View>
 
         {/* Expandable color picker */}
-        {isColorExpanded && (
-          <View style={{ marginTop: spacing.sm }}>
-            <ColorPicker
-              selectedColor={color}
-              onColorSelect={setColor}
-              unavailableColors={otherCompetitorColor ? [otherCompetitorColor] : []}
-            />
-          </View>
-        )}
+        <Animated.View
+          style={{
+            height: colorPickerHeight,
+            opacity: colorPickerOpacity,
+            marginTop: spacing.sm,
+            overflow: 'hidden',
+          }}
+        >
+          <ColorPicker
+            selectedColor={color}
+            onColorSelect={setColor}
+            unavailableColors={otherCompetitorColor ? [otherCompetitorColor] : []}
+          />
+        </Animated.View>
       </View>
     </BottomSheetContainer>
   );

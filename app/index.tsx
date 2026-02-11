@@ -536,12 +536,14 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
   },
   emptyText: {
-    fontSize: 24,
+    fontFamily: 'Caveat',
+    fontSize: 34,
     fontWeight: '400',
-    lineHeight: 30,
+    lineHeight: 40,
     textAlign: 'right',
     paddingRight: 75,
-    marginBottom: 8,
+    marginBottom: 0,
+    transform: [{ rotate: '-1deg' }],
   },
   arrowImage: {
     width: 85,

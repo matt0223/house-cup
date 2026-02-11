@@ -396,7 +396,7 @@ export function AddTaskSheet({
 
   if (!modalVisible) return null;
 
-  const contentBottomPadding = keyboardHeight > 0 ? keyboardHeight : insets.bottom;
+  const contentBottomPadding = keyboardHeight > 0 ? keyboardHeight - 8 : insets.bottom;
 
   return (
     <Modal
