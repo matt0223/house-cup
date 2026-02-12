@@ -302,3 +302,42 @@ describe('seedFromTemplates — duplicate prevention', () => {
     expect(useChallengeStore.getState().tasks.length).toBe(countBefore);
   });
 });
+
+describe('reorderTasks', () => {
+  beforeEach(() => {
+    const challenge = makeChallenge();
+    useChallengeStore.getState().setChallenge(challenge);
+    useChallengeStore.getState().setSelectedDay('2026-02-12');
+  });
+
+  it('reassigns sortOrder based on new array position', () => {
+    useChallengeStore.getState().addTask('Task A', {});
+    useChallengeStore.getState().addTask('Task B', {});
+    useChallengeStore.getState().addTask('Task C', {});
+
+    const tasks = useChallengeStore.getState().tasks;
+
+    // Reorder: C, A, B
+    const reordered = [tasks[2], tasks[0], tasks[1]];
+    useChallengeStore.getState().reorderTasks(reordered);
+
+    const result = useChallengeStore.getState().tasks.filter((t) => t.dayKey === '2026-02-12');
+    const sorted = [...result].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+    expect(sorted.map((t) => t.name)).toEqual(['Task C', 'Task A', 'Task B']);
+    expect(sorted.map((t) => t.sortOrder)).toEqual([0, 1, 2]);
+  });
+
+  it('does not affect tasks on other days', () => {
+    useChallengeStore.getState().addTask('Wed Task', {});
+    useChallengeStore.getState().setSelectedDay('2026-02-13');
+    useChallengeStore.getState().addTask('Thu Task', {});
+
+    useChallengeStore.getState().setSelectedDay('2026-02-12');
+    const wedTasks = useChallengeStore.getState().tasks.filter((t) => t.dayKey === '2026-02-12');
+    useChallengeStore.getState().reorderTasks(wedTasks);
+
+    const thuTasks = useChallengeStore.getState().tasks.filter((t) => t.dayKey === '2026-02-13');
+    expect(thuTasks).toHaveLength(1);
+    expect(thuTasks[0].name).toBe('Thu Task');
+  });
+});

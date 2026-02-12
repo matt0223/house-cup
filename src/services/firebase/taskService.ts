@@ -309,6 +309,31 @@ export async function deleteTasksByTemplateFromDay(
 }
 
 /**
+ * Batch-update sortOrder for multiple tasks (used after drag-to-reorder).
+ */
+export async function updateTaskSortOrders(
+  householdId: string,
+  updates: { taskId: string; sortOrder: number }[]
+): Promise<void> {
+  if (updates.length === 0) return;
+
+  const db = getDb();
+  if (!db) {
+    throw new Error('Firestore is not configured');
+  }
+
+  const batch = writeBatch(db);
+  const now = serverTimestamp();
+
+  for (const { taskId, sortOrder } of updates) {
+    const ref = doc(db, 'households', householdId, SUBCOLLECTION, taskId);
+    batch.update(ref, { sortOrder, updatedAt: now });
+  }
+
+  await batch.commit();
+}
+
+/**
  * Subscribe to tasks for a challenge
  */
 export function subscribeToTasks(

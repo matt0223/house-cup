@@ -143,6 +143,9 @@ interface ChallengeActions {
   /** Set all tasks (for Firestore sync) */
   setTasks: (tasks: TaskInstance[]) => void;
 
+  /** Reorder tasks for the selected day after a drag-and-drop */
+  reorderTasks: (reorderedTasks: TaskInstance[]) => void;
+
   /** Set skip records (for Firestore sync; keeps seeding in sync with recurring store) */
   setSkipRecords: (skipRecords: SkipRecord[]) => void;
 }
@@ -691,6 +694,31 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
       tasks,
       tasksLoadedForChallengeId: challenge?.id ?? null,
     });
+  },
+
+  reorderTasks: (reorderedTasks) => {
+    const { tasks, selectedDayKey, syncEnabled, householdId } = get();
+
+    // Assign new sortOrder based on array position
+    const updatedReordered = reorderedTasks.map((t, i) => ({
+      ...t,
+      sortOrder: i,
+    }));
+
+    // Replace the day's tasks in the full list, keep other days untouched
+    const otherDayTasks = tasks.filter((t) => t.dayKey !== selectedDayKey);
+    set({ tasks: [...otherDayTasks, ...updatedReordered] });
+
+    // Persist to Firestore
+    if (syncEnabled && householdId) {
+      const updates = updatedReordered.map((t) => ({
+        taskId: t.id,
+        sortOrder: t.sortOrder!,
+      }));
+      taskService.updateTaskSortOrders(householdId, updates).catch((error) => {
+        console.error('Failed to sync reorder:', error);
+      });
+    }
   },
 
   setSkipRecords: (skipRecords) => {

@@ -90,6 +90,7 @@ export default function ChallengeScreen() {
   const deleteTasksForTemplateFromDay = useChallengeStore((s) => s.deleteTasksForTemplateFromDay);
   const linkTaskToTemplate = useChallengeStore((s) => s.linkTaskToTemplate);
   const seedFromTemplates = useChallengeStore((s) => s.seedFromTemplates);
+  const reorderTasks = useChallengeStore((s) => s.reorderTasks);
   const getScores = useChallengeStore((s) => s.getScores);
 
   // Recurring store
@@ -476,6 +477,7 @@ export default function ChallengeScreen() {
               onPointsChange={handlePointsChange}
               onTaskPress={handleTaskPress}
               onTaskDelete={handleSwipeDelete}
+              onReorder={reorderTasks}
             />
           </View>
         ) : (

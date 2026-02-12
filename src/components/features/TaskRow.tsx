@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
 import { PointsChip } from '../ui/PointsChip';
 import { TaskInstance } from '../../domain/models/TaskInstance';
@@ -20,6 +20,10 @@ export interface TaskRowProps {
   onPress?: () => void;
   /** Show pulse nudge on score circles (for onboarding) */
   showScoreNudge?: boolean;
+  /** Called on grip long-press to initiate drag */
+  onGripLongPress?: () => void;
+  /** Whether this row is currently being dragged */
+  isActive?: boolean;
 }
 
 /**
@@ -33,6 +37,8 @@ export function TaskRow({
   onPointsChange,
   onPress,
   showScoreNudge = false,
+  onGripLongPress,
+  isActive = false,
 }: TaskRowProps) {
   const { colors, typography, spacing } = useTheme();
 
@@ -55,6 +61,18 @@ export function TaskRow({
       activeOpacity={0.7}
       disabled={!onPress}
     >
+      {/* Grip handle — long press to start drag */}
+      {onGripLongPress && (
+        <TouchableOpacity
+          onLongPress={onGripLongPress}
+          delayLongPress={150}
+          style={styles.gripHandle}
+          activeOpacity={0.5}
+        >
+          <MaterialCommunityIcons name="drag-vertical" size={16} color={colors.textSecondary} style={{ opacity: 0.5 }} />
+        </TouchableOpacity>
+      )}
+
       <View style={styles.nameContainer}>
         <Text
           style={[typography.body, { color: colors.textPrimary, flexShrink: 1 }]}
@@ -92,6 +110,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
+  },
+  gripHandle: {
+    // 44x44 minimum touch target, but negative margins keep the icon
+    // in its original visual position so the task name doesn't shift.
+    paddingLeft: 12,
+    paddingRight: 12,
+    paddingVertical: 12,
+    marginLeft: -12,
+    marginRight: -4,
+    marginVertical: -8,
+    justifyContent: 'center',
   },
   nameContainer: {
     flex: 1,
