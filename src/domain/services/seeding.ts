@@ -64,6 +64,13 @@ export function seedTasks(
     }
   }
 
+  // Track max sortOrder per day so seeded tasks append after existing ones
+  const maxSortOrderByDay = new Map<DayKey, number>();
+  for (const instance of existingInstances) {
+    const cur = maxSortOrderByDay.get(instance.dayKey) ?? -1;
+    maxSortOrderByDay.set(instance.dayKey, Math.max(cur, instance.sortOrder ?? 0));
+  }
+
   const now = new Date().toISOString();
 
   for (const dayKey of dayKeys) {
@@ -89,6 +96,10 @@ export function seedTasks(
         continue;
       }
 
+      // Assign sortOrder: next value after existing tasks for this day
+      const nextSort = (maxSortOrderByDay.get(dayKey) ?? -1) + 1;
+      maxSortOrderByDay.set(dayKey, nextSort);
+
       // Create new instance
       const instance: TaskInstance = {
         id: generateId(),
@@ -100,6 +111,7 @@ export function seedTasks(
         points: {},
         createdAt: now,
         updatedAt: now,
+        sortOrder: nextSort,
       };
 
       created.push(instance);

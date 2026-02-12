@@ -148,6 +148,85 @@ describe('seeding service', () => {
       expect(mondayInstance).toBeUndefined();
     });
 
+    it('assigns sequential sortOrder values per day', () => {
+      const result = seedTasks(
+        weekDays,
+        [dailyTemplate, weekdaysTemplate],
+        [],
+        [],
+        'challenge-1'
+      );
+
+      // Monday should have 2 tasks (daily + weekdays) with sortOrder 0,1
+      const mondayTasks = result.created
+        .filter((t) => t.dayKey === '2026-01-19')
+        .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+      expect(mondayTasks).toHaveLength(2);
+      expect(mondayTasks[0].sortOrder).toBe(0);
+      expect(mondayTasks[1].sortOrder).toBe(1);
+
+      // Sunday should have 1 task (daily only) with sortOrder 0
+      const sundayTasks = result.created.filter((t) => t.dayKey === '2026-01-18');
+      expect(sundayTasks).toHaveLength(1);
+      expect(sundayTasks[0].sortOrder).toBe(0);
+    });
+
+    it('new seeds start after existing tasks with sortOrder', () => {
+      // Pre-existing tasks already have sortOrder 0 and 1
+      const existingInstances: TaskInstance[] = [
+        {
+          id: 'existing-1',
+          challengeId: 'challenge-1',
+          dayKey: '2026-01-19',
+          name: 'One-off task A',
+          templateId: null,
+          points: {},
+          createdAt: '2026-01-19T00:00:00Z',
+          updatedAt: '2026-01-19T00:00:00Z',
+          sortOrder: 0,
+        },
+        {
+          id: 'existing-2',
+          challengeId: 'challenge-1',
+          dayKey: '2026-01-19',
+          name: 'One-off task B',
+          templateId: null,
+          points: {},
+          createdAt: '2026-01-19T00:00:00Z',
+          updatedAt: '2026-01-19T00:00:00Z',
+          sortOrder: 1,
+        },
+      ];
+
+      const result = seedTasks(
+        ['2026-01-19'], // just Monday
+        [dailyTemplate],
+        existingInstances,
+        [],
+        'challenge-1'
+      );
+
+      expect(result.created).toHaveLength(1);
+      expect(result.created[0].sortOrder).toBe(2); // after existing 0,1
+    });
+
+    it('sortOrder sequences are independent across days', () => {
+      const result = seedTasks(
+        weekDays,
+        [dailyTemplate],
+        [],
+        [],
+        'challenge-1'
+      );
+
+      // Every day should have sortOrder 0 (only 1 template)
+      for (const day of weekDays) {
+        const dayTasks = result.created.filter((t) => t.dayKey === day);
+        expect(dayTasks).toHaveLength(1);
+        expect(dayTasks[0].sortOrder).toBe(0);
+      }
+    });
+
     it('edit "this day only" does not create duplicates', () => {
       // Existing detached instance (templateId = null) + skip record
       const existingInstances: TaskInstance[] = [

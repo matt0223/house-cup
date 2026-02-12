@@ -77,8 +77,10 @@ export default function ChallengeScreen() {
   // Challenge store - ALL hooks must be called before any conditional returns
   const challenge = useChallengeStore((s) => s.challenge);
   const tasks = useChallengeStore((s) => s.tasks);
+  const tasksLoadedForChallengeId = useChallengeStore((s) => s.tasksLoadedForChallengeId);
   const selectedDayKey = useChallengeStore((s) => s.selectedDayKey);
   const initializeChallenge = useChallengeStore((s) => s.initializeChallenge);
+  const updateChallengeBoundaries = useChallengeStore((s) => s.updateChallengeBoundaries);
   const setSelectedDay = useChallengeStore((s) => s.setSelectedDay);
   const addTask = useChallengeStore((s) => s.addTask);
   const updateTaskPoints = useChallengeStore((s) => s.updateTaskPoints);
@@ -97,33 +99,45 @@ export default function ChallengeScreen() {
   const updateTemplate = useRecurringStore((s) => s.updateTemplate);
   const deleteTemplate = useRecurringStore((s) => s.deleteTemplate);
 
-  // Note: Sample data loading is handled by FirebaseProvider
-  // When Firebase is configured, data comes from Firestore
-  // When offline, FirebaseProvider loads sample data
-
-  // Initialize challenge when household is ready, or reinitialize when weekStartDay changes
+  // Initialize challenge when household is ready.
+  // When Firebase is configured, Firestore provides the challenge — NEVER overwrite it
+  // with a local one. Only use initializeChallenge for offline/dev mode.
+  // For weekStartDay changes (settings), update boundaries on the existing challenge.
   useEffect(() => {
-    if (household && templates.length > 0) {
-      // Initialize if no challenge, or reinitialize if weekStartDay changed
-      const needsInit = !challenge || challengeWeekStartDay !== household.weekStartDay;
-      if (needsInit) {
-        initializeChallenge(
-          household.timezone,
-          household.weekStartDay,
-          templates,
-          skipRecords
-        );
+    if (!household || templates.length === 0) return;
+
+    if (isConfigured) {
+      // Firestore provides the challenge. Only handle weekStartDay boundary changes.
+      if (challenge && challengeWeekStartDay !== null && challengeWeekStartDay !== household.weekStartDay) {
+        updateChallengeBoundaries(household.timezone, household.weekStartDay);
+        setChallengeWeekStartDay(household.weekStartDay);
+      } else if (challenge && challengeWeekStartDay === null) {
+        // First time seeing the Firestore challenge this session — record weekStartDay
         setChallengeWeekStartDay(household.weekStartDay);
       }
+      return;
     }
-  }, [household, challenge, templates, challengeWeekStartDay]);
 
-  // Auto-seed tasks when templates change (idempotent - won't create duplicates)
+    // Offline mode: initialize challenge locally
+    const needsInit = !challenge || challengeWeekStartDay !== household.weekStartDay;
+    if (needsInit) {
+      initializeChallenge(
+        household.timezone,
+        household.weekStartDay,
+        templates,
+        skipRecords
+      );
+      setChallengeWeekStartDay(household.weekStartDay);
+    }
+  }, [household, challenge, templates, challengeWeekStartDay, isConfigured]);
+
+  // Auto-seed tasks when templates change (idempotent - won't create duplicates).
+  // Wait for Firestore to deliver existing tasks before seeding to avoid duplicates.
   useEffect(() => {
-    if (challenge && templates.length > 0) {
+    if (challenge && templates.length > 0 && tasksLoadedForChallengeId === challenge.id) {
       seedFromTemplates(templates);
     }
-  }, [templates, challenge]);
+  }, [templates, challenge, tasksLoadedForChallengeId]);
 
   // Redirect to onboarding if Firebase is configured but user is not authenticated
   // or has no household. Also handles stale cached householdId when auth is lost.
@@ -146,7 +160,15 @@ export default function ChallengeScreen() {
   const competitors = household?.competitors ?? [];
   const competitorA = competitors[0];
   const competitorB = competitors[1];
-  const tasksForDay = tasks.filter((t) => t.dayKey === selectedDayKey);
+  const tasksForDay = tasks
+    .filter((t) => t.dayKey === selectedDayKey)
+    .sort((a, b) => {
+      const aSort = a.sortOrder ?? Infinity;
+      const bSort = b.sortOrder ?? Infinity;
+      if (aSort !== bSort) return aSort - bSort;
+      // Fallback: oldest first for tasks without sortOrder
+      return a.createdAt.localeCompare(b.createdAt);
+    });
   const scores = competitors.length > 0 ? getScores(competitors) : null;
   const scoreA = scores?.scores.find((s) => s.competitorId === competitorA?.id)?.total ?? 0;
   const scoreB = scores?.scores.find((s) => s.competitorId === competitorB?.id)?.total ?? 0;
@@ -179,15 +201,15 @@ export default function ChallengeScreen() {
     points: Record<string, number>,
     repeatDays: number[] | null
   ) => {
-    // Create the task for today
-    const taskId = addTask(name, points);
-    
-    // If repeat days are set, create template and link task to it
-    if (repeatDays && repeatDays.length > 0 && taskId) {
+    if (repeatDays && repeatDays.length > 0) {
+      // Create template first, then task with templateId — avoids race where
+      // seeding sees the task with templateId: null and creates a duplicate.
       const template = addTemplate(name, repeatDays);
-      linkTaskToTemplate(taskId, template.id);
+      addTask(name, points, template.id);
+    } else {
+      addTask(name, points);
     }
-    
+
     // Show toast (increment key to force new instance if already visible)
     setToastKey((k) => k + 1);
     setShowToast(true);

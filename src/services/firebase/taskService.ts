@@ -69,6 +69,7 @@ function docToTask(
     points: data.points ?? {},
     createdAt: data.createdAt?.toDate?.()?.toISOString() ?? data.createdAt,
     updatedAt: data.updatedAt?.toDate?.()?.toISOString() ?? data.updatedAt,
+    sortOrder: data.sortOrder ?? undefined,
   };
 }
 
@@ -199,7 +200,7 @@ export async function createTasksBatch(
 export async function updateTask(
   householdId: string,
   taskId: string,
-  updates: Partial<Pick<TaskInstance, 'name' | 'points' | 'templateId' | 'originalName'>>
+  updates: Partial<Pick<TaskInstance, 'name' | 'points' | 'templateId' | 'originalName' | 'sortOrder'>>
 ): Promise<void> {
   const ref = getTaskRef(householdId, taskId);
   if (!ref) {

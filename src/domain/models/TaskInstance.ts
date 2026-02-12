@@ -39,6 +39,9 @@ export interface TaskInstance {
 
   /** When the task was last updated */
   updatedAt: string;
+
+  /** Position in the task list for user-defined ordering. Lower = higher in list. */
+  sortOrder?: number;
 }
 
 /**

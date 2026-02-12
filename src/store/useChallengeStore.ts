@@ -220,7 +220,14 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
     const now = new Date().toISOString();
     // Pre-generate Firestore-compatible ID so local and synced IDs match
     const taskId = syncEnabled ? generateFirestoreId() : generateId();
-    
+
+    // Assign sortOrder: append to end of the day's tasks
+    const tasksForDay = tasks.filter((t) => t.dayKey === selectedDayKey);
+    const maxSortOrder = tasksForDay.reduce(
+      (max, t) => Math.max(max, t.sortOrder ?? 0),
+      -1
+    );
+
     const newTask: TaskInstance = {
       id: taskId,
       challengeId: challenge.id,
@@ -231,6 +238,7 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
       points,
       createdAt: now,
       updatedAt: now,
+      sortOrder: maxSortOrder + 1,
     };
 
     // Optimistic update
@@ -247,6 +255,7 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
             name,
             templateId,
             points,
+            sortOrder: newTask.sortOrder,
           },
           taskId // Pass the pre-generated ID
         )
@@ -574,6 +583,7 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
                 name: task.name,
                 templateId: task.templateId,
                 points: task.points,
+                sortOrder: task.sortOrder,
               },
               task.id
             )
@@ -652,18 +662,27 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
 
   setChallenge: (challenge) => {
     const prev = get().challenge;
-    // Clear tasks when switching to a different challenge or clearing challenge
-    const isNewChallenge = !challenge || (prev && challenge && prev.id !== challenge.id);
-    const tasks = isNewChallenge ? [] : get().tasks;
 
-    // Reset selected day to today when switching to a different challenge
-    if (isNewChallenge && challenge) {
+    // Same challenge ID — update fields only, preserve tasks and sync flag
+    if (prev && challenge && prev.id === challenge.id) {
+      set({ challenge });
+      return;
+    }
+
+    // Different challenge — clear tasks and reset selected day
+    if (prev && challenge && prev.id !== challenge.id) {
       const household = useHouseholdStore.getState().household;
       const timezone = household?.timezone ?? 'America/New_York';
-      set({ challenge, tasks, tasksLoadedForChallengeId: null, selectedDayKey: getTodayDayKey(timezone) });
-    } else {
-      set({ challenge, tasks, tasksLoadedForChallengeId: null });
+      set({ challenge, tasks: [], tasksLoadedForChallengeId: null, selectedDayKey: getTodayDayKey(timezone) });
+      return;
     }
+
+    // First load (prev is null) or clearing (challenge is null)
+    set({
+      challenge,
+      tasks: challenge ? get().tasks : [],
+      tasksLoadedForChallengeId: null,
+    });
   },
 
   setTasks: (tasks) => {
