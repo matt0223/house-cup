@@ -1,6 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { View, StyleSheet, LayoutChangeEvent } from 'react-native';
-import { GestureHandlerRootView, Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { GestureHandlerRootView, Gesture } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -280,13 +280,21 @@ function SortableRow({
     [taskId],
   );
 
-  // --- Gesture ---
+  // --- Gesture: activateAfterLongPress combines long-press + pan in one gesture ---
+  // This eliminates the two-phase activation problem where the first touch
+  // always failed because React state had to re-render to enable the gesture.
   const startY = useSharedValue(0);
 
   const panGesture = Gesture.Pan()
+    .activateAfterLongPress(150)
     .onStart(() => {
+      // Initialize drag state (previously done in handleGripLongPress)
+      const slot = positions.value[taskId] ?? 0;
+      draggedId.value = taskId;
+      currentSlot.value = slot;
       isDragMovable.value = true;
       startY.value = top.value;
+      runOnJS(onDragStart)(taskId, slot);
     })
     .onUpdate((event) => {
       const h = ROW_HEIGHT.value;
@@ -314,23 +322,14 @@ function SortableRow({
 
       // Animate the dragged row to snap into its final slot
       isDragMovable.value = false;
-      top.value = withSpring(finalSlot * h, { damping: 20, stiffness: 200 }, (finished) => {
+      top.value = withSpring(finalSlot * h, { damping: 100, stiffness: 300 }, (finished) => {
         if (finished) {
           draggedId.value = null;
           currentSlot.value = -1;
           runOnJS(onDragEnd)();
         }
       });
-    })
-    .activeOffsetY([-3, 3]);
-
-  // --- Grip long-press handler (sets up drag state, enables pan gesture) ---
-  const handleGripLongPress = useCallback(() => {
-    const slot = positions.value[taskId] ?? 0;
-    draggedId.value = taskId;
-    currentSlot.value = slot;
-    onDragStart(taskId, slot);
-  }, [taskId, positions, draggedId, currentSlot, onDragStart]);
+    });
 
   // --- Animated style ---
   const animatedStyle = useAnimatedStyle(() => {
@@ -365,41 +364,34 @@ function SortableRow({
     taskId !== draggingTaskId;
   const showDivider = myCurrentSlot < tasksCount - 1 && !showLineAfter;
 
-  // Only enable the pan gesture when this row has been activated via grip long-press.
-  // This prevents drag from interfering with swipe-to-delete, tap-to-edit, etc.
-  const isActive = draggingTaskId === taskId;
-  const gesture = isActive ? panGesture : Gesture.Pan().enabled(false);
-
   return (
-    <GestureDetector gesture={gesture}>
-      <Animated.View
-        style={[styles.row, animatedStyle]}
-        onLayout={onLayout}
-      >
-        {showLineBefore && (
-          <View style={[styles.insertionLine, { backgroundColor: insertionLineColor }]} />
-        )}
-        <SwipeableTaskRow
-          task={task}
-          competitors={competitors}
-          templates={templates}
-          onPointsChange={(competitorId, points) =>
-            onPointsChange(task.id, competitorId, points)
-          }
-          onPress={onTaskPress ? () => onTaskPress(task) : undefined}
-          onDelete={onTaskDelete ?? (() => {})}
-          onGripLongPress={onReorder ? handleGripLongPress : undefined}
-          isActive={draggingTaskId === taskId}
-          showScoreNudge={showScoreNudge}
-        />
-        {showLineAfter && (
-          <View style={[styles.insertionLine, { backgroundColor: insertionLineColor }]} />
-        )}
-        {showDivider && (
-          <View style={[styles.divider, { backgroundColor: dividerColor }]} />
-        )}
-      </Animated.View>
-    </GestureDetector>
+    <Animated.View
+      style={[styles.row, animatedStyle]}
+      onLayout={onLayout}
+    >
+      {showLineBefore && (
+        <View style={[styles.insertionLine, { backgroundColor: insertionLineColor }]} />
+      )}
+      <SwipeableTaskRow
+        task={task}
+        competitors={competitors}
+        templates={templates}
+        onPointsChange={(competitorId, points) =>
+          onPointsChange(task.id, competitorId, points)
+        }
+        onPress={onTaskPress ? () => onTaskPress(task) : undefined}
+        onDelete={onTaskDelete ?? (() => {})}
+        gripGesture={onReorder ? panGesture : undefined}
+        isActive={draggingTaskId === taskId}
+        showScoreNudge={showScoreNudge}
+      />
+      {showLineAfter && (
+        <View style={[styles.insertionLine, { backgroundColor: insertionLineColor }]} />
+      )}
+      {showDivider && (
+        <View style={[styles.divider, { backgroundColor: dividerColor }]} />
+      )}
+    </Animated.View>
   );
 }
 

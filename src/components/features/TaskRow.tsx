@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { GestureDetector } from 'react-native-gesture-handler';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
 import { PointsChip } from '../ui/PointsChip';
@@ -20,8 +21,8 @@ export interface TaskRowProps {
   onPress?: () => void;
   /** Show pulse nudge on score circles (for onboarding) */
   showScoreNudge?: boolean;
-  /** Called on grip long-press to initiate drag */
-  onGripLongPress?: () => void;
+  /** Gesture object for the grip handle (activateAfterLongPress pan) */
+  gripGesture?: any;
   /** Whether this row is currently being dragged */
   isActive?: boolean;
 }
@@ -37,7 +38,7 @@ export function TaskRow({
   onPointsChange,
   onPress,
   showScoreNudge = false,
-  onGripLongPress,
+  gripGesture,
   isActive = false,
 }: TaskRowProps) {
   const { colors, typography, spacing } = useTheme();
@@ -61,17 +62,14 @@ export function TaskRow({
       activeOpacity={0.7}
       disabled={!onPress}
     >
-      {/* Grip handle — long press to start drag */}
-      {onGripLongPress && (
-        <TouchableOpacity
-          onLongPress={onGripLongPress}
-          delayLongPress={150}
-          style={styles.gripHandle}
-          activeOpacity={0.5}
-        >
-          <MaterialCommunityIcons name="drag-vertical" size={16} color={colors.textSecondary} style={{ opacity: 0.5 }} />
-        </TouchableOpacity>
-      )}
+      {/* Grip handle — long press activates drag via gesture */}
+      {gripGesture ? (
+        <GestureDetector gesture={gripGesture}>
+          <View style={styles.gripHandle}>
+            <MaterialCommunityIcons name="drag-vertical" size={16} color={colors.textSecondary} style={{ opacity: 0.5 }} />
+          </View>
+        </GestureDetector>
+      ) : null}
 
       <View style={styles.nameContainer}>
         <Text

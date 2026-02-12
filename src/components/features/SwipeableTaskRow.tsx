@@ -10,8 +10,8 @@ export interface SwipeableTaskRowProps extends Omit<TaskRowProps, 'task'> {
   task: TaskInstance;
   /** Called when delete action is triggered */
   onDelete: (task: TaskInstance) => void;
-  /** Called on grip long-press to initiate drag */
-  onGripLongPress?: () => void;
+  /** Gesture object for the grip handle (activateAfterLongPress pan) */
+  gripGesture?: any;
   /** Whether this row is currently being dragged */
   isActive?: boolean;
 }
@@ -22,7 +22,7 @@ export interface SwipeableTaskRowProps extends Omit<TaskRowProps, 'task'> {
 export function SwipeableTaskRow({
   task,
   onDelete,
-  onGripLongPress,
+  gripGesture,
   isActive,
   ...taskRowProps
 }: SwipeableTaskRowProps) {
@@ -68,7 +68,7 @@ export function SwipeableTaskRow({
       rightThreshold={40}
     >
       <View style={{ backgroundColor: colors.surface }}>
-        <TaskRow task={task} onGripLongPress={onGripLongPress} isActive={isActive} {...taskRowProps} />
+        <TaskRow task={task} gripGesture={gripGesture} isActive={isActive} {...taskRowProps} />
       </View>
     </Swipeable>
   );
