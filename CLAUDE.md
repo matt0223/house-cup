@@ -128,6 +128,10 @@ export { MyNewComponent } from './MyNewComponent';
 | Task model | `src/domain/models/TaskInstance.ts` |
 | Competitor model | `src/domain/models/Competitor.ts` |
 | Challenge state | `src/store/useChallengeStore.ts` |
+| Task list (drag-to-reorder) | `src/components/features/TaskList.tsx` |
+| Task row (grip icon, points) | `src/components/features/TaskRow.tsx` |
+| Swipeable row wrapper | `src/components/features/SwipeableTaskRow.tsx` |
+| Task Firestore service | `src/services/firebase/taskService.ts` |
 | Settings screen | `app/settings.tsx` |
 | Onboarding index | `app/onboarding/index.tsx` |
 | Join household | `app/onboarding/join.tsx` |
@@ -227,6 +231,8 @@ Then approve in App Store Connect TestFlight tab.
 - **Smart insight tips** - Only surfaces tips for new/spiking tasks (not baseline recurring tasks), avoids repetition across weeks
 - **Contextual toast notifications** - "Task added", "Task updated", "Task deleted", "Settings updated", "Invite sent"
 - **Scrolling day picker** - Header fades out on scroll, scoreboard collapses, day strip stays pinned, task list scrolls in a rounded-corner window beneath
+- **Drag-to-reorder tasks** - Grip icon (8-dot vertical drag handle) on each task row; long-press grip → drag to reorder. Uses absolute positioning with shared-value positions map for flash-free 60fps animations. Displaced rows animate smoothly via `withSpring`. Insertion line shows drop target. Floating task gets reduced opacity + shadow. Order persists via `sortOrder` field to Firestore.
+- **Stable task ordering (`sortOrder`)** - Tasks have a `sortOrder` field. New tasks get `max + 1` so they appear at the bottom. UI sorts by `sortOrder` with `createdAt` fallback for legacy tasks.
 
 ### Planned
 - Push notifications for reminders
@@ -279,6 +285,7 @@ interface TaskInstance {
   templateId?: string;    // Links to RecurringTemplate (null for one-off tasks)
   originalName?: string;  // For detecting renames
   points: Record<string, number>;  // competitorId -> points
+  sortOrder?: number;     // Position in task list (lower = higher). New tasks get max+1 (bottom).
 }
 
 interface SkipRecord {
@@ -322,6 +329,26 @@ Skip records prevent re-seeding of deleted task instances:
 | seedFromTemplates | `src/store/useChallengeStore.ts` |
 | Auto-seed trigger | `app/index.tsx` (useEffect) |
 
+## Drag-to-Reorder Architecture (TaskList.tsx)
+
+The task list uses an **absolute-positioning + shared-value positions map** pattern (the standard approach for flash-free drag-to-reorder in React Native). Key points:
+
+1. **Positions map** — A Reanimated `useSharedValue<Record<string, number>>` maps each task ID to its slot index. This lives entirely on the UI thread.
+2. **Absolute positioning** — Each row is `position: 'absolute'` with a `top` shared value = `slot * ROW_HEIGHT`. The Card container has an explicit `height: ROW_HEIGHT * tasks.length`.
+3. **During drag** — The dragged row's `top` follows the finger directly. When it crosses into a new slot, `objectSwap()` updates the positions map. Displaced rows react via `useAnimatedReaction` and animate with `withSpring`.
+4. **On drop** — The dragged row animates to snap into its final slot with `withSpring`. No React re-render happens during any animation — this eliminates the flash-to-origin issue.
+5. **Commit to React** — Only after the spring animation settles, `onDragEnd` reads the positions map, sorts the tasks array, and calls `onReorder()` to update the Zustand store.
+6. **Grip-only activation** — The pan gesture is disabled by default. The grip icon's `onLongPress` (in TaskRow) sets `draggingTaskId` React state, which enables the pan gesture on that specific row. This prevents drag from interfering with swipe-to-delete, tap-to-edit, or parent scroll.
+7. **External sync** — When the tasks array changes from outside (add/delete/day change), the component detects the ID list change and rebuilds the positions map.
+
+### Visual feedback during drag:
+- **Insertion line** — 2px coral line appears between rows at the drop target position
+- **Float effect** — Dragged row gets reduced opacity (0.5) and shadow, animated smoothly with `withTiming` only once the pan gesture activates (not on grip long-press alone)
+- **Grip icon** — 8-dot vertical drag handle (`MaterialCommunityIcons drag-vertical`) at 16px, 50% opacity
+
+### Key constraint:
+- All rows must have the **same height** (measured from the first row's `onLayout`). Variable-height rows would require a more complex positions calculation.
+
 ## Challenge Screen Layout (Important — Regressions Happen Here)
 
 The main screen (`app/index.tsx`) has a specific scroll-linked layout that must be preserved:
@@ -348,6 +375,8 @@ SafeAreaView
 - **Missing persistent gap** — If the gap between DayStrip and tasks is inside the ScrollView (as marginTop or paddingTop on content), it scrolls away. The gap must be on the DayStrip's paddingBottom (outside scroll).
 - **Invisible rounded corners** — The scroll window needs `backgroundColor: colors.surface` and `marginHorizontal: spacing.sm` to match the Card's inset. Without these, rounded corners clip transparent space and are invisible.
 - **Header icons clipping** — The header container uses both height collapse AND opacity fade. Without the opacity fade, the settings/insights icons get visually clipped in half as the container shrinks.
+- **Scroll-linked animations not firing** — If the task list is wrapped in a third-party container (e.g., `NestableScrollContainer`) that overwrites the `onScroll` prop, the `scrollY` Animated.Value won't update and all header/scoreboard collapse animations break. The scroll handler must remain the one wired to `scrollY.setValue()`.
+- **Drag-to-reorder breaking other gestures** — The pan gesture for reordering must be scoped to the grip icon only (via long-press activation on that specific row). If the pan gesture is enabled on the whole row, it will block swipe-to-delete and parent scroll.
 
 ## Gotchas
 
@@ -359,6 +388,7 @@ SafeAreaView
 6. **Firebase JS SDK** - Works with Expo Go, no native build required. Set env vars in `.env`
 7. **Offline mode** - Without Firebase env vars, app runs locally with sample data
 8. **Optimistic updates** - Stores update immediately, then sync to Firestore in background
+8a. **reorderTasks persists via batch write** - `updateTaskSortOrders()` in taskService.ts uses a Firestore `writeBatch` to update all `sortOrder` values atomically
 9. **syncEnabled flag** - Each store has a `syncEnabled` flag that controls Firestore writes
 10. **Pending competitor has no userId** - Check with `isPendingCompetitor(competitor)` helper
 11. **Join flow claims existing competitor** - Uses `claimCompetitorSlot()`, not `addCompetitorToHousehold()`
@@ -385,6 +415,17 @@ service cloud.firestore {
 ```
 
 If user sees "Missing or insufficient permissions" errors, provide these rules.
+
+## Lessons Learned (Drag-to-Reorder — Feb 2026)
+
+These are hard-won lessons from implementing drag-to-reorder. Preserve for future reference:
+
+1. **Don't use `react-native-draggable-flatlist` with a parent ScrollView** — It takes over gestures and blocks parent scrolling. `NestableScrollContainer` "fixes" nesting but overwrites `onScroll`, breaking any scroll-linked animations.
+2. **`useAnimatedGestureHandler` is removed in Reanimated v4** — Use `Gesture.Pan()` from `react-native-gesture-handler` + `GestureDetector` instead.
+3. **translateY-based reorder will flash on drop** — When a dragged item's `translateY` resets to 0 (UI thread) before React re-renders with the new order (JS thread), the item visually teleports to its origin. The fix is absolute positioning with a shared-value positions map so everything stays on the UI thread.
+4. **`setChallenge` must be idempotent for the same ID** — If it clears tasks/state when called with the same challenge ID (common on Firestore re-sync), all tasks disappear. Guard with `if (newId === currentId) return` or preserve task arrays.
+5. **Create template before task for recurring tasks** — If `addTask` runs before the template is created, the task starts with `templateId: null`, and seeding creates duplicates because it doesn't see the anchor.
+6. **`sortOrder` should be per-day** — Each day's tasks have independent `sortOrder` values starting from 0. The `reorderTasks` action only touches the selected day's tasks.
 
 ## Questions to Ask User
 
