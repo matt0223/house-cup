@@ -167,6 +167,14 @@ export function MorphingScoreboard({
     extrapolate: 'clamp',
   });
 
+  // Shift prize circle content down as text fades so trophy ends up centered.
+  // The invisible text still takes flex space, so we compensate with translateY.
+  const prizeContentShiftY = progress.interpolate({
+    inputRange: [0, 0.6],
+    outputRange: [0, 20],
+    extrapolate: 'clamp',
+  });
+
   // Animate fontSize/lineHeight directly with easing (no scale transform = no clipping)
   const scoreFontSize = scrollY.interpolate({
     inputRange: easeScrollStops,
@@ -502,22 +510,23 @@ export function MorphingScoreboard({
           },
         ]}
       >
-        {/* Trophy icon (always visible, scales down when collapsed) */}
-        <Animated.View style={{ transform: [{ scale: trophyScale }] }}>
-          <Ionicons name="trophy-outline" size={TROPHY_EXPANDED} color={colors.prize} />
-        </Animated.View>
+        {/* Content group shifts down as text fades so trophy re-centers */}
+        <Animated.View style={{ alignItems: 'center', transform: [{ translateY: prizeContentShiftY }] }}>
+          {/* Trophy icon (always visible, scales down when collapsed) */}
+          <Animated.View style={{ transform: [{ scale: trophyScale }] }}>
+            <Ionicons name="trophy-outline" size={TROPHY_EXPANDED} color={colors.prize} />
+          </Animated.View>
 
-        {/* Prize text or empty state — fades out when collapsed */}
-        <Animated.View
-          style={{
-            opacity: prizeTextOpacity,
-            maxHeight: prizeTextMaxHeight,
-            overflow: 'hidden',
-            marginTop: 2,
-            alignItems: 'center',
-          }}
-          pointerEvents="none"
-        >
+          {/* Prize text — fixed width prevents reflow, only opacity fades */}
+          <Animated.View
+            style={{
+              opacity: prizeTextOpacity,
+              marginTop: 2,
+              alignItems: 'center',
+              width: PRIZE_CIRCLE_EXPANDED - PRIZE_BORDER_EXPANDED * 2,
+            }}
+            pointerEvents="none"
+          >
           {hasPrize ? (
             <Text
               style={[
@@ -528,7 +537,6 @@ export function MorphingScoreboard({
                   paddingHorizontal: spacing.xs,
                 },
               ]}
-              numberOfLines={3}
             >
               {prize}
             </Text>
@@ -559,6 +567,7 @@ export function MorphingScoreboard({
               </View>
             </>
           )}
+          </Animated.View>
         </Animated.View>
       </AnimatedTouchableOpacity>
     </Animated.View>
@@ -643,6 +652,7 @@ const styles = StyleSheet.create({
     top: '50%',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
     zIndex: 10,
   },
   addButton: {

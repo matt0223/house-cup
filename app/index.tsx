@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { View, StyleSheet, Text, Image, ActivityIndicator, Animated } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, StyleSheet, Text, Image, ActivityIndicator, Animated, Easing } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -139,6 +139,29 @@ export default function ChallengeScreen() {
       seedFromTemplates(templates);
     }
   }, [templates, challenge, tasksLoadedForChallengeId]);
+
+  // Fade-in + slide-up animation for task list (avoids flash of empty state on load)
+  const contentFade = useRef(new Animated.Value(0)).current;
+  const contentSlide = contentFade.interpolate({
+    inputRange: [0, 1],
+    outputRange: [10, 0], // starts 10px below, slides up to final position
+  });
+  const tasksReady = tasksLoadedForChallengeId === challenge?.id;
+
+  useEffect(() => {
+    if (tasksReady) {
+      // Smooth fade in when tasks finish loading
+      Animated.timing(contentFade, {
+        toValue: 1,
+        duration: 350,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }).start();
+    } else {
+      // Reset instantly when switching challenges / loading
+      contentFade.setValue(0);
+    }
+  }, [tasksReady]);
 
   // Redirect to onboarding if Firebase is configured but user is not authenticated
   // or has no household. Also handles stale cached householdId when auth is lost.
@@ -467,36 +490,38 @@ export default function ChallengeScreen() {
         )}
         scrollEventThrottle={16}
       >
-        {/* Content Area */}
-        {tasksForDay.length > 0 ? (
-          <View>
-            <TaskList
-              tasks={tasksForDay}
-              competitors={competitors}
-              templates={templates}
-              onPointsChange={handlePointsChange}
-              onTaskPress={handleTaskPress}
-              onTaskDelete={handleSwipeDelete}
-              onReorder={reorderTasks}
-            />
-          </View>
-        ) : (
-          <View style={styles.emptyState}>
-            <Text
-              style={[
-                styles.emptyText,
-                { color: colors.textSecondary },
-              ]}
-            >
-              What needs doing today?
-            </Text>
-            <Image
-              source={require('../assets/images/arrow.png')}
-              style={styles.arrowImage}
-              resizeMode="contain"
-            />
-          </View>
-        )}
+        {/* Content Area — hidden until tasks finish loading to avoid empty-state flash */}
+        <Animated.View style={{ opacity: contentFade, transform: [{ translateY: contentSlide }], flex: 1 }}>
+          {tasksForDay.length > 0 ? (
+            <View>
+              <TaskList
+                tasks={tasksForDay}
+                competitors={competitors}
+                templates={templates}
+                onPointsChange={handlePointsChange}
+                onTaskPress={handleTaskPress}
+                onTaskDelete={handleSwipeDelete}
+                onReorder={reorderTasks}
+              />
+            </View>
+          ) : tasksReady ? (
+            <View style={styles.emptyState}>
+              <Text
+                style={[
+                  styles.emptyText,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                What needs doing today?
+              </Text>
+              <Image
+                source={require('../assets/images/arrow.png')}
+                style={styles.arrowImage}
+                resizeMode="contain"
+              />
+            </View>
+          ) : null}
+        </Animated.View>
       </Animated.ScrollView>
       </View>
 
