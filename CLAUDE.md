@@ -124,6 +124,7 @@ export { MyNewComponent } from './MyNewComponent';
 | Purpose | File |
 |---------|------|
 | Main screen | `app/index.tsx` |
+| Scoreboard / Prize circle | `src/components/features/MorphingScoreboard.tsx` |
 | Theme colors | `src/theme/colors.ts` |
 | Task model | `src/domain/models/TaskInstance.ts` |
 | Competitor model | `src/domain/models/Competitor.ts` |
@@ -233,6 +234,8 @@ Then approve in App Store Connect TestFlight tab.
 - **Scrolling day picker** - Header fades out on scroll, scoreboard collapses, day strip stays pinned, task list scrolls in a rounded-corner window beneath
 - **Drag-to-reorder tasks** - Grip icon (8-dot vertical drag handle) on each task row; long-press grip → drag to reorder. Uses absolute positioning with shared-value positions map for flash-free 60fps animations. Displaced rows animate smoothly via `withSpring`. Insertion line shows drop target. Floating task gets reduced opacity + shadow. Order persists via `sortOrder` field to Firestore.
 - **Stable task ordering (`sortOrder`)** - Tasks have a `sortOrder` field. New tasks get `max + 1` so they appear at the bottom. UI sorts by `sortOrder` with `createdAt` fallback for legacy tasks.
+- **Task list fade-in on load** - Task list fades in (opacity 0→1) and slides up (10px translateY) over 350ms with `Easing.out(Easing.ease)` when tasks finish loading. Prevents the empty-state flash that occurred while Firestore tasks were still loading. The empty state ("What needs doing today?") only renders once `tasksReady` is true and the task array is empty.
+- **Smooth prize circle morph** - Prize circle collapses/expands without text shuffling. Text has a fixed width (`PRIZE_CIRCLE_EXPANDED - PRIZE_BORDER_EXPANDED * 2`), no `numberOfLines` limit, and the circle has `overflow: 'hidden'`. Text fades with opacity only (no `maxHeight` animation). A `translateY` shift on the content group (trophy + text) moves it down as text fades so the trophy stays centered in the collapsed circle.
 
 ### Planned
 - Push notifications for reminders
@@ -377,6 +380,8 @@ SafeAreaView
 - **Header icons clipping** — The header container uses both height collapse AND opacity fade. Without the opacity fade, the settings/insights icons get visually clipped in half as the container shrinks.
 - **Scroll-linked animations not firing** — If the task list is wrapped in a third-party container (e.g., `NestableScrollContainer`) that overwrites the `onScroll` prop, the `scrollY` Animated.Value won't update and all header/scoreboard collapse animations break. The scroll handler must remain the one wired to `scrollY.setValue()`.
 - **Drag-to-reorder breaking other gestures** — The pan gesture for reordering must be scoped to the grip icon only (via long-press activation on that specific row). If the pan gesture is enabled on the whole row, it will block swipe-to-delete and parent scroll.
+- **Prize circle text shuffling** — The prize text must have a fixed width and NO `numberOfLines` prop. If `maxHeight` is animated on the text container, the text will reflow/shuffle at intermediate heights. Only use opacity to fade the text and `translateY` on the content group to keep the trophy centered. The circle itself handles clipping via `overflow: 'hidden'`.
+- **Empty-state flash on app load** — The task list content must be wrapped in a fade animation gated by `tasksReady`. Without this, the "What needs doing today?" empty state flashes before Firestore tasks arrive.
 
 ## Gotchas
 
@@ -416,16 +421,26 @@ service cloud.firestore {
 
 If user sees "Missing or insufficient permissions" errors, provide these rules.
 
-## Lessons Learned (Drag-to-Reorder — Feb 2026)
+## Lessons Learned (Feb 2026)
 
-These are hard-won lessons from implementing drag-to-reorder. Preserve for future reference:
+These are hard-won lessons from implementation. Preserve for future reference:
 
+### Drag-to-Reorder
 1. **Don't use `react-native-draggable-flatlist` with a parent ScrollView** — It takes over gestures and blocks parent scrolling. `NestableScrollContainer` "fixes" nesting but overwrites `onScroll`, breaking any scroll-linked animations.
 2. **`useAnimatedGestureHandler` is removed in Reanimated v4** — Use `Gesture.Pan()` from `react-native-gesture-handler` + `GestureDetector` instead.
 3. **translateY-based reorder will flash on drop** — When a dragged item's `translateY` resets to 0 (UI thread) before React re-renders with the new order (JS thread), the item visually teleports to its origin. The fix is absolute positioning with a shared-value positions map so everything stays on the UI thread.
 4. **`setChallenge` must be idempotent for the same ID** — If it clears tasks/state when called with the same challenge ID (common on Firestore re-sync), all tasks disappear. Guard with `if (newId === currentId) return` or preserve task arrays.
 5. **Create template before task for recurring tasks** — If `addTask` runs before the template is created, the task starts with `templateId: null`, and seeding creates duplicates because it doesn't see the anchor.
 6. **`sortOrder` should be per-day** — Each day's tasks have independent `sortOrder` values starting from 0. The `reorderTasks` action only touches the selected day's tasks.
+7. **`Gesture.Pan().activateAfterLongPress(150)` fixes first-touch failure** — Using `TouchableOpacity.onLongPress` to enable a pan gesture causes the first drag attempt to fail because the ScrollView claims the gesture during the 150ms delay before React state updates. Combining long-press and pan into a single gesture via `activateAfterLongPress` solves this.
+8. **Tight spring on drop feels better** — `damping: 100, stiffness: 300` gives a clean snap with no visible bounce. The default spring (`damping: 20, stiffness: 200`) oscillates visibly for several seconds.
+
+### Animations & Morphing
+9. **Never animate `maxHeight` on text containers** — Changing maxHeight causes text reflow/ellipsis at intermediate heights, creating visible "shuffling" even with `overflow: 'hidden'`. Instead, use opacity for fading and `translateY` for repositioning.
+10. **Fixed text width prevents reflow during parent resize** — When a container (like the prize circle) animates its size, text inside will reflow unless given a fixed width matching the expanded state. Set `width` explicitly on the text container.
+11. **Use `translateY` to re-center content when invisible elements take flex space** — When text fades via opacity but still occupies layout space, the visible content (e.g., trophy icon) shifts off-center. A `translateY` interpolation that shifts the content group compensates without changing layout, which avoids triggering reflow.
+12. **React hook order violations from conditional returns** — `useRef`/`useEffect` hooks must be placed above ALL early `return` statements in a component. Placing them after conditional `return <Redirect />` or `return <ActivityIndicator />` causes "Rendered more hooks" errors.
+13. **Prevent empty-state flash on load** — Don't render the empty state until data has actually loaded. Use a `tasksReady` flag (e.g., `tasksLoadedForChallengeId === challenge?.id`) and only show empty state when ready AND task array is empty. Wrap content in an animated fade+slide for polish.
 
 ## Questions to Ask User
 
