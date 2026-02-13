@@ -45,7 +45,10 @@ const TROPHY_COLLAPSED = 28;
 const ROW_HEIGHT_EXPANDED = 80;
 const ROW_HEIGHT_COLLAPSED = 44;
 const NAME_LINE_HEIGHT = 20; // callout lineHeight
-const SCORE_INLINE_LEFT = 36; // ~28pt score width + 8px gap (production)
+
+// Dynamic score-to-name gap: each digit at collapsed font (28px bold SF Pro) ≈ 17px wide
+const COLLAPSED_DIGIT_WIDTH = 17;
+const SCORE_NAME_GAP = 8;
 
 // Score font sizes: animate directly instead of scale transforms (avoids clipping)
 const SCORE_FONT_SIZE_EXPANDED = 48;
@@ -65,8 +68,8 @@ const ADD_BUTTON_SIZE = 44;
 
 // Stagger: stacked name exits first, then inline name enters
 const STACKED_EXIT_END = 0.45;
-const INLINE_ENTER_START = 0.25;
-const INLINE_ENTER_END = 0.65;
+const INLINE_ENTER_START = 0.65;
+const INLINE_ENTER_END = 0.95;
 
 /**
  * Single scoreboard that morphs between expanded and collapsed states.
@@ -87,6 +90,10 @@ export function MorphingScoreboard({
   onCompetitorPress,
 }: MorphingScoreboardProps) {
   const { colors, typography, spacing, radius } = useTheme();
+
+  // Dynamic inline name offset: score width + 8px gap (each side independent)
+  const scoreInlineOffsetA = String(scoreA).length * COLLAPSED_DIGIT_WIDTH + SCORE_NAME_GAP;
+  const scoreInlineOffsetB = String(scoreB).length * COLLAPSED_DIGIT_WIDTH + SCORE_NAME_GAP;
 
   // Linear progress (0-1) used by name stagger and other custom-timed transitions
   const progress = scrollY.interpolate({
@@ -299,6 +306,7 @@ export function MorphingScoreboard({
                 styles.inlineNameClip,
                 styles.inlineNameClipRight,
                 {
+                  right: scoreInlineOffsetB,
                   top: inlineNameClipTop,
                   opacity: inlineNameOpacity,
                   transform: [{ translateY: inlineNameTranslateY }],
@@ -468,6 +476,7 @@ export function MorphingScoreboard({
                   style={[
                     styles.inlineNameClip,
                     {
+                      left: scoreInlineOffsetA,
                       top: inlineNameClipTop,
                       opacity: inlineNameOpacity,
                       transform: [{ translateY: inlineNameTranslateY }],
@@ -620,15 +629,12 @@ const styles = StyleSheet.create({
   },
   inlineNameClip: {
     position: 'absolute',
-    left: SCORE_INLINE_LEFT,
     top: 0,
     height: NAME_LINE_HEIGHT,
     overflow: 'hidden',
     justifyContent: 'center',
   },
   inlineNameClipRight: {
-    left: undefined,
-    right: SCORE_INLINE_LEFT,
     alignItems: 'flex-end',
   },
   scorePosition: {
