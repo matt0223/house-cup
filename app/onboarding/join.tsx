@@ -17,6 +17,16 @@ import { useFirebase } from '../../src/providers/FirebaseProvider';
 import { useAppleAuth } from '../../src/hooks/useAppleAuth';
 import { isPendingCompetitor, availableCompetitorColors } from '../../src/domain/models/Competitor';
 import { findHouseholdByJoinCode } from '../../src/services/firebase';
+import { useHouseholdStore } from '../../src/store/useHouseholdStore';
+import {
+  trackScreenViewed,
+  trackAppleSignInStarted,
+  trackAppleSignInCompleted,
+  trackAppleSignInFailed,
+  trackHouseholdJoined,
+  trackHouseholdCreated,
+  trackJoinCodeFailed,
+} from '../../src/services/analytics';
 
 /**
  * Onboarding join screen.
@@ -47,6 +57,11 @@ export default function OnboardingJoinScreen() {
 
   const inputRef = useRef<TextInput>(null);
 
+  // Track screen view on mount
+  React.useEffect(() => {
+    trackScreenViewed({ 'screen name': 'join household' });
+  }, []);
+
   // Validate code and join household (called after authentication)
   const validateAndJoin = async (codeToJoin: string, appleGivenName?: string) => {
     setStatus('joining');
@@ -56,6 +71,7 @@ export default function OnboardingJoinScreen() {
       const household = await findHouseholdByJoinCode(codeToJoin.toUpperCase());
 
       if (!household) {
+        trackJoinCodeFailed({ 'error reason': 'invalid code' });
         setError("That code didn't work. Double-check with your housemate.");
         setStatus('error');
         return;
@@ -66,8 +82,10 @@ export default function OnboardingJoinScreen() {
       if (!pendingCompetitor) {
         const joinedCount = household.competitors.filter(c => c.userId).length;
         if (joinedCount >= 2) {
+          trackJoinCodeFailed({ 'error reason': 'household full' });
           setError("This household already has two members.");
         } else {
+          trackJoinCodeFailed({ 'error reason': 'no pending invite' });
           setError("No pending invite found for this household.");
         }
         setStatus('error');
@@ -79,9 +97,15 @@ export default function OnboardingJoinScreen() {
       const color = pendingCompetitor.color;
 
       await joinHousehold(codeToJoin.toUpperCase(), name, color);
+      trackHouseholdJoined({
+        'household id': household.id,
+        'competitor name': name,
+        'competitor color': color,
+      });
       router.replace('/');
     } catch (err) {
       console.error('Failed to validate/join:', err);
+      trackJoinCodeFailed({ 'error reason': 'exception' });
       // Always show a friendly message — never expose raw Firebase errors
       setError("That code didn't work. Double-check with your housemate and try again.");
       setStatus('error');
@@ -108,12 +132,16 @@ export default function OnboardingJoinScreen() {
     setStatus('signing-in');
     setError(null);
 
+    trackAppleSignInStarted({ flow: 'join' });
+
     const appleGivenName = await signInWithApple();
     if (appleGivenName !== null) {
+      trackAppleSignInCompleted({ flow: 'join', 'is returning user': false, 'had existing household': false });
       setAppleGivenNameRef(appleGivenName || undefined);
       await validateAndJoin(code, appleGivenName || undefined);
     } else {
       // Sign-in cancelled
+      trackAppleSignInFailed({ flow: 'join', reason: appleError || 'cancelled' });
       setStatus('idle');
     }
   };
@@ -127,6 +155,12 @@ export default function OnboardingJoinScreen() {
       const name = appleGivenNameRef || 'You';
       const defaultColor = availableCompetitorColors[0].hex;
       await createHousehold(name, defaultColor, undefined, undefined, '');
+      const createdHousehold = useHouseholdStore.getState().household;
+      trackHouseholdCreated({
+        'household id': createdHousehold?.id ?? '',
+        'competitor name': name,
+        'competitor color': defaultColor,
+      });
       router.replace('/');
     } catch (err) {
       console.error('Failed to create household:', err);

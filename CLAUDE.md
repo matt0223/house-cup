@@ -47,6 +47,52 @@ The empty competitor score sitting at 0 next to their 1 creates an implicit ques
 - **expo-apple-authentication** - Native Apple Sign-In
 - **expo-crypto** - Cryptographic operations for auth nonces
 
+## Amplitude Analytics
+
+The app uses Amplitude for product analytics with Session Replay and Experiment SDKs.
+
+### SDKs
+- `@amplitude/analytics-react-native` — Core event tracking
+- `@amplitude/plugin-session-replay-react-native` — Session Replay
+- `@amplitude/experiment-react-native-client` — Feature flags / A/B tests
+
+### Architecture
+- **Centralized service:** `src/services/analytics.ts` — All event definitions with typed helpers. Never call `amplitude.track()` directly; use typed wrappers like `trackTaskCreated()`.
+- **Initialization:** `FirebaseProvider` calls `initAnalytics()` on mount. User identity (userId, householdId group, user properties) is set when auth and household resolve.
+- **API Key:** `EXPO_PUBLIC_AMPLITUDE_API_KEY` in all `.env` files and `eas.json` profiles.
+
+### Naming Conventions
+- **Event names:** Title Case, "Object Past Tense Verb" (e.g., "Task Created", "Day Selected")
+- **Event/user properties:** lower case with spaces (e.g., "task id", "is recurring", "household id")
+
+### Event Catalog
+| Event | Where Tracked |
+|-------|--------------|
+| Screen Viewed | `app/index.tsx`, `app/settings.tsx`, `app/history.tsx`, onboarding screens |
+| Onboarding Started | `app/onboarding/index.tsx` |
+| Apple Sign In Started/Completed/Failed | `app/onboarding/index.tsx`, `app/onboarding/join.tsx` |
+| Join Code Entered | `app/onboarding/index.tsx` |
+| Household Created/Joined | `app/onboarding/index.tsx`, `app/onboarding/join.tsx` |
+| Join Code Failed | `app/onboarding/join.tsx` |
+| Task Created/Edited/Deleted/Scored/Reordered | `app/index.tsx` |
+| Task Converted to Recurring/One Off | `app/index.tsx` |
+| Prize Set/Cleared | `app/index.tsx`, `app/settings.tsx` |
+| Housemate Added | `app/index.tsx`, `app/settings.tsx` |
+| Invite Shared | `app/index.tsx`, `app/settings.tsx` |
+| Scoreboard Tapped | `app/index.tsx` |
+| Day Selected | `app/index.tsx` |
+| Insight Expanded | `app/history.tsx` |
+| Setting Changed | `app/settings.tsx` |
+| Data Cleared | `app/settings.tsx` |
+| User Signed Out | `app/settings.tsx` |
+| Challenge Loaded | `app/index.tsx` |
+| Week Completed | `src/services/firebase/challengeService.ts` |
+
+### Adding New Events
+1. Add a typed helper function to `src/services/analytics.ts`
+2. Import and call it from the relevant screen/component
+3. Update this table in CLAUDE.md
+
 ## Firebase Projects (Dev vs Prod)
 
 The app uses **two separate Firebase projects** to isolate development data from production:
@@ -81,6 +127,9 @@ eas build --profile production --platform ios
 ```
 
 ## Critical Patterns
+
+### 0. Stay Strictly On-Topic
+**Only do what the user's most recent message asks for.** Do not carry forward unanswered questions from earlier messages, do not proactively investigate or comment on unrelated features, and do not provide unsolicited analysis or suggestions beyond the scope of the current request. If the user asks you to implement X, implement X and nothing else. If something seems related but wasn't asked about, do not mention it.
 
 ### 1. Always Use Theme Tokens
 ```typescript
@@ -119,6 +168,16 @@ export { MyNewComponent } from './MyNewComponent';
 - `src/components/features/` - Business-specific (AddTaskSheet, ScoreboardCard)
 - `src/components/ui/` - Reusable primitives (Button, Card, DayStrip)
 
+### 6. Amplitude Analytics on Every New Feature
+**Whenever building any new feature, screen, or user interaction**, automatically add Amplitude tracking:
+1. Add a `trackScreenViewed({ 'screen name': '...' })` call in a `useEffect` on mount for every new screen.
+2. Add typed event helpers to `src/services/analytics.ts` for every new user action (following "Object Past Tense Verb" Title Case naming for events, lower case with spaces for properties).
+3. Include relevant unique identifiers (`task id`, `household id`, `competition id`, `competitor id`, `template id`) in event properties for funnel analysis.
+4. Reuse existing property names from the Cross-Event Property Glossary (see analytics plan) — never create synonyms (e.g., always `"task id"`, never `"taskId"` or `"task identifier"`).
+5. Never call `amplitude.track()` directly — always use the typed wrappers in `src/services/analytics.ts`.
+6. Verify new tracking doesn't duplicate or conflict with existing events. Check the Event Catalog table in this file.
+7. Update the Event Catalog table in this file when adding new events.
+
 ## Key Files to Know
 
 | Purpose | File |
@@ -141,6 +200,7 @@ export { MyNewComponent } from './MyNewComponent';
 | Firebase provider | `src/providers/FirebaseProvider.tsx` |
 | Household service | `src/services/firebase/householdService.ts` |
 | History screen | `app/history.tsx` |
+| Analytics service | `src/services/analytics.ts` |
 | Cloud Functions | `functions/src/index.ts` |
 | Firebase setup guide | `docs/FIREBASE_SETUP.md` |
 
@@ -236,6 +296,8 @@ Then approve in App Store Connect TestFlight tab.
 - **Stable task ordering (`sortOrder`)** - Tasks have a `sortOrder` field. New tasks get `max + 1` so they appear at the bottom. UI sorts by `sortOrder` with `createdAt` fallback for legacy tasks.
 - **Task list fade-in on load** - Task list fades in (opacity 0→1) and slides up (10px translateY) over 350ms with `Easing.out(Easing.ease)` when tasks finish loading. Prevents the empty-state flash that occurred while Firestore tasks were still loading. The empty state ("What needs doing today?") only renders once `tasksReady` is true and the task array is empty.
 - **Smooth prize circle morph** - Prize circle collapses/expands without text shuffling. Text has a fixed width (`PRIZE_CIRCLE_EXPANDED - PRIZE_BORDER_EXPANDED * 2`), no `numberOfLines` limit, and the circle has `overflow: 'hidden'`. Text fades with opacity only (no `maxHeight` animation). A `translateY` shift on the content group (trophy + text) moves it down as text fades so the trophy stays centered in the collapsed circle.
+
+- **Amplitude Analytics** — Full event instrumentation with Session Replay. Events, user properties, and group properties are tracked via a centralized service (`src/services/analytics.ts`). Initialized in `FirebaseProvider` on mount; identity set when auth/household resolve.
 
 ### Planned
 - Push notifications for reminders

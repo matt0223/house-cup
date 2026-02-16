@@ -36,6 +36,7 @@ export interface WeekStoryCardProps {
   scoreB: number;
   narrative: WeekNarrative;
   competitors: Competitor[];
+  onExpand?: () => void;
 }
 
 /**
@@ -56,6 +57,7 @@ export function WeekStoryCard({
   scoreB,
   narrative,
   competitors,
+  onExpand,
 }: WeekStoryCardProps) {
   const { colors, spacing, typography, radius } = useTheme();
   const [isExpanded, setIsExpanded] = useState(false);
@@ -78,8 +80,11 @@ export function WeekStoryCard({
         LayoutAnimation.Properties.opacity,
       ),
     );
-    setIsExpanded((prev) => !prev);
-  }, []);
+    setIsExpanded((prev) => {
+      if (!prev && onExpand) onExpand();
+      return !prev;
+    });
+  }, [onExpand]);
 
   // Day-by-day breakdown data (only computed when needed)
   const dayKeys = isExpanded ? getChallengeDayKeys(challenge) : [];

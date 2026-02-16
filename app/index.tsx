@@ -16,6 +16,26 @@ import { useFirebase } from '../src/providers/FirebaseProvider';
 import { formatDayKeyRange, getTodayDayKey, getCurrentWeekWindow } from '../src/domain/services';
 import { TaskInstance } from '../src/domain/models/TaskInstance';
 import { shareHouseholdInvite } from '../src/utils/shareInvite';
+import {
+  trackScreenViewed,
+  trackTaskCreated,
+  trackTaskNameChanged,
+  trackTaskDeleted,
+  trackTaskScored,
+  trackTaskReordered,
+  trackTaskScheduleChanged,
+  trackDaySelected,
+  trackPrizeSet,
+  trackPrizeCleared,
+  trackHousemateAdded,
+  trackInviteShared,
+  trackChallengeLoaded,
+  trackScoreboardTapped,
+  trackCompetitorNameChanged,
+  trackCompetitorColorChanged,
+  incrementUserProperty,
+} from '../src/services/analytics';
+import { PRIZE_SUGGESTIONS } from '../src/components/features/AddPrizeSheet';
 
 // NOTE: Task suggestion chips saved for future use.
 // const TASK_SUGGESTIONS = ['Cook dinner','Clean kitchen','Laundry','Exercise','Groceries','Take out trash'];
@@ -100,6 +120,11 @@ export default function ChallengeScreen() {
   const updateTemplate = useRecurringStore((s) => s.updateTemplate);
   const deleteTemplate = useRecurringStore((s) => s.deleteTemplate);
 
+  // Track home screen view on mount
+  useEffect(() => {
+    trackScreenViewed({ 'screen name': 'home' });
+  }, []);
+
   // Initialize challenge when household is ready.
   // When Firebase is configured, Firestore provides the challenge — NEVER overwrite it
   // with a local one. Only use initializeChallenge for offline/dev mode.
@@ -163,6 +188,32 @@ export default function ChallengeScreen() {
     }
   }, [tasksReady]);
 
+  // Track Challenge Loaded once tasks have been delivered from Firestore
+  const challengeTrackedRef = React.useRef<string | null>(null);
+  useEffect(() => {
+    if (!tasksReady || !challenge || !household || challengeTrackedRef.current === challenge.id) return;
+    challengeTrackedRef.current = challenge.id;
+
+    const result = getScores(household.competitors);
+    const todayKeyNow = getTodayDayKey(household.timezone);
+    const todayIdx = weekDayKeys.indexOf(todayKeyNow);
+    const daysRemaining = todayIdx >= 0 ? weekDayKeys.length - 1 - todayIdx : 0;
+    const hasHousemate = household.competitors.filter(c => c.userId).length >= 2;
+    const scoreA = result.scores.find(s => s.competitorId === competitorA?.id)?.total ?? 0;
+    const scoreB = result.scores.find(s => s.competitorId === competitorB?.id)?.total ?? 0;
+
+    trackChallengeLoaded({
+      'competition id': challenge.id,
+      'household id': household.id,
+      'task count': tasks.length,
+      'score a': scoreA,
+      'score b': scoreB,
+      'days remaining': daysRemaining,
+      'has prize': !!household.prize && household.prize.length > 0,
+      'has housemate': hasHousemate,
+    });
+  }, [tasksReady, challenge?.id]);
+
   // Redirect to onboarding if Firebase is configured but user is not authenticated
   // or has no household. Also handles stale cached householdId when auth is lost.
   if (isConfigured && !isAuthLoading && (!householdId || !userId)) {
@@ -225,13 +276,38 @@ export default function ChallengeScreen() {
     points: Record<string, number>,
     repeatDays: number[] | null
   ) => {
+    let templateId: string | null = null;
     if (repeatDays && repeatDays.length > 0) {
       // Create template first, then task with templateId — avoids race where
       // seeding sees the task with templateId: null and creates a duplicate.
       const template = addTemplate(name, repeatDays);
+      templateId = template.id;
       addTask(name, points, template.id);
     } else {
       addTask(name, points);
+    }
+
+    const hasInitialPoints = Object.values(points).some((p) => p > 0);
+    const dayTasks = tasks.filter((t) => t.dayKey === selectedDayKey);
+    const todayKey = household ? getTodayDayKey(household.timezone) : selectedDayKey;
+
+    trackTaskCreated({
+      'task id': `${Date.now()}`,
+      'competition id': challenge?.id ?? '',
+      'template id': templateId,
+      'task name length': name.length,
+      'is recurring': !!templateId,
+      'repeat days count': repeatDays?.length ?? 0,
+      'has initial points': hasInitialPoints,
+      'day key': selectedDayKey,
+      'is today': selectedDayKey === todayKey,
+      'task count for day': dayTasks.length + 1,
+      source: 'add task sheet',
+    });
+
+    incrementUserProperty('total tasks created');
+    if (templateId) {
+      incrementUserProperty('total templates created');
     }
 
     // Show toast (increment key to force new instance if already visible)
@@ -252,47 +328,105 @@ export default function ChallengeScreen() {
 
     // Handle name change
     if (changes.name !== undefined && changes.name !== task.name) {
+      trackTaskNameChanged({
+        'task id': taskId,
+        'template id': task.templateId ?? null,
+        'old name length': task.name.length,
+        'new name length': changes.name.length,
+        scope,
+        'is recurring': isRecurring,
+        source: 'edit task sheet',
+      });
+
       if (isRecurring && task.templateId) {
         if (scope === 'future') {
-          // Update template name + all linked instances
           updateTaskName(taskId, changes.name, true, templates, (templateId, newName) => {
             updateTemplate(templateId, { name: newName });
           });
         } else {
-          // Detach and update just this instance
           updateTaskName(taskId, changes.name, false, templates);
         }
       } else {
-        // One-off task - just update
         updateTask(taskId, { name: changes.name });
       }
     }
 
-    // Handle points change (always applies to instance)
+    // Handle points change (always applies to instance) - track as Task Scored from edit sheet
     if (changes.points !== undefined) {
+      for (const [competitorId, newPoints] of Object.entries(changes.points)) {
+        const previousPoints = task.points?.[competitorId] ?? 0;
+        if (newPoints !== previousPoints) {
+          const isSelf = competitorId === competitorA?.id;
+          const todayKeyNow = household ? getTodayDayKey(household.timezone) : selectedDayKey;
+          trackTaskScored({
+            'task id': taskId,
+            'competition id': challenge?.id ?? '',
+            'competitor id': competitorId,
+            'points value': newPoints,
+            'previous points value': previousPoints,
+            'is self': isSelf,
+            'is recurring': isRecurring,
+            'day key': task.dayKey ?? selectedDayKey,
+            'is today': (task.dayKey ?? selectedDayKey) === todayKeyNow,
+            source: 'edit task sheet',
+          });
+        }
+      }
       updateTask(taskId, { points: changes.points });
     }
 
     // Handle schedule change
-    if (changes.repeatDays !== undefined && isRecurring && task.templateId) {
-      if (changes.repeatDays.length === 0) {
-        // Converting recurring to one-off: delete template and detach task
-        deleteTemplate(task.templateId);
-        updateTask(taskId, { templateId: null });
-      } else {
-        // Just update the template's days
-        updateTemplate(task.templateId, { repeatDays: changes.repeatDays });
-      }
-    }
+    if (changes.repeatDays !== undefined) {
+      const oldRepeatDaysCount = isRecurring
+        ? (templates.find(t => t.id === task.templateId)?.repeatDays?.length ?? 0)
+        : 0;
+      const newRepeatDaysCount = changes.repeatDays.length;
 
-    // Handle converting one-off to recurring
-    if (
-      changes.repeatDays !== undefined &&
-      changes.repeatDays.length > 0 &&
-      !isRecurring
-    ) {
-      const newTemplate = addTemplate(task.name, changes.repeatDays);
-      linkTaskToTemplate(taskId, newTemplate.id);
+      let direction = 'unchanged';
+      if (newRepeatDaysCount > oldRepeatDaysCount) direction = 'added days';
+      else if (newRepeatDaysCount < oldRepeatDaysCount) direction = 'removed days';
+      else if (newRepeatDaysCount === oldRepeatDaysCount && newRepeatDaysCount > 0) direction = 'shifted days';
+
+      if (isRecurring && task.templateId) {
+        if (changes.repeatDays.length === 0) {
+          direction = 'converted to one off';
+          trackTaskScheduleChanged({
+            'task id': taskId,
+            'template id': task.templateId,
+            'old repeat days count': oldRepeatDaysCount,
+            'new repeat days count': 0,
+            direction,
+            'is recurring': true,
+          });
+          deleteTemplate(task.templateId);
+          updateTask(taskId, { templateId: null });
+        } else {
+          trackTaskScheduleChanged({
+            'task id': taskId,
+            'template id': task.templateId,
+            'old repeat days count': oldRepeatDaysCount,
+            'new repeat days count': newRepeatDaysCount,
+            direction,
+            'is recurring': true,
+          });
+          updateTemplate(task.templateId, { repeatDays: changes.repeatDays });
+        }
+      }
+
+      // Handle converting one-off to recurring
+      if (changes.repeatDays.length > 0 && !isRecurring) {
+        const newTemplate = addTemplate(task.name, changes.repeatDays);
+        linkTaskToTemplate(taskId, newTemplate.id);
+        trackTaskScheduleChanged({
+          'task id': taskId,
+          'template id': newTemplate.id,
+          'old repeat days count': 0,
+          'new repeat days count': newRepeatDaysCount,
+          direction: 'converted to recurring',
+          'is recurring': false,
+        });
+        incrementUserProperty('total templates created');
+      }
     }
 
     // Show toast
@@ -308,6 +442,18 @@ export default function ChallengeScreen() {
   const handleDeleteTask = (taskId: string, scope: ChangeScope) => {
     const task = tasks.find((t) => t.id === taskId);
     if (!task) return;
+
+    const hadPoints = Object.values(task.points ?? {}).some((p) => p > 0);
+
+    trackTaskDeleted({
+      'task id': taskId,
+      'template id': task.templateId ?? null,
+      'competition id': challenge?.id ?? '',
+      method: 'edit sheet',
+      scope,
+      'is recurring': !!task.templateId,
+      'had points': hadPoints,
+    });
 
     if (scope === 'future' && task.templateId) {
       // Delete template and all remaining instances
@@ -330,7 +476,16 @@ export default function ChallengeScreen() {
       // Show confirmation modal for recurring tasks
       setSwipeDeleteTask(task);
     } else {
-      // Delete one-off task directly
+      const hadPoints = Object.values(task.points ?? {}).some((p) => p > 0);
+      trackTaskDeleted({
+        'task id': task.id,
+        'template id': task.templateId ?? null,
+        'competition id': challenge?.id ?? '',
+        method: 'swipe',
+        scope: 'this day only',
+        'is recurring': false,
+        'had points': hadPoints,
+      });
       deleteTask(task.id);
     }
   };
@@ -338,6 +493,19 @@ export default function ChallengeScreen() {
   // Handle swipe delete confirmation selection
   const handleSwipeDeleteConfirm = (optionId: string) => {
     if (!swipeDeleteTask) return;
+
+    const hadPoints = Object.values(swipeDeleteTask.points ?? {}).some((p) => p > 0);
+    const scope = optionId === 'today' ? 'this day only' : 'future';
+
+    trackTaskDeleted({
+      'task id': swipeDeleteTask.id,
+      'template id': swipeDeleteTask.templateId ?? null,
+      'competition id': challenge?.id ?? '',
+      method: 'swipe',
+      scope,
+      'is recurring': !!swipeDeleteTask.templateId,
+      'had points': hadPoints,
+    });
 
     if (optionId === 'today') {
       // Delete just this instance
@@ -369,21 +537,64 @@ export default function ChallengeScreen() {
 
   // Handle prize save from AddPrizeSheet
   const handlePrizeSave = (prize: string) => {
+    const currentPrize = household?.prize ?? '';
+    const oldPrizeLength = currentPrize.length;
+    const isFirstPrize = oldPrizeLength === 0;
+    const isSuggested = PRIZE_SUGGESTIONS.includes(prize);
+
+    if (prize.length > 0) {
+      trackPrizeSet({
+        'household id': householdId ?? '',
+        'competition id': challenge?.id ?? '',
+        'prize length': prize.length,
+        'old prize length': oldPrizeLength,
+        'is first prize': isFirstPrize,
+        'is suggested': isSuggested,
+        source: 'prize sheet',
+      });
+    } else {
+      trackPrizeCleared({
+        'household id': householdId ?? '',
+        'old prize length': oldPrizeLength,
+        source: 'prize sheet',
+      });
+    }
+
     updateSettings({ prize });
   };
 
   // Handle housemate save from AddHousemateSheet (add only)
   const handleHousemateSave = async (name: string, color: string) => {
-    await addHousemate(name, color);
+    const newComp = await addHousemate(name, color);
+    trackHousemateAdded({
+      'household id': householdId ?? '',
+      'competitor id': newComp.id,
+      source: 'housemate sheet',
+      'housemate name length': name.length,
+    });
   };
 
   // Handle housemate invite (add then share)
   const handleHousemateInvite = async (name: string, color: string) => {
     const newCompetitor = await addHousemate(name, color);
+    trackHousemateAdded({
+      'household id': householdId ?? '',
+      'competitor id': newCompetitor.id,
+      source: 'housemate sheet invite',
+      'housemate name length': name.length,
+    });
     if (household?.joinCode) {
       const inviterName = household.competitors[0]?.name ?? 'Your housemate';
       const shared = await shareHouseholdInvite(inviterName, name, household.joinCode);
-      if (shared) await markInviteSent(newCompetitor.id);
+      if (shared) {
+        trackInviteShared({
+          'household id': householdId ?? '',
+          'competitor id': newCompetitor.id,
+          source: 'housemate sheet',
+          'is resend': false,
+        });
+        await markInviteSent(newCompetitor.id);
+      }
     }
   };
 
@@ -393,11 +604,26 @@ export default function ChallengeScreen() {
     if (!household?.joinCode || !compB) return;
     const inviterName = household.competitors[0]?.name ?? 'Your housemate';
     const shared = await shareHouseholdInvite(inviterName, compB.name, household.joinCode);
-    if (shared) await markInviteSent(compB.id);
+    if (shared) {
+      trackInviteShared({
+        'household id': householdId ?? '',
+        'competitor id': compB.id,
+        source: 'header icon',
+        'is resend': true,
+      });
+      await markInviteSent(compB.id);
+    }
   };
 
   // Open competitor sheet when name/score is tapped on scoreboard
   const handleCompetitorPress = (competitorId: string) => {
+    const isSelf = competitorId === competitorA?.id;
+    const position = competitorId === competitorA?.id ? 'left' : 'right';
+    trackScoreboardTapped({
+      'competitor id': competitorId,
+      'competitor position': position,
+      'is self': isSelf,
+    });
     setSelectedCompetitorId(competitorId);
   };
 
@@ -406,6 +632,24 @@ export default function ChallengeScreen() {
     competitorId: string,
     points: number
   ) => {
+    const task = tasks.find((t) => t.id === taskId);
+    const previousPoints = task?.points?.[competitorId] ?? 0;
+    const todayKey = household ? getTodayDayKey(household.timezone) : selectedDayKey;
+    const isSelf = competitorId === competitorA?.id;
+
+    trackTaskScored({
+      'task id': taskId,
+      'competition id': challenge?.id ?? '',
+      'competitor id': competitorId,
+      'points value': points,
+      'previous points value': previousPoints,
+      'is self': isSelf,
+      'is recurring': !!task?.templateId,
+      'day key': task?.dayKey ?? selectedDayKey,
+      'is today': (task?.dayKey ?? selectedDayKey) === todayKey,
+      source: 'task list',
+    });
+
     updateTaskPoints(taskId, competitorId, points);
   };
 
@@ -469,7 +713,22 @@ export default function ChallengeScreen() {
           dayKeys={weekDayKeys}
           selectedDayKey={selectedDayKey}
           todayDayKey={todayKey}
-          onSelectDay={setSelectedDay}
+          onSelectDay={(dayKey: string) => {
+            const todayKeyNow = household ? getTodayDayKey(household.timezone) : selectedDayKey;
+            const todayIndex = weekDayKeys.indexOf(todayKeyNow);
+            const selectedIndex = weekDayKeys.indexOf(dayKey);
+            const daysFromToday = selectedIndex - todayIndex;
+            const dayTasks = tasks.filter((t) => t.dayKey === dayKey);
+
+            trackDaySelected({
+              'day key': dayKey,
+              'is today': dayKey === todayKeyNow,
+              'days from today': daysFromToday,
+              'task count for day': dayTasks.length,
+            });
+
+            setSelectedDay(dayKey);
+          }}
         />
       </Animated.View>
 
@@ -501,7 +760,16 @@ export default function ChallengeScreen() {
                 onPointsChange={handlePointsChange}
                 onTaskPress={handleTaskPress}
                 onTaskDelete={handleSwipeDelete}
-                onReorder={reorderTasks}
+                onReorder={(reorderedTasks: TaskInstance[]) => {
+                  if (reorderedTasks.length > 0) {
+                    trackTaskReordered({
+                      'task id': reorderedTasks[0].id,
+                      'competition id': challenge?.id ?? '',
+                      'task count for day': reorderedTasks.length,
+                    });
+                  }
+                  reorderTasks(reorderedTasks);
+                }}
               />
             </View>
           ) : tasksReady ? (
@@ -564,12 +832,30 @@ export default function ChallengeScreen() {
         onClose={() => setSelectedCompetitorId(null)}
         competitor={selectedCompetitor ?? competitorA}
         otherCompetitorColor={otherCompetitor?.color}
-        onNameChange={(name) =>
-          selectedCompetitor && updateCompetitor(selectedCompetitor.id, { name })
-        }
-        onColorChange={(color) =>
-          selectedCompetitor && updateCompetitor(selectedCompetitor.id, { color })
-        }
+        onNameChange={(name) => {
+          if (selectedCompetitor) {
+            trackCompetitorNameChanged({
+              'competitor id': selectedCompetitor.id,
+              'old name length': selectedCompetitor.name.length,
+              'new name length': name.length,
+              'is self': selectedCompetitor.id === competitorA?.id,
+              source: 'competitor sheet',
+            });
+            updateCompetitor(selectedCompetitor.id, { name });
+          }
+        }}
+        onColorChange={(color) => {
+          if (selectedCompetitor) {
+            trackCompetitorColorChanged({
+              'competitor id': selectedCompetitor.id,
+              'old value': selectedCompetitor.color,
+              'new value': color,
+              'is self': selectedCompetitor.id === competitorA?.id,
+              source: 'competitor sheet',
+            });
+            updateCompetitor(selectedCompetitor.id, { color });
+          }
+        }}
         onInvitePress={
           selectedCompetitor && !selectedCompetitor.userId
             ? handleShareInvitePress

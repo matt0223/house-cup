@@ -13,6 +13,16 @@ import { Button, AppleSignInButton } from '../../src/components/ui';
 import { useAppleAuth } from '../../src/hooks/useAppleAuth';
 import { useFirebase } from '../../src/providers/FirebaseProvider';
 import { availableCompetitorColors } from '../../src/domain/models/Competitor';
+import { useHouseholdStore } from '../../src/store/useHouseholdStore';
+import {
+  trackOnboardingStarted,
+  trackAppleSignInStarted,
+  trackAppleSignInCompleted,
+  trackAppleSignInFailed,
+  trackJoinCodeEntered,
+  trackHouseholdCreated,
+  trackScreenViewed,
+} from '../../src/services/analytics';
 
 type ViewState = 'welcome' | 'signing-in';
 
@@ -35,6 +45,12 @@ export default function OnboardingWelcomeScreen() {
   // View state
   const [viewState, setViewState] = useState<ViewState>('welcome');
 
+  // Track screen view on mount
+  React.useEffect(() => {
+    trackScreenViewed({ 'screen name': 'onboarding' });
+    trackOnboardingStarted({ 'entry point': 'fresh install' });
+  }, []);
+
   // Handle Apple sign-in (primary action)
   const handleAppleSignIn = async () => {
     // Clear any stale state
@@ -44,6 +60,8 @@ export default function OnboardingWelcomeScreen() {
     clearAppleError?.();
     setViewState('signing-in');
     
+    trackAppleSignInStarted({ flow: 'create' });
+
     // signIn returns givenName on success, null on failure/cancel
     const appleGivenName = await signInWithApple();
     if (appleGivenName !== null) {
@@ -51,14 +69,22 @@ export default function OnboardingWelcomeScreen() {
       const recovered = await recoverHousehold();
       if (recovered) {
         // Returning user - go to main app
+        trackAppleSignInCompleted({ flow: 'create', 'is returning user': true, 'had existing household': true });
         router.replace('/');
       } else {
         // New user — auto-create household with Apple name + default color
+        trackAppleSignInCompleted({ flow: 'create', 'is returning user': false, 'had existing household': false });
         try {
           const name = appleGivenName || 'You';
           const defaultColor = availableCompetitorColors[0].hex; // Purple
           const defaultPrize = '';
           await createHousehold(name, defaultColor, undefined, undefined, defaultPrize);
+          const createdHousehold = useHouseholdStore.getState().household;
+          trackHouseholdCreated({
+            'household id': createdHousehold?.id ?? '',
+            'competitor name': name,
+            'competitor color': defaultColor,
+          });
           router.replace('/');
         } catch (err) {
           console.error('Failed to auto-create household:', err);
@@ -68,12 +94,14 @@ export default function OnboardingWelcomeScreen() {
       }
     } else {
       // Sign-in failed or cancelled
+      trackAppleSignInFailed({ flow: 'create', reason: appleError || 'cancelled' });
       setViewState('welcome');
     }
   };
 
   // Navigate to join flow screen
   const handleJoinCodePress = () => {
+    trackJoinCodeEntered();
     router.push('/onboarding/join');
   };
 

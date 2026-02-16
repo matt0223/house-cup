@@ -15,6 +15,7 @@ import {
   EnrichedChallenge,
 } from '../src/store';
 import { useHouseholdStore, useCompetitors } from '../src/store';
+import { trackScreenViewed, trackInsightExpanded } from '../src/services/analytics';
 
 /**
  * Insights screen — story feed of completed challenge weeks.
@@ -33,6 +34,10 @@ export default function InsightsScreen() {
 
   // Load history when screen mounts
   useEffect(() => {
+    trackScreenViewed({ 'screen name': 'insights' });
+  }, []);
+
+  useEffect(() => {
     if (household?.id && competitors.length > 0) {
       loadHistory(household.id, competitors);
     }
@@ -44,7 +49,7 @@ export default function InsightsScreen() {
     : undefined;
 
   const renderWeek = useCallback(
-    ({ item }: { item: EnrichedChallenge }) => (
+    ({ item, index }: { item: EnrichedChallenge; index: number }) => (
       <View style={{ paddingHorizontal: spacing.sm, marginBottom: spacing.md }}>
         <WeekStoryCard
           challenge={item.challenge}
@@ -53,6 +58,18 @@ export default function InsightsScreen() {
           scoreB={item.scoreB}
           narrative={item.narrative}
           competitors={competitors}
+          onExpand={() => {
+            trackInsightExpanded({
+              'competition id': item.challenge.id,
+              'week start': item.challenge.startDayKey,
+              'week end': item.challenge.endDayKey,
+              'score a': item.scoreA,
+              'score b': item.scoreB,
+              'total tasks': item.tasks.length,
+              'has narrative': !!item.narrative?.headline,
+              'weeks ago': index,
+            });
+          }}
         />
       </View>
     ),

@@ -169,7 +169,7 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
   tasks: [],
   tasksLoadedForChallengeId: null,
   seedSkipAnchor: null,
-  selectedDayKey: new Date().toISOString().split('T')[0],
+  selectedDayKey: new Date().toISOString().split('T')[0], // UTC fallback; corrected to household timezone on first setChallenge
   skipRecords: [],
   isLoading: false,
   error: null,
@@ -648,12 +648,14 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
   },
 
   reset: () => {
+    const household = useHouseholdStore.getState().household;
+    const timezone = household?.timezone ?? 'America/New_York';
     set({
       challenge: null,
       tasks: [],
       tasksLoadedForChallengeId: null,
       seedSkipAnchor: null,
-      selectedDayKey: new Date().toISOString().split('T')[0],
+      selectedDayKey: getTodayDayKey(timezone),
       skipRecords: [],
       error: null,
     });
@@ -681,10 +683,13 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
     }
 
     // First load (prev is null) or clearing (challenge is null)
+    const household = useHouseholdStore.getState().household;
+    const timezone = household?.timezone ?? 'America/New_York';
     set({
       challenge,
       tasks: challenge ? get().tasks : [],
       tasksLoadedForChallengeId: null,
+      selectedDayKey: getTodayDayKey(timezone),
     });
   },
 

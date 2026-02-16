@@ -24,7 +24,7 @@ export interface AddPrizeSheetProps {
 }
 
 /** Suggested prizes shown as quick-tap chips */
-const PRIZE_SUGGESTIONS = [
+export const PRIZE_SUGGESTIONS = [
   'Gets to assign a chore',
   'No dishes for 3 days',
   'Picks Sat night plans',

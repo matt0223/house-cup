@@ -30,6 +30,20 @@ import { useAppleAuth } from '../src/hooks/useAppleAuth';
 import { useAuth } from '../src/hooks/useAuth';
 import Constants from 'expo-constants';
 import { shareHouseholdInvite } from '../src/utils/shareInvite';
+import {
+  trackScreenViewed,
+  trackThemeChanged,
+  trackWeekEndDayChanged,
+  trackCompetitorNameChanged,
+  trackCompetitorColorChanged,
+  trackDataCleared,
+  trackUserSignedOut,
+  trackPrizeSet,
+  trackPrizeCleared,
+  trackHousemateAdded,
+  trackInviteShared,
+  resetAnalytics,
+} from '../src/services/analytics';
 
 /** Day options for picker */
 const DAY_OPTIONS: { id: string; label: string }[] = [
@@ -90,6 +104,11 @@ export default function SettingsScreen() {
   const [toastKey, setToastKey] = useState(0);
   const [toastMessage, setToastMessage] = useState('Settings updated');
 
+  // Track screen view on mount
+  React.useEffect(() => {
+    trackScreenViewed({ 'screen name': 'settings' });
+  }, []);
+
   const showSettingsToast = () => {
     setToastMessage('Settings updated');
     setToastKey((k) => k + 1);
@@ -119,6 +138,8 @@ export default function SettingsScreen() {
           onPress: async () => {
             setIsSigningOut(true);
             try {
+              trackUserSignedOut({ 'household id': household?.id ?? '' });
+              resetAnalytics();
               // Sign out from Firebase
               await signOut();
               // Clear local household data
@@ -153,6 +174,7 @@ export default function SettingsScreen() {
             setIsClearingData(true);
             try {
               await clearAllHouseholdTaskData();
+              trackDataCleared({ 'household id': household?.id ?? '' });
               Alert.alert('Done', 'All task data has been cleared.');
             } catch (error) {
               console.error('Clear task data error:', error);
@@ -174,9 +196,11 @@ export default function SettingsScreen() {
     const pendingCompetitor = household.competitors.find(c => isPendingCompetitor(c));
     if (!pendingCompetitor) return;
     
+    const isResend = hasBeenInvited(pendingCompetitor);
+
     // Mark as invited BEFORE opening share sheet
     // This ensures the UI updates immediately when user taps the button
-    if (!hasBeenInvited(pendingCompetitor)) {
+    if (!isResend) {
       await markInviteSent(pendingCompetitor.id);
     }
     
@@ -186,6 +210,13 @@ export default function SettingsScreen() {
       pendingCompetitor.name,
       household.joinCode || ''
     );
+
+    trackInviteShared({
+      'household id': household.id,
+      'competitor id': pendingCompetitor.id,
+      source: 'settings',
+      'is resend': isResend,
+    });
 
     showInviteToast();
   }, [household, markInviteSent]);
@@ -198,6 +229,13 @@ export default function SettingsScreen() {
     try {
       // Create the competitor first
       const newCompetitor = await addHousemate(newHousemateName.trim(), newHousemateColor);
+
+      trackHousemateAdded({
+        'household id': household.id,
+        'competitor id': newCompetitor.id,
+        source: 'settings invite',
+        'housemate name length': newHousemateName.trim().length,
+      });
       
       // Mark as invited immediately after creation
       await markInviteSent(newCompetitor.id);
@@ -208,6 +246,13 @@ export default function SettingsScreen() {
         newHousemateName.trim(),
         household.joinCode || ''
       );
+
+      trackInviteShared({
+        'household id': household.id,
+        'competitor id': newCompetitor.id,
+        source: 'settings',
+        'is resend': false,
+      });
       
       // Clear the input
       setNewHousemateName('');
@@ -265,13 +310,50 @@ export default function SettingsScreen() {
 
   const currentEndDay = household ? getEndDay(household.weekStartDay) : 6;
 
+  // Track original name before edit starts (captured on focus / mount)
+  const competitorNameBeforeEditRef = React.useRef<Record<string, string>>({});
+
   // Handle competitor name change (fires on every keystroke — no toast here)
   const handleNameChange = (competitorId: string, name: string) => {
+    if (!competitorNameBeforeEditRef.current[competitorId]) {
+      const competitor = household?.competitors.find(c => c.id === competitorId);
+      competitorNameBeforeEditRef.current[competitorId] = competitor?.name ?? '';
+    }
     updateCompetitor(competitorId, { name });
+  };
+
+  // Track name change on blur (when editing finishes)
+  const handleNameBlur = (competitorId: string) => {
+    const oldName = competitorNameBeforeEditRef.current[competitorId];
+    const competitor = household?.competitors.find(c => c.id === competitorId);
+    const newName = competitor?.name ?? '';
+
+    if (oldName !== undefined && oldName !== newName && newName.trim().length > 0) {
+      const isSelf = competitorId === competitorA?.id;
+      trackCompetitorNameChanged({
+        'competitor id': competitorId,
+        'old name length': oldName.length,
+        'new name length': newName.length,
+        'is self': isSelf,
+        source: 'settings',
+      });
+    }
+
+    delete competitorNameBeforeEditRef.current[competitorId];
+    showSettingsToast();
   };
 
   // Handle competitor color change
   const handleColorChange = (competitorId: string, color: string) => {
+    const competitor = household?.competitors.find(c => c.id === competitorId);
+    const isSelf = competitorId === competitorA?.id;
+    trackCompetitorColorChanged({
+      'competitor id': competitorId,
+      'old value': competitor?.color ?? '',
+      'new value': color,
+      'is self': isSelf,
+      source: 'settings',
+    });
     updateCompetitor(competitorId, { color });
     showSettingsToast();
   };
@@ -279,6 +361,10 @@ export default function SettingsScreen() {
   // Handle end day change
   const handleEndDayChange = (endDay: number) => {
     const weekStartDay = getWeekStartFromEndDay(endDay);
+    trackWeekEndDayChanged({
+      'old value': DAY_OPTIONS[currentEndDay].label,
+      'new value': DAY_OPTIONS[endDay].label,
+    });
     updateSettings({ weekStartDay });
     setShowEndDayPicker(false);
     showSettingsToast();
@@ -286,6 +372,26 @@ export default function SettingsScreen() {
 
   // Handle prize save
   const handlePrizeSave = () => {
+    const currentPrize = household?.prize ?? '';
+    const oldPrizeLength = currentPrize.length;
+
+    if (prizeText.length > 0) {
+      trackPrizeSet({
+        'household id': household?.id ?? '',
+        'competition id': '',
+        'prize length': prizeText.length,
+        'old prize length': oldPrizeLength,
+        'is first prize': oldPrizeLength === 0,
+        'is suggested': false,
+        source: 'settings',
+      });
+    } else if (oldPrizeLength > 0) {
+      trackPrizeCleared({
+        'household id': household?.id ?? '',
+        'old prize length': oldPrizeLength,
+        source: 'settings',
+      });
+    }
     updateSettings({ prize: prizeText });
     setEditingPrize(false);
     showSettingsToast();
@@ -327,7 +433,7 @@ export default function SettingsScreen() {
               }
               unavailableColors={[competitorB?.color ?? newHousemateColor]}
               showDivider={true}
-              onBlur={showSettingsToast}
+              onBlur={() => handleNameBlur(competitorA.id)}
             />
           )}
           {competitorB ? (
@@ -343,7 +449,7 @@ export default function SettingsScreen() {
               }
               unavailableColors={[competitorA?.color ?? '']}
               showDivider={false}
-              onBlur={showSettingsToast}
+              onBlur={() => handleNameBlur(competitorB.id)}
               statusLabel={
                 isPendingHousemate
                   ? hasInviteBeenSent
@@ -621,6 +727,10 @@ export default function SettingsScreen() {
         options={THEME_OPTIONS}
         selectedId={selectedTheme}
         onSelect={(id) => {
+          trackThemeChanged({
+            'old value': selectedTheme,
+            'new value': id,
+          });
           setThemePreference(id as ThemePreference, userId ?? null);
           setShowThemePicker(false);
           showSettingsToast();

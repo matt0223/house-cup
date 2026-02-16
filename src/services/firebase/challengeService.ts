@@ -28,6 +28,7 @@ import { WeekStartDay } from '../../domain/models/Household';
 import { getTasksForChallenge } from './taskService';
 import { calculateChallengeScores } from '../../domain/services/scoring';
 import { getCurrentWeekWindow } from '../../domain/services/weekWindow';
+import { trackWeekCompleted } from '../analytics';
 
 const SUBCOLLECTION = 'challenges';
 
@@ -169,7 +170,7 @@ export async function updateChallenge(
  */
 export async function getCompletedChallenges(
   householdId: string,
-  limitCount = 10
+  limitCount = 200
 ): Promise<Challenge[]> {
   const ref = getChallengesRef(householdId);
   if (!ref) return [];
@@ -273,6 +274,28 @@ export async function completeExpiredChallenge(
   }
 
   await batch.commit();
+
+  // Track Week Completed analytics event
+  const scores = calculateChallengeScores(tasks, competitors);
+  const selfId = competitors[0]?.id ?? '';
+  const opponentId = competitors[1]?.id ?? '';
+  const selfScore = scores.scores.find(s => s.competitorId === selfId)?.total ?? 0;
+  const opponentScore = scores.scores.find(s => s.competitorId === opponentId)?.total ?? 0;
+  const tasksWithPoints = tasks.filter(t =>
+    Object.values(t.points ?? {}).some(p => p > 0)
+  ).length;
+
+  trackWeekCompleted({
+    'competition id': expiredChallenge.id,
+    'household id': householdId,
+    'winner is self': winnerId === selfId,
+    'is tie': isTie,
+    'score gap': Math.abs(selfScore - opponentScore),
+    'self score': selfScore,
+    'opponent score': opponentScore,
+    'total tasks': tasks.length,
+    'tasks with points': tasksWithPoints,
+  });
 
   console.log(
     `Completed expired challenge ${expiredChallenge.id}, winner: ${winnerId ?? 'tie'}`

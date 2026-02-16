@@ -49,7 +49,24 @@ module.exports = {
       output: 'static',
       favicon: './assets/images/favicon.png',
     },
-    plugins: ['expo-router', 'expo-apple-authentication', 'expo-font'],
+    plugins: [
+      'expo-router',
+      'expo-apple-authentication',
+      'expo-font',
+      [
+        'expo-build-properties',
+        {
+          ios: {
+            extraPods: [
+              {
+                name: 'AmplitudeSessionReplay',
+                version: '>= 0.4.0',
+              },
+            ],
+          },
+        },
+      ],
+    ],
     experiments: {
       typedRoutes: true,
     },

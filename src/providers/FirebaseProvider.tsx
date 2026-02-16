@@ -5,7 +5,8 @@
  * Wraps the app to provide Firebase services throughout.
  */
 
-import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../hooks/useAuth';
 import { useFirestoreSync } from '../hooks/useFirestoreSync';
@@ -28,8 +29,19 @@ import {
   deleteAllSkipRecords,
   subscribeToUserProfile,
 } from '../services/firebase';
+import Constants from 'expo-constants';
 import { Competitor, isPendingCompetitor } from '../domain/models/Competitor';
+import { getCompletedChallenges } from '../services/firebase/challengeService';
+import { getTasksForChallenge } from '../services/firebase/taskService';
 import { getCurrentWeekWindow, getTodayDayKey } from '../domain/services';
+import {
+  initAnalytics,
+  setAnalyticsUserId,
+  setAnalyticsGroup,
+  identifyUser,
+  identifyUserOnce,
+  trackAppOpened,
+} from '../services/analytics';
 
 const HOUSEHOLD_ID_KEY = '@housecup/householdId';
 
@@ -104,7 +116,7 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
   const [isLoadingHouseholdId, setIsLoadingHouseholdId] = useState(true);
 
   // Auth state (only active when Firebase is configured)
-  const { userId, isLoading: isAuthLoading, error: authError } = useAuth();
+  const { user: authUser, userId, isLoading: isAuthLoading, error: authError } = useAuth();
 
   // Load householdId from AsyncStorage on mount
   useEffect(() => {
@@ -171,6 +183,154 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
       useRecurringStore.getState().setSyncEnabled(false, null);
     }
   }, [isConfigured, householdId, userId, setSyncEnabledHousehold]);
+
+  // Initialize Amplitude analytics on mount and track App Opened
+  const sessionCountRef = useRef(0);
+  const appOpenedTrackedRef = useRef(false);
+
+  useEffect(() => {
+    const init = async () => {
+      await initAnalytics();
+
+      // Track initial App Opened
+      const storedCount = await AsyncStorage.getItem('@housecup/sessionCount');
+      const count = storedCount ? parseInt(storedCount, 10) + 1 : 1;
+      sessionCountRef.current = count;
+      await AsyncStorage.setItem('@housecup/sessionCount', String(count));
+      trackAppOpened({ 'is first open': count === 1, 'session count': count });
+      appOpenedTrackedRef.current = true;
+    };
+    init();
+
+    // Track App Opened on foreground resume
+    const handleAppState = async (nextState: AppStateStatus) => {
+      if (nextState === 'active' && appOpenedTrackedRef.current) {
+        const storedCount = await AsyncStorage.getItem('@housecup/sessionCount');
+        const count = storedCount ? parseInt(storedCount, 10) + 1 : 1;
+        sessionCountRef.current = count;
+        await AsyncStorage.setItem('@housecup/sessionCount', String(count));
+        trackAppOpened({ 'is first open': false, 'session count': count });
+      }
+    };
+
+    const sub = AppState.addEventListener('change', handleAppState);
+    return () => sub.remove();
+  }, []);
+
+  // Set Amplitude identity when auth and household are available.
+  // Prefer the user's email (from Apple Sign-In via Firebase) as the Amplitude
+  // userId so users are identifiable in the dashboard. Fall back to Firebase UID.
+  useEffect(() => {
+    if (!userId) return;
+    const amplitudeUserId = authUser?.email ?? userId;
+    setAnalyticsUserId(amplitudeUserId);
+
+    if (householdId) {
+      setAnalyticsGroup(householdId);
+    }
+  }, [userId, authUser?.email, householdId]);
+
+  // Set Amplitude user properties when household data is available
+  useEffect(() => {
+    if (!household || !userId) return;
+
+    const myCompetitor = household.competitors.find(c => c.userId === userId);
+    const hasHousemate = household.competitors.filter(c => c.userId).length >= 2;
+    const pendingCompetitor = household.competitors.find(c => isPendingCompetitor(c));
+    const housemateStatus = hasHousemate ? 'joined' : pendingCompetitor ? 'invited' : 'solo';
+    const themePreference = useUserProfileStore.getState().themePreference ?? 'system';
+
+    // Calculate week end day label from weekStartDay
+    const dayLabels = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const weekEndDay = (household.weekStartDay + 6) % 7;
+
+    // Calculate days since household creation
+    let daysSinceCreation: number | undefined;
+    if (household.createdAt) {
+      const createdDate = new Date(household.createdAt);
+      const now = new Date();
+      daysSinceCreation = Math.floor((now.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24));
+    }
+
+    identifyUser({
+      'email': authUser?.email ?? undefined,
+      'household id': household.id,
+      'competitor id': myCompetitor?.id,
+      'competitor name': myCompetitor?.name,
+      'competitor color': myCompetitor?.color,
+      'has housemate': hasHousemate,
+      'housemate status': housemateStatus,
+      'theme preference': themePreference,
+      'week end day': dayLabels[weekEndDay],
+      'prize set': !!household.prize && household.prize.length > 0,
+      'app version': Constants.expoConfig?.version ?? '1.0.0',
+      'days since household creation': daysSinceCreation,
+    });
+
+    identifyUserOnce({
+      'is household creator': myCompetitor?.id === household.competitors[0]?.id,
+    });
+  }, [household, userId]);
+
+  // Compute competition stats from Firestore in the background and set as user properties.
+  // Runs once per app launch when household is available. Includes current week tasks
+  // from the challenge store for up-to-date "active days" counting.
+  const competitionStatsComputedRef = React.useRef<string | null>(null);
+  useEffect(() => {
+    if (!household || !userId || !isConfigured) return;
+    // Only compute once per household per app session
+    if (competitionStatsComputedRef.current === household.id) return;
+    competitionStatsComputedRef.current = household.id;
+
+    const myCompetitor = household.competitors.find(c => c.userId === userId);
+    if (!myCompetitor) return;
+    const myId = myCompetitor.id;
+
+    (async () => {
+      try {
+        // Fetch all completed challenges (up to 200 — covers ~4 years of weekly data)
+        const completedChallenges = await getCompletedChallenges(household.id);
+
+        // Fetch tasks for each completed challenge in parallel
+        const taskArrays = await Promise.all(
+          completedChallenges.map(c => getTasksForChallenge(household.id, c.id))
+        );
+
+        // Compute stats from completed challenges
+        const totalCompleted = completedChallenges.length;
+        const totalWon = completedChallenges.filter(c => c.winnerId === myId).length;
+        const percentageWon = totalCompleted > 0
+          ? Math.round((totalWon / totalCompleted) * 100)
+          : 0;
+
+        const totalActiveCompetitions = completedChallenges.filter((_, i) => {
+          return taskArrays[i].some(t => (t.points?.[myId] ?? 0) > 0);
+        }).length;
+
+        // Count unique active days across all completed challenges
+        const activeDayKeys = new Set<string>();
+        taskArrays.flat().forEach(t => {
+          if ((t.points?.[myId] ?? 0) > 0) activeDayKeys.add(t.dayKey);
+        });
+
+        // Also include current week's active days from the challenge store
+        const currentTasks = useChallengeStore.getState().tasks;
+        currentTasks.forEach(t => {
+          if ((t.points?.[myId] ?? 0) > 0) activeDayKeys.add(t.dayKey);
+        });
+
+        identifyUser({
+          'total competitions completed': totalCompleted,
+          'total competitions won': totalWon,
+          'percentage competitions won': percentageWon,
+          'total active competitions': totalActiveCompetitions,
+          'total active days': activeDayKeys.size,
+        });
+      } catch (err) {
+        console.warn('Failed to compute competition stats for Amplitude:', err);
+      }
+    })();
+  }, [household?.id, userId, isConfigured]);
 
   // Subscribe to current user's profile (e.g. theme preference); clear when signed out
   useEffect(() => {
