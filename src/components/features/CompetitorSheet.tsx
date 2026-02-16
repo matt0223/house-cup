@@ -12,10 +12,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
 import { useBottomSheet } from '../../hooks/useBottomSheet';
 import { BottomSheetContainer } from '../ui/BottomSheetContainer';
-import { UnsavedChangesModal } from '../ui/UnsavedChangesModal';
 import { ColorPicker } from '../ui/ColorPicker';
 import { Competitor, isPendingCompetitor } from '../../domain/models/Competitor';
-import { trackUnsavedChangesShown } from '../../services/analytics';
 
 export interface CompetitorSheetProps {
   /** Whether the sheet is visible */
@@ -59,7 +57,6 @@ export function CompetitorSheet({
   const [name, setName] = useState(competitor.name);
   const [color, setColor] = useState(competitor.color);
   const [isColorExpanded, setIsColorExpanded] = useState(false);
-  const [showUnsavedModal, setShowUnsavedModal] = useState(false);
 
   // Animation values for color picker expand/collapse
   const colorPickerHeight = useRef(new Animated.Value(0)).current;
@@ -73,7 +70,6 @@ export function CompetitorSheet({
       setName(competitor.name);
       setColor(competitor.color);
       setIsColorExpanded(false);
-      setShowUnsavedModal(false);
       colorPickerHeight.setValue(0);
       colorPickerOpacity.setValue(0);
     }
@@ -120,47 +116,17 @@ export function CompetitorSheet({
 
   const canSubmit = name.trim().length > 0;
 
-  // Dirty state: name or color differs from original
-  const hasNameChanged = name.trim() !== competitor.name;
-  const hasColorChanged = color !== competitor.color;
-  const hasDirtyState = hasNameChanged || hasColorChanged;
-
-  // Intercept dismiss
+  // Auto-save on dismiss: lightweight settings don't need a confirmation modal
   const handleDismiss = useCallback(() => {
-    if (hasDirtyState) {
-      setShowUnsavedModal(true);
-    } else {
-      onClose();
+    const trimmed = name.trim();
+    if (trimmed) {
+      if (trimmed !== competitor.name) onNameChange(trimmed);
+      if (color !== competitor.color) onColorChange(color);
     }
-  }, [hasDirtyState, onClose]);
-
-  const unsavedAnalyticsProps = {
-    'sheet name': 'competitor' as const,
-    'has name change': hasNameChanged,
-    'has points change': false,
-    'has schedule change': false,
-  };
-
-  const handleUnsavedDiscard = useCallback(() => {
-    trackUnsavedChangesShown({ ...unsavedAnalyticsProps, 'action taken': 'discard' });
-    setShowUnsavedModal(false);
     onClose();
-  }, [unsavedAnalyticsProps, onClose]);
-
-  const handleUnsavedKeepEditing = useCallback(() => {
-    trackUnsavedChangesShown({ ...unsavedAnalyticsProps, 'action taken': 'keep editing' });
-    setShowUnsavedModal(false);
-    setTimeout(() => inputRef.current?.focus(), 300);
-  }, [unsavedAnalyticsProps]);
-
-  const handleUnsavedSave = useCallback(() => {
-    trackUnsavedChangesShown({ ...unsavedAnalyticsProps, 'action taken': 'save' });
-    setShowUnsavedModal(false);
-    handleSave();
-  }, [unsavedAnalyticsProps, handleSave]);
+  }, [name, color, competitor.name, competitor.color, onNameChange, onColorChange, onClose]);
 
   return (
-    <>
     <BottomSheetContainer
       modalVisible={modalVisible}
       overlayOpacity={overlayOpacity}
@@ -250,13 +216,6 @@ export function CompetitorSheet({
         </Animated.View>
       </View>
     </BottomSheetContainer>
-    <UnsavedChangesModal
-      visible={showUnsavedModal}
-      onDiscard={handleUnsavedDiscard}
-      onKeepEditing={handleUnsavedKeepEditing}
-      onSave={handleUnsavedSave}
-    />
-    </>
   );
 }
 

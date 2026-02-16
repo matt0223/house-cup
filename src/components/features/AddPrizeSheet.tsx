@@ -11,8 +11,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
 import { useBottomSheet } from '../../hooks/useBottomSheet';
 import { BottomSheetContainer } from '../ui/BottomSheetContainer';
-import { UnsavedChangesModal } from '../ui/UnsavedChangesModal';
-import { trackUnsavedChangesShown } from '../../services/analytics';
 
 export interface AddPrizeSheetProps {
   /** Whether the sheet is visible */
@@ -54,13 +52,11 @@ export function AddPrizeSheet({
 
   // Form state
   const [prizeText, setPrizeText] = useState('');
-  const [showUnsavedModal, setShowUnsavedModal] = useState(false);
 
   // Reset form when sheet opens
   useEffect(() => {
     if (isVisible) {
       setPrizeText(currentPrize);
-      setShowUnsavedModal(false);
     }
   }, [isVisible]);
 
@@ -77,45 +73,16 @@ export function AddPrizeSheet({
 
   const isSubmitEnabled = prizeText.trim().length > 0;
 
-  // Dirty state: prize text differs from what was loaded
-  const hasDirtyState = prizeText.trim() !== currentPrize.trim();
-
-  // Intercept dismiss
+  // Auto-save on dismiss: lightweight setting doesn't need a confirmation modal
   const handleDismiss = useCallback(() => {
-    if (hasDirtyState) {
-      setShowUnsavedModal(true);
-    } else {
-      onClose();
+    const trimmed = prizeText.trim();
+    if (trimmed && trimmed !== currentPrize.trim()) {
+      onSave(trimmed);
     }
-  }, [hasDirtyState, onClose]);
-
-  const unsavedAnalyticsProps = {
-    'sheet name': 'add prize' as const,
-    'has name change': hasDirtyState,
-    'has points change': false,
-    'has schedule change': false,
-  };
-
-  const handleUnsavedDiscard = useCallback(() => {
-    trackUnsavedChangesShown({ ...unsavedAnalyticsProps, 'action taken': 'discard' });
-    setShowUnsavedModal(false);
     onClose();
-  }, [unsavedAnalyticsProps, onClose]);
-
-  const handleUnsavedKeepEditing = useCallback(() => {
-    trackUnsavedChangesShown({ ...unsavedAnalyticsProps, 'action taken': 'keep editing' });
-    setShowUnsavedModal(false);
-    setTimeout(() => inputRef.current?.focus(), 300);
-  }, [unsavedAnalyticsProps]);
-
-  const handleUnsavedSave = useCallback(() => {
-    trackUnsavedChangesShown({ ...unsavedAnalyticsProps, 'action taken': 'save' });
-    setShowUnsavedModal(false);
-    handleSave();
-  }, [unsavedAnalyticsProps, handleSave]);
+  }, [prizeText, currentPrize, onSave, onClose]);
 
   return (
-    <>
     <BottomSheetContainer
       modalVisible={modalVisible}
       overlayOpacity={overlayOpacity}
@@ -223,13 +190,6 @@ export function AddPrizeSheet({
         </View>
       </View>
     </BottomSheetContainer>
-    <UnsavedChangesModal
-      visible={showUnsavedModal}
-      onDiscard={handleUnsavedDiscard}
-      onKeepEditing={handleUnsavedKeepEditing}
-      onSave={handleUnsavedSave}
-    />
-    </>
   );
 }
 

@@ -12,10 +12,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
 import { useBottomSheet } from '../../hooks/useBottomSheet';
 import { BottomSheetContainer } from '../ui/BottomSheetContainer';
-import { UnsavedChangesModal } from '../ui/UnsavedChangesModal';
 import { ColorPicker } from '../ui/ColorPicker';
 import { availableCompetitorColors } from '../../domain/models/Competitor';
-import { trackUnsavedChangesShown } from '../../services/analytics';
 
 export interface AddHousemateSheetProps {
   /** Whether the sheet is visible */
@@ -53,7 +51,6 @@ export function AddHousemateSheet({
   const [name, setName] = useState('');
   const [color, setColor] = useState(availableCompetitorColors[0].hex);
   const [isColorExpanded, setIsColorExpanded] = useState(false);
-  const [showUnsavedModal, setShowUnsavedModal] = useState(false);
 
   // Animation values for color picker expand/collapse
   const colorPickerHeight = useRef(new Animated.Value(0)).current;
@@ -64,7 +61,6 @@ export function AddHousemateSheet({
     if (isVisible) {
       setName('');
       setIsColorExpanded(false);
-      setShowUnsavedModal(false);
       colorPickerHeight.setValue(0);
       colorPickerOpacity.setValue(0);
       const next = competitorAColor
@@ -109,45 +105,12 @@ export function AddHousemateSheet({
 
   const canSubmit = name.trim().length > 0 && color.length > 0;
 
-  // Dirty state: any name entered counts as unsaved work
-  const hasDirtyState = name.trim().length > 0;
-
-  // Intercept dismiss
+  // Silent discard on dismiss: one-time action, user knows if they didn't finish
   const handleDismiss = useCallback(() => {
-    if (hasDirtyState) {
-      setShowUnsavedModal(true);
-    } else {
-      onClose();
-    }
-  }, [hasDirtyState, onClose]);
-
-  const unsavedAnalyticsProps = {
-    'sheet name': 'add housemate' as const,
-    'has name change': hasDirtyState,
-    'has points change': false,
-    'has schedule change': false,
-  };
-
-  const handleUnsavedDiscard = useCallback(() => {
-    trackUnsavedChangesShown({ ...unsavedAnalyticsProps, 'action taken': 'discard' });
-    setShowUnsavedModal(false);
     onClose();
-  }, [unsavedAnalyticsProps, onClose]);
-
-  const handleUnsavedKeepEditing = useCallback(() => {
-    trackUnsavedChangesShown({ ...unsavedAnalyticsProps, 'action taken': 'keep editing' });
-    setShowUnsavedModal(false);
-    setTimeout(() => inputRef.current?.focus(), 300);
-  }, [unsavedAnalyticsProps]);
-
-  const handleUnsavedSave = useCallback(() => {
-    trackUnsavedChangesShown({ ...unsavedAnalyticsProps, 'action taken': 'save' });
-    setShowUnsavedModal(false);
-    handleSave();
-  }, [unsavedAnalyticsProps, handleSave]);
+  }, [onClose]);
 
   return (
-    <>
     <BottomSheetContainer
       modalVisible={modalVisible}
       overlayOpacity={overlayOpacity}
@@ -237,13 +200,6 @@ export function AddHousemateSheet({
         </Animated.View>
       </View>
     </BottomSheetContainer>
-    <UnsavedChangesModal
-      visible={showUnsavedModal}
-      onDiscard={handleUnsavedDiscard}
-      onKeepEditing={handleUnsavedKeepEditing}
-      onSave={handleUnsavedSave}
-    />
-    </>
   );
 }
 
