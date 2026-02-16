@@ -427,8 +427,8 @@ export function trackWeekCompleted(props: {
 // ---------------------------------------------------------------------------
 
 export function trackUnsavedChangesShown(props: {
-  'sheet name': string;
-  'action taken': string;
+  'sheet name': string;       // 'edit task' | 'add task' | 'add prize' | 'competitor' | 'add housemate'
+  'action taken': string;     // 'save' | 'discard' | 'keep editing'
   'has name change': boolean;
   'has points change': boolean;
   'has schedule change': boolean;

@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
 import { useBottomSheet } from '../../hooks/useBottomSheet';
 import { BottomSheetContainer } from '../ui/BottomSheetContainer';
-import { ConfirmationModal } from '../ui/ConfirmationModal';
+import { UnsavedChangesModal } from '../ui/UnsavedChangesModal';
 import { ColorPicker } from '../ui/ColorPicker';
 import { Competitor, isPendingCompetitor } from '../../domain/models/Competitor';
 import { trackUnsavedChangesShown } from '../../services/analytics';
@@ -134,32 +134,29 @@ export function CompetitorSheet({
     }
   }, [hasDirtyState, onClose]);
 
-  const handleUnsavedSelect = useCallback((optionId: string) => {
-    trackUnsavedChangesShown({
-      'sheet name': 'competitor',
-      'action taken': optionId === 'save' ? 'save' : 'discard',
-      'has name change': hasNameChanged,
-      'has points change': false,
-      'has schedule change': false,
-    });
-    setShowUnsavedModal(false);
-    if (optionId === 'save') {
-      handleSave();
-    } else {
-      onClose();
-    }
-  }, [hasNameChanged, handleSave, onClose]);
+  const unsavedAnalyticsProps = {
+    'sheet name': 'competitor' as const,
+    'has name change': hasNameChanged,
+    'has points change': false,
+    'has schedule change': false,
+  };
 
-  const handleUnsavedCancel = useCallback(() => {
-    trackUnsavedChangesShown({
-      'sheet name': 'competitor',
-      'action taken': 'cancel',
-      'has name change': hasNameChanged,
-      'has points change': false,
-      'has schedule change': false,
-    });
+  const handleUnsavedDiscard = useCallback(() => {
+    trackUnsavedChangesShown({ ...unsavedAnalyticsProps, 'action taken': 'discard' });
     setShowUnsavedModal(false);
-  }, [hasNameChanged]);
+    onClose();
+  }, [unsavedAnalyticsProps, onClose]);
+
+  const handleUnsavedKeepEditing = useCallback(() => {
+    trackUnsavedChangesShown({ ...unsavedAnalyticsProps, 'action taken': 'keep editing' });
+    setShowUnsavedModal(false);
+  }, [unsavedAnalyticsProps]);
+
+  const handleUnsavedSave = useCallback(() => {
+    trackUnsavedChangesShown({ ...unsavedAnalyticsProps, 'action taken': 'save' });
+    setShowUnsavedModal(false);
+    handleSave();
+  }, [unsavedAnalyticsProps, handleSave]);
 
   return (
     <>
@@ -252,15 +249,11 @@ export function CompetitorSheet({
         </Animated.View>
       </View>
     </BottomSheetContainer>
-    <ConfirmationModal
+    <UnsavedChangesModal
       visible={showUnsavedModal}
-      title="Unsaved changes"
-      options={[
-        { id: 'save', label: 'Save changes' },
-        { id: 'discard', label: 'Discard' },
-      ]}
-      onSelect={handleUnsavedSelect}
-      onCancel={handleUnsavedCancel}
+      onDiscard={handleUnsavedDiscard}
+      onKeepEditing={handleUnsavedKeepEditing}
+      onSave={handleUnsavedSave}
     />
     </>
   );

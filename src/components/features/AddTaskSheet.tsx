@@ -21,6 +21,7 @@ import { RepeatPill } from '../ui/RepeatPill';
 import { RepeatDayPicker } from '../ui/RepeatDayPicker';
 import { KebabButton } from '../ui/KebabButton';
 import { ConfirmationModal } from '../ui/ConfirmationModal';
+import { UnsavedChangesModal } from '../ui/UnsavedChangesModal';
 import { Competitor } from '../../domain/models/Competitor';
 import { TaskInstance } from '../../domain/models/TaskInstance';
 import { WeekStartDay } from '../../domain/models/Household';
@@ -324,33 +325,31 @@ export function AddTaskSheet({
     }
   }, [hasDirtyState, onClose]);
 
-  // Handle unsaved modal selection
-  const handleUnsavedSelect = useCallback((optionId: string) => {
-    trackUnsavedChangesShown({
-      'sheet name': isEditMode ? 'edit task' : 'add task',
-      'action taken': optionId === 'save' ? 'save' : 'discard',
-      'has name change': hasNameChanged,
-      'has points change': hasPointsChanged,
-      'has schedule change': hasScheduleChanged,
-    });
-    setShowUnsavedModal(false);
-    if (optionId === 'save') {
-      handleSubmit();
-    } else {
-      onClose();
-    }
-  }, [isEditMode, hasNameChanged, hasPointsChanged, hasScheduleChanged, onClose]);
+  // Unsaved modal callbacks
+  const sheetNameForAnalytics = isEditMode ? 'edit task' : 'add task';
+  const unsavedAnalyticsProps = {
+    'sheet name': sheetNameForAnalytics,
+    'has name change': hasNameChanged,
+    'has points change': hasPointsChanged,
+    'has schedule change': hasScheduleChanged,
+  };
 
-  const handleUnsavedCancel = useCallback(() => {
-    trackUnsavedChangesShown({
-      'sheet name': isEditMode ? 'edit task' : 'add task',
-      'action taken': 'cancel',
-      'has name change': hasNameChanged,
-      'has points change': hasPointsChanged,
-      'has schedule change': hasScheduleChanged,
-    });
+  const handleUnsavedDiscard = useCallback(() => {
+    trackUnsavedChangesShown({ ...unsavedAnalyticsProps, 'action taken': 'discard' });
     setShowUnsavedModal(false);
-  }, [isEditMode, hasNameChanged, hasPointsChanged, hasScheduleChanged]);
+    onClose();
+  }, [unsavedAnalyticsProps, onClose]);
+
+  const handleUnsavedKeepEditing = useCallback(() => {
+    trackUnsavedChangesShown({ ...unsavedAnalyticsProps, 'action taken': 'keep editing' });
+    setShowUnsavedModal(false);
+  }, [unsavedAnalyticsProps]);
+
+  const handleUnsavedSave = useCallback(() => {
+    trackUnsavedChangesShown({ ...unsavedAnalyticsProps, 'action taken': 'save' });
+    setShowUnsavedModal(false);
+    handleSubmit();
+  }, [unsavedAnalyticsProps]);
 
   // Handle submit (add or edit)
   const handleSubmit = () => {
@@ -612,16 +611,11 @@ export function AddTaskSheet({
             embedded
           />
           {/* Unsaved Changes Modal */}
-          <ConfirmationModal
+          <UnsavedChangesModal
             visible={showUnsavedModal}
-            title="Unsaved changes"
-            options={[
-              { id: 'save', label: 'Save changes' },
-              { id: 'discard', label: 'Discard' },
-            ]}
-            onSelect={handleUnsavedSelect}
-            onCancel={handleUnsavedCancel}
-            embedded
+            onDiscard={handleUnsavedDiscard}
+            onKeepEditing={handleUnsavedKeepEditing}
+            onSave={handleUnsavedSave}
           />
         </View>
       </Modal>

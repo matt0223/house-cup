@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
 import { useBottomSheet } from '../../hooks/useBottomSheet';
 import { BottomSheetContainer } from '../ui/BottomSheetContainer';
-import { ConfirmationModal } from '../ui/ConfirmationModal';
+import { UnsavedChangesModal } from '../ui/UnsavedChangesModal';
 import { trackUnsavedChangesShown } from '../../services/analytics';
 
 export interface AddPrizeSheetProps {
@@ -89,32 +89,29 @@ export function AddPrizeSheet({
     }
   }, [hasDirtyState, onClose]);
 
-  const handleUnsavedSelect = useCallback((optionId: string) => {
-    trackUnsavedChangesShown({
-      'sheet name': 'add prize',
-      'action taken': optionId === 'save' ? 'save' : 'discard',
-      'has name change': hasDirtyState,
-      'has points change': false,
-      'has schedule change': false,
-    });
-    setShowUnsavedModal(false);
-    if (optionId === 'save') {
-      handleSave();
-    } else {
-      onClose();
-    }
-  }, [hasDirtyState, handleSave, onClose]);
+  const unsavedAnalyticsProps = {
+    'sheet name': 'add prize' as const,
+    'has name change': hasDirtyState,
+    'has points change': false,
+    'has schedule change': false,
+  };
 
-  const handleUnsavedCancel = useCallback(() => {
-    trackUnsavedChangesShown({
-      'sheet name': 'add prize',
-      'action taken': 'cancel',
-      'has name change': hasDirtyState,
-      'has points change': false,
-      'has schedule change': false,
-    });
+  const handleUnsavedDiscard = useCallback(() => {
+    trackUnsavedChangesShown({ ...unsavedAnalyticsProps, 'action taken': 'discard' });
     setShowUnsavedModal(false);
-  }, [hasDirtyState]);
+    onClose();
+  }, [unsavedAnalyticsProps, onClose]);
+
+  const handleUnsavedKeepEditing = useCallback(() => {
+    trackUnsavedChangesShown({ ...unsavedAnalyticsProps, 'action taken': 'keep editing' });
+    setShowUnsavedModal(false);
+  }, [unsavedAnalyticsProps]);
+
+  const handleUnsavedSave = useCallback(() => {
+    trackUnsavedChangesShown({ ...unsavedAnalyticsProps, 'action taken': 'save' });
+    setShowUnsavedModal(false);
+    handleSave();
+  }, [unsavedAnalyticsProps, handleSave]);
 
   return (
     <>
@@ -225,15 +222,11 @@ export function AddPrizeSheet({
         </View>
       </View>
     </BottomSheetContainer>
-    <ConfirmationModal
+    <UnsavedChangesModal
       visible={showUnsavedModal}
-      title="Unsaved changes"
-      options={[
-        { id: 'save', label: 'Save changes' },
-        { id: 'discard', label: 'Discard' },
-      ]}
-      onSelect={handleUnsavedSelect}
-      onCancel={handleUnsavedCancel}
+      onDiscard={handleUnsavedDiscard}
+      onKeepEditing={handleUnsavedKeepEditing}
+      onSave={handleUnsavedSave}
     />
     </>
   );
