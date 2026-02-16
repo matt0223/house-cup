@@ -28,8 +28,8 @@ export interface UnsavedChangesModalProps {
  *
  * - Keyboard is dismissed on mount so the modal is fully visible.
  * - Outside taps are blocked — the user must choose an action.
- * - Buttons (top to bottom): Discard Changes (tertiary/red),
- *   Keep Editing (secondary), Save & Close (primary).
+ * - Layout (top to bottom): Title, body text, Save & Close (primary),
+ *   Keep Editing (secondary/outline), Discard Changes (tertiary/red ghost).
  * - 250ms ease-out fade-in entrance animation.
  * - All buttons are disabled after Save & Close is tapped to prevent double-taps.
  */
@@ -95,72 +95,35 @@ export function UnsavedChangesModal({
               },
             ]}
           >
+            {/* Title */}
             <Text
               style={[
                 typography.headline,
-                { color: colors.textPrimary, marginBottom: spacing.md },
+                { color: colors.textPrimary, marginBottom: spacing.xs },
               ]}
             >
               Unsaved changes
             </Text>
 
-            <View style={[styles.options, { gap: spacing.xs }]}>
-              {/* Tertiary: Discard Changes (red text, no background) */}
-              <TouchableOpacity
-                style={[styles.tertiaryButton, { paddingVertical: spacing.md }]}
-                onPress={onDiscard}
-                disabled={saving}
-                activeOpacity={0.7}
-              >
-                <Text
-                  style={[
-                    typography.body,
-                    {
-                      color: colors.error,
-                      textAlign: 'center',
-                      opacity: saving ? 0.4 : 1,
-                    },
-                  ]}
-                >
-                  Discard Changes
-                </Text>
-              </TouchableOpacity>
+            {/* Body */}
+            <Text
+              style={[
+                typography.body,
+                { color: colors.textSecondary, marginBottom: spacing.lg },
+              ]}
+            >
+              Are you sure you want to leave? Your changes will be lost.
+            </Text>
 
-              {/* Secondary: Keep Editing */}
-              <TouchableOpacity
-                style={[
-                  styles.optionButton,
-                  {
-                    backgroundColor: colors.background,
-                    borderRadius: radius.medium,
-                    paddingVertical: spacing.md,
-                    paddingHorizontal: spacing.md,
-                    opacity: saving ? 0.4 : 1,
-                  },
-                ]}
-                onPress={onKeepEditing}
-                disabled={saving}
-                activeOpacity={0.7}
-              >
-                <Text
-                  style={[
-                    typography.body,
-                    { color: colors.textPrimary, textAlign: 'center' },
-                  ]}
-                >
-                  Keep Editing
-                </Text>
-              </TouchableOpacity>
-
+            <View style={[styles.buttons, { gap: spacing.sm }]}>
               {/* Primary: Save & Close */}
               <TouchableOpacity
                 style={[
-                  styles.optionButton,
+                  styles.button,
                   {
                     backgroundColor: colors.primary,
                     borderRadius: radius.medium,
                     paddingVertical: spacing.md,
-                    paddingHorizontal: spacing.md,
                     opacity: saving ? 0.6 : 1,
                   },
                 ]}
@@ -179,6 +142,57 @@ export function UnsavedChangesModal({
                   ]}
                 >
                   Save & Close
+                </Text>
+              </TouchableOpacity>
+
+              {/* Secondary: Keep Editing (outline/border style) */}
+              <TouchableOpacity
+                style={[
+                  styles.button,
+                  {
+                    backgroundColor: 'transparent',
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    borderRadius: radius.medium,
+                    paddingVertical: spacing.md,
+                    opacity: saving ? 0.4 : 1,
+                  },
+                ]}
+                onPress={onKeepEditing}
+                disabled={saving}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    typography.body,
+                    { color: colors.textPrimary, textAlign: 'center' },
+                  ]}
+                >
+                  Keep Editing
+                </Text>
+              </TouchableOpacity>
+
+              {/* Tertiary: Discard Changes (ghost, red text) */}
+              <TouchableOpacity
+                style={[
+                  styles.button,
+                  {
+                    backgroundColor: 'transparent',
+                    paddingVertical: spacing.md,
+                    opacity: saving ? 0.4 : 1,
+                  },
+                ]}
+                onPress={onDiscard}
+                disabled={saving}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    typography.body,
+                    { color: colors.error, textAlign: 'center' },
+                  ]}
+                >
+                  Discard Changes
                 </Text>
               </TouchableOpacity>
             </View>
@@ -206,9 +220,11 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 320,
   },
-  options: {},
-  tertiaryButton: {},
-  optionButton: {},
+  buttons: {},
+  button: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });
 
 export default UnsavedChangesModal;
