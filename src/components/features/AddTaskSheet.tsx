@@ -382,11 +382,11 @@ export function AddTaskSheet({
     confirmModalType === 'delete'
       ? [
           { id: 'today', label: 'Today only' },
-          { id: 'future', label: 'This and all without points', isDestructive: true },
+          { id: 'future', label: 'All days without points', isDestructive: true },
         ]
       : [
           { id: 'today', label: 'Today only' },
-          { id: 'future', label: 'This and all without points' },
+          { id: 'future', label: 'All days without points' },
         ];
 
   const confirmTitle =

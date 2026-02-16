@@ -108,6 +108,7 @@ export default function ChallengeScreen() {
   const updateTask = useChallengeStore((s) => s.updateTask);
   const deleteTask = useChallengeStore((s) => s.deleteTask);
   const deleteTasksForTemplateFromDay = useChallengeStore((s) => s.deleteTasksForTemplateFromDay);
+  const deleteRecurringTaskKeepingPoints = useChallengeStore((s) => s.deleteRecurringTaskKeepingPoints);
   const linkTaskToTemplate = useChallengeStore((s) => s.linkTaskToTemplate);
   const seedFromTemplates = useChallengeStore((s) => s.seedFromTemplates);
   const reorderTasks = useChallengeStore((s) => s.reorderTasks);
@@ -456,9 +457,8 @@ export default function ChallengeScreen() {
     });
 
     if (scope === 'future' && task.templateId) {
-      // Delete template and all remaining instances
-      deleteTasksForTemplateFromDay(task.templateId, task.dayKey);
-      deleteTemplate(task.templateId);
+      // Delete this instance + others without points this week; keep scored ones as one-offs
+      deleteRecurringTaskKeepingPoints(task.templateId, taskId);
     } else {
       // Delete just this instance
       deleteTask(taskId);
@@ -511,9 +511,8 @@ export default function ChallengeScreen() {
       // Delete just this instance
       deleteTask(swipeDeleteTask.id);
     } else if (optionId === 'future' && swipeDeleteTask.templateId) {
-      // Delete template and all remaining instances
-      deleteTasksForTemplateFromDay(swipeDeleteTask.templateId, swipeDeleteTask.dayKey);
-      deleteTemplate(swipeDeleteTask.templateId);
+      // Delete this instance + others without points this week; keep scored ones as one-offs
+      deleteRecurringTaskKeepingPoints(swipeDeleteTask.templateId, swipeDeleteTask.id);
     }
 
     setSwipeDeleteTask(null);
@@ -876,7 +875,7 @@ export default function ChallengeScreen() {
         title="Delete this task?"
         options={[
           { id: 'today', label: 'Today only' },
-          { id: 'future', label: 'Today and future instances', isDestructive: true },
+          { id: 'future', label: 'All days without points', isDestructive: true },
         ]}
         onSelect={handleSwipeDeleteConfirm}
         onCancel={() => setSwipeDeleteTask(null)}
