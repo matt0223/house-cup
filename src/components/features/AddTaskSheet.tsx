@@ -25,6 +25,7 @@ import { Competitor } from '../../domain/models/Competitor';
 import { TaskInstance } from '../../domain/models/TaskInstance';
 import { WeekStartDay } from '../../domain/models/Household';
 import { formatRepeatDays } from '../../domain/services';
+import { trackUnsavedChangesShown } from '../../services/analytics';
 
 /** Scope for applying changes to recurring tasks */
 export type ChangeScope = 'today' | 'future';
@@ -119,6 +120,9 @@ export function AddTaskSheet({
   // Confirmation modal state
   const [confirmModalVisible, setConfirmModalVisible] = useState(false);
   const [confirmModalType, setConfirmModalType] = useState<'name' | 'delete'>('name');
+
+  // Unsaved changes modal state
+  const [showUnsavedModal, setShowUnsavedModal] = useState(false);
 
   // Derived state
   const isEditMode = editingTask !== null && editingTask !== undefined;
@@ -225,6 +229,7 @@ export function AddTaskSheet({
         expandedAreaHeight.setValue(0);
         expandedAreaOpacity.setValue(0);
         setConfirmModalVisible(false);
+        setShowUnsavedModal(false);
       });
     }
   }, [isVisible, editingTask]);
@@ -292,6 +297,60 @@ export function AddTaskSheet({
     if (sorted1.length !== sorted2.length) return true;
     return sorted1.some((v, i) => v !== sorted2[i]);
   })();
+
+  // Check if points have changed (edit mode only)
+  const hasPointsChanged = isEditMode && editingTask
+    ? (() => {
+        const orig = editingTask.points ?? {};
+        const allIds = new Set([...Object.keys(orig), ...Object.keys(points)]);
+        for (const id of allIds) {
+          if ((orig[id] ?? 0) !== (points[id] ?? 0)) return true;
+        }
+        return false;
+      })()
+    : false;
+
+  // Whether the form has any unsaved edits (edit mode) or any content (add mode)
+  const hasDirtyState = isEditMode
+    ? hasNameChanged || hasPointsChanged || hasScheduleChanged
+    : taskName.trim().length > 0;
+
+  // Intercept dismiss — show unsaved modal if dirty, otherwise close
+  const handleDismiss = useCallback(() => {
+    if (hasDirtyState) {
+      setShowUnsavedModal(true);
+    } else {
+      onClose();
+    }
+  }, [hasDirtyState, onClose]);
+
+  // Handle unsaved modal selection
+  const handleUnsavedSelect = useCallback((optionId: string) => {
+    trackUnsavedChangesShown({
+      'sheet name': isEditMode ? 'edit task' : 'add task',
+      'action taken': optionId === 'save' ? 'save' : 'discard',
+      'has name change': hasNameChanged,
+      'has points change': hasPointsChanged,
+      'has schedule change': hasScheduleChanged,
+    });
+    setShowUnsavedModal(false);
+    if (optionId === 'save') {
+      handleSubmit();
+    } else {
+      onClose();
+    }
+  }, [isEditMode, hasNameChanged, hasPointsChanged, hasScheduleChanged, onClose]);
+
+  const handleUnsavedCancel = useCallback(() => {
+    trackUnsavedChangesShown({
+      'sheet name': isEditMode ? 'edit task' : 'add task',
+      'action taken': 'cancel',
+      'has name change': hasNameChanged,
+      'has points change': hasPointsChanged,
+      'has schedule change': hasScheduleChanged,
+    });
+    setShowUnsavedModal(false);
+  }, [isEditMode, hasNameChanged, hasPointsChanged, hasScheduleChanged]);
 
   // Handle submit (add or edit)
   const handleSubmit = () => {
@@ -403,11 +462,11 @@ export function AddTaskSheet({
       visible={modalVisible}
       transparent
       animationType="none"
-      onRequestClose={onClose}
+      onRequestClose={handleDismiss}
     >
         <View style={styles.modalContainer}>
           {/* Layer 1: Dark Overlay */}
-          <TouchableWithoutFeedback onPress={onClose}>
+          <TouchableWithoutFeedback onPress={handleDismiss}>
             <Animated.View
               style={[styles.overlay, { opacity: overlayOpacity }]}
             />
@@ -550,6 +609,18 @@ export function AddTaskSheet({
             options={confirmOptions}
             onSelect={handleConfirmSelect}
             onCancel={() => setConfirmModalVisible(false)}
+            embedded
+          />
+          {/* Unsaved Changes Modal */}
+          <ConfirmationModal
+            visible={showUnsavedModal}
+            title="Unsaved changes"
+            options={[
+              { id: 'save', label: 'Save changes' },
+              { id: 'discard', label: 'Discard' },
+            ]}
+            onSelect={handleUnsavedSelect}
+            onCancel={handleUnsavedCancel}
             embedded
           />
         </View>

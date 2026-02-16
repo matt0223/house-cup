@@ -11,6 +11,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
 import { useBottomSheet } from '../../hooks/useBottomSheet';
 import { BottomSheetContainer } from '../ui/BottomSheetContainer';
+import { ConfirmationModal } from '../ui/ConfirmationModal';
+import { trackUnsavedChangesShown } from '../../services/analytics';
 
 export interface AddPrizeSheetProps {
   /** Whether the sheet is visible */
@@ -52,11 +54,13 @@ export function AddPrizeSheet({
 
   // Form state
   const [prizeText, setPrizeText] = useState('');
+  const [showUnsavedModal, setShowUnsavedModal] = useState(false);
 
   // Reset form when sheet opens
   useEffect(() => {
     if (isVisible) {
       setPrizeText(currentPrize);
+      setShowUnsavedModal(false);
     }
   }, [isVisible]);
 
@@ -73,13 +77,53 @@ export function AddPrizeSheet({
 
   const isSubmitEnabled = prizeText.trim().length > 0;
 
+  // Dirty state: prize text differs from what was loaded
+  const hasDirtyState = prizeText.trim() !== currentPrize.trim();
+
+  // Intercept dismiss
+  const handleDismiss = useCallback(() => {
+    if (hasDirtyState) {
+      setShowUnsavedModal(true);
+    } else {
+      onClose();
+    }
+  }, [hasDirtyState, onClose]);
+
+  const handleUnsavedSelect = useCallback((optionId: string) => {
+    trackUnsavedChangesShown({
+      'sheet name': 'add prize',
+      'action taken': optionId === 'save' ? 'save' : 'discard',
+      'has name change': hasDirtyState,
+      'has points change': false,
+      'has schedule change': false,
+    });
+    setShowUnsavedModal(false);
+    if (optionId === 'save') {
+      handleSave();
+    } else {
+      onClose();
+    }
+  }, [hasDirtyState, handleSave, onClose]);
+
+  const handleUnsavedCancel = useCallback(() => {
+    trackUnsavedChangesShown({
+      'sheet name': 'add prize',
+      'action taken': 'cancel',
+      'has name change': hasDirtyState,
+      'has points change': false,
+      'has schedule change': false,
+    });
+    setShowUnsavedModal(false);
+  }, [hasDirtyState]);
+
   return (
+    <>
     <BottomSheetContainer
       modalVisible={modalVisible}
       overlayOpacity={overlayOpacity}
       sheetTranslateY={sheetTranslateY}
       contentBottomPadding={contentBottomPadding}
-      onClose={onClose}
+      onClose={handleDismiss}
     >
       <View style={[styles.content, { padding: spacing.md }]}>
         {/* Input row */}
@@ -181,6 +225,17 @@ export function AddPrizeSheet({
         </View>
       </View>
     </BottomSheetContainer>
+    <ConfirmationModal
+      visible={showUnsavedModal}
+      title="Unsaved changes"
+      options={[
+        { id: 'save', label: 'Save changes' },
+        { id: 'discard', label: 'Discard' },
+      ]}
+      onSelect={handleUnsavedSelect}
+      onCancel={handleUnsavedCancel}
+    />
+    </>
   );
 }
 

@@ -12,8 +12,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
 import { useBottomSheet } from '../../hooks/useBottomSheet';
 import { BottomSheetContainer } from '../ui/BottomSheetContainer';
+import { ConfirmationModal } from '../ui/ConfirmationModal';
 import { ColorPicker } from '../ui/ColorPicker';
 import { availableCompetitorColors } from '../../domain/models/Competitor';
+import { trackUnsavedChangesShown } from '../../services/analytics';
 
 export interface AddHousemateSheetProps {
   /** Whether the sheet is visible */
@@ -51,6 +53,7 @@ export function AddHousemateSheet({
   const [name, setName] = useState('');
   const [color, setColor] = useState(availableCompetitorColors[0].hex);
   const [isColorExpanded, setIsColorExpanded] = useState(false);
+  const [showUnsavedModal, setShowUnsavedModal] = useState(false);
 
   // Animation values for color picker expand/collapse
   const colorPickerHeight = useRef(new Animated.Value(0)).current;
@@ -61,6 +64,7 @@ export function AddHousemateSheet({
     if (isVisible) {
       setName('');
       setIsColorExpanded(false);
+      setShowUnsavedModal(false);
       colorPickerHeight.setValue(0);
       colorPickerOpacity.setValue(0);
       const next = competitorAColor
@@ -105,13 +109,53 @@ export function AddHousemateSheet({
 
   const canSubmit = name.trim().length > 0 && color.length > 0;
 
+  // Dirty state: any name entered counts as unsaved work
+  const hasDirtyState = name.trim().length > 0;
+
+  // Intercept dismiss
+  const handleDismiss = useCallback(() => {
+    if (hasDirtyState) {
+      setShowUnsavedModal(true);
+    } else {
+      onClose();
+    }
+  }, [hasDirtyState, onClose]);
+
+  const handleUnsavedSelect = useCallback((optionId: string) => {
+    trackUnsavedChangesShown({
+      'sheet name': 'add housemate',
+      'action taken': optionId === 'save' ? 'save' : 'discard',
+      'has name change': hasDirtyState,
+      'has points change': false,
+      'has schedule change': false,
+    });
+    setShowUnsavedModal(false);
+    if (optionId === 'save') {
+      handleSave();
+    } else {
+      onClose();
+    }
+  }, [hasDirtyState, handleSave, onClose]);
+
+  const handleUnsavedCancel = useCallback(() => {
+    trackUnsavedChangesShown({
+      'sheet name': 'add housemate',
+      'action taken': 'cancel',
+      'has name change': hasDirtyState,
+      'has points change': false,
+      'has schedule change': false,
+    });
+    setShowUnsavedModal(false);
+  }, [hasDirtyState]);
+
   return (
+    <>
     <BottomSheetContainer
       modalVisible={modalVisible}
       overlayOpacity={overlayOpacity}
       sheetTranslateY={sheetTranslateY}
       contentBottomPadding={contentBottomPadding}
-      onClose={onClose}
+      onClose={handleDismiss}
     >
       <View style={[styles.content, { padding: spacing.md }]}>
         {/* Name input row */}
@@ -195,6 +239,17 @@ export function AddHousemateSheet({
         </Animated.View>
       </View>
     </BottomSheetContainer>
+    <ConfirmationModal
+      visible={showUnsavedModal}
+      title="Unsaved changes"
+      options={[
+        { id: 'save', label: 'Save changes' },
+        { id: 'discard', label: 'Discard' },
+      ]}
+      onSelect={handleUnsavedSelect}
+      onCancel={handleUnsavedCancel}
+    />
+    </>
   );
 }
 

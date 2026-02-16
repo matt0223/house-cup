@@ -68,25 +68,34 @@ The app uses Amplitude for product analytics with Session Replay and Experiment 
 ### Event Catalog
 | Event | Where Tracked |
 |-------|--------------|
+| App Opened | `src/providers/FirebaseProvider.tsx` |
 | Screen Viewed | `app/index.tsx`, `app/settings.tsx`, `app/history.tsx`, onboarding screens |
 | Onboarding Started | `app/onboarding/index.tsx` |
 | Apple Sign In Started/Completed/Failed | `app/onboarding/index.tsx`, `app/onboarding/join.tsx` |
 | Join Code Entered | `app/onboarding/index.tsx` |
 | Household Created/Joined | `app/onboarding/index.tsx`, `app/onboarding/join.tsx` |
 | Join Code Failed | `app/onboarding/join.tsx` |
-| Task Created/Edited/Deleted/Scored/Reordered | `app/index.tsx` |
-| Task Converted to Recurring/One Off | `app/index.tsx` |
+| Task Created | `app/index.tsx` |
+| Task Name Changed | `app/index.tsx` |
+| Task Deleted | `app/index.tsx` |
+| Task Scored | `app/index.tsx` |
+| Task Reordered | `app/index.tsx` |
+| Task Schedule Changed | `app/index.tsx` |
 | Prize Set/Cleared | `app/index.tsx`, `app/settings.tsx` |
 | Housemate Added | `app/index.tsx`, `app/settings.tsx` |
 | Invite Shared | `app/index.tsx`, `app/settings.tsx` |
 | Scoreboard Tapped | `app/index.tsx` |
+| Competitor Name Changed | `app/index.tsx`, `app/settings.tsx` |
+| Competitor Color Changed | `app/index.tsx`, `app/settings.tsx` |
 | Day Selected | `app/index.tsx` |
 | Insight Expanded | `app/history.tsx` |
-| Setting Changed | `app/settings.tsx` |
+| Theme Changed | `app/settings.tsx` |
+| Week End Day Changed | `app/settings.tsx` |
 | Data Cleared | `app/settings.tsx` |
 | User Signed Out | `app/settings.tsx` |
 | Challenge Loaded | `app/index.tsx` |
 | Week Completed | `src/services/firebase/challengeService.ts` |
+| Unsaved Changes Shown | `AddTaskSheet`, `AddPrizeSheet`, `CompetitorSheet`, `AddHousemateSheet` |
 
 ### Adding New Events
 1. Add a typed helper function to `src/services/analytics.ts`
