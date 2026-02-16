@@ -105,6 +105,7 @@ export function AddPrizeSheet({
   const handleUnsavedKeepEditing = useCallback(() => {
     trackUnsavedChangesShown({ ...unsavedAnalyticsProps, 'action taken': 'keep editing' });
     setShowUnsavedModal(false);
+    setTimeout(() => inputRef.current?.focus(), 300);
   }, [unsavedAnalyticsProps]);
 
   const handleUnsavedSave = useCallback(() => {
