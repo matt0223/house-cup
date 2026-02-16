@@ -421,3 +421,17 @@ export function trackWeekCompleted(props: {
 }) {
   amplitude.track('Week Completed', props);
 }
+
+// ---------------------------------------------------------------------------
+// UX Events
+// ---------------------------------------------------------------------------
+
+export function trackUnsavedChangesShown(props: {
+  'sheet name': string;       // 'edit task' | 'add task' | 'add prize' | 'competitor' | 'add housemate'
+  'action taken': string;     // 'save' | 'discard' | 'keep editing'
+  'has name change': boolean;
+  'has points change': boolean;
+  'has schedule change': boolean;
+}) {
+  amplitude.track('Unsaved Changes Shown', props);
+}

@@ -116,13 +116,23 @@ export function CompetitorSheet({
 
   const canSubmit = name.trim().length > 0;
 
+  // Auto-save on dismiss: lightweight settings don't need a confirmation modal
+  const handleDismiss = useCallback(() => {
+    const trimmed = name.trim();
+    if (trimmed) {
+      if (trimmed !== competitor.name) onNameChange(trimmed);
+      if (color !== competitor.color) onColorChange(color);
+    }
+    onClose();
+  }, [name, color, competitor.name, competitor.color, onNameChange, onColorChange, onClose]);
+
   return (
     <BottomSheetContainer
       modalVisible={modalVisible}
       overlayOpacity={overlayOpacity}
       sheetTranslateY={sheetTranslateY}
       contentBottomPadding={contentBottomPadding}
-      onClose={onClose}
+      onClose={handleDismiss}
     >
       <View style={[styles.content, { padding: spacing.md }]}>
         {/* Name input row */}

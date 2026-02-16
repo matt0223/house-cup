@@ -21,10 +21,12 @@ import { RepeatPill } from '../ui/RepeatPill';
 import { RepeatDayPicker } from '../ui/RepeatDayPicker';
 import { KebabButton } from '../ui/KebabButton';
 import { ConfirmationModal } from '../ui/ConfirmationModal';
+import { UnsavedChangesModal } from '../ui/UnsavedChangesModal';
 import { Competitor } from '../../domain/models/Competitor';
 import { TaskInstance } from '../../domain/models/TaskInstance';
 import { WeekStartDay } from '../../domain/models/Household';
 import { formatRepeatDays } from '../../domain/services';
+import { trackUnsavedChangesShown } from '../../services/analytics';
 
 /** Scope for applying changes to recurring tasks */
 export type ChangeScope = 'today' | 'future';
@@ -119,6 +121,9 @@ export function AddTaskSheet({
   // Confirmation modal state
   const [confirmModalVisible, setConfirmModalVisible] = useState(false);
   const [confirmModalType, setConfirmModalType] = useState<'name' | 'delete'>('name');
+
+  // Unsaved changes modal state
+  const [showUnsavedModal, setShowUnsavedModal] = useState(false);
 
   // Derived state
   const isEditMode = editingTask !== null && editingTask !== undefined;
@@ -225,6 +230,7 @@ export function AddTaskSheet({
         expandedAreaHeight.setValue(0);
         expandedAreaOpacity.setValue(0);
         setConfirmModalVisible(false);
+        setShowUnsavedModal(false);
       });
     }
   }, [isVisible, editingTask]);
@@ -292,6 +298,59 @@ export function AddTaskSheet({
     if (sorted1.length !== sorted2.length) return true;
     return sorted1.some((v, i) => v !== sorted2[i]);
   })();
+
+  // Check if points have changed (edit mode only)
+  const hasPointsChanged = isEditMode && editingTask
+    ? (() => {
+        const orig = editingTask.points ?? {};
+        const allIds = new Set([...Object.keys(orig), ...Object.keys(points)]);
+        for (const id of allIds) {
+          if ((orig[id] ?? 0) !== (points[id] ?? 0)) return true;
+        }
+        return false;
+      })()
+    : false;
+
+  // Whether the form has any unsaved edits (edit mode) or any content (add mode)
+  const hasDirtyState = isEditMode
+    ? hasNameChanged || hasPointsChanged || hasScheduleChanged
+    : taskName.trim().length > 0;
+
+  // Intercept dismiss — show unsaved modal if dirty, otherwise close
+  const handleDismiss = useCallback(() => {
+    if (hasDirtyState) {
+      setShowUnsavedModal(true);
+    } else {
+      onClose();
+    }
+  }, [hasDirtyState, onClose]);
+
+  // Unsaved modal callbacks
+  const sheetNameForAnalytics = isEditMode ? 'edit task' : 'add task';
+  const unsavedAnalyticsProps = {
+    'sheet name': sheetNameForAnalytics,
+    'has name change': hasNameChanged,
+    'has points change': hasPointsChanged,
+    'has schedule change': hasScheduleChanged,
+  };
+
+  const handleUnsavedDiscard = useCallback(() => {
+    trackUnsavedChangesShown({ ...unsavedAnalyticsProps, 'action taken': 'discard' });
+    setShowUnsavedModal(false);
+    onClose();
+  }, [unsavedAnalyticsProps, onClose]);
+
+  const handleUnsavedKeepEditing = useCallback(() => {
+    trackUnsavedChangesShown({ ...unsavedAnalyticsProps, 'action taken': 'keep editing' });
+    setShowUnsavedModal(false);
+    setTimeout(() => inputRef.current?.focus(), 300);
+  }, [unsavedAnalyticsProps]);
+
+  const handleUnsavedSave = useCallback(() => {
+    trackUnsavedChangesShown({ ...unsavedAnalyticsProps, 'action taken': 'save' });
+    setShowUnsavedModal(false);
+    handleSubmit();
+  }, [unsavedAnalyticsProps]);
 
   // Handle submit (add or edit)
   const handleSubmit = () => {
@@ -403,11 +462,11 @@ export function AddTaskSheet({
       visible={modalVisible}
       transparent
       animationType="none"
-      onRequestClose={onClose}
+      onRequestClose={handleDismiss}
     >
         <View style={styles.modalContainer}>
           {/* Layer 1: Dark Overlay */}
-          <TouchableWithoutFeedback onPress={onClose}>
+          <TouchableWithoutFeedback onPress={handleDismiss}>
             <Animated.View
               style={[styles.overlay, { opacity: overlayOpacity }]}
             />
@@ -551,6 +610,13 @@ export function AddTaskSheet({
             onSelect={handleConfirmSelect}
             onCancel={() => setConfirmModalVisible(false)}
             embedded
+          />
+          {/* Unsaved Changes Modal */}
+          <UnsavedChangesModal
+            visible={showUnsavedModal}
+            onDiscard={handleUnsavedDiscard}
+            onKeepEditing={handleUnsavedKeepEditing}
+            onSave={handleUnsavedSave}
           />
         </View>
       </Modal>

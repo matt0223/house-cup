@@ -73,13 +73,22 @@ export function AddPrizeSheet({
 
   const isSubmitEnabled = prizeText.trim().length > 0;
 
+  // Auto-save on dismiss: lightweight setting doesn't need a confirmation modal
+  const handleDismiss = useCallback(() => {
+    const trimmed = prizeText.trim();
+    if (trimmed && trimmed !== currentPrize.trim()) {
+      onSave(trimmed);
+    }
+    onClose();
+  }, [prizeText, currentPrize, onSave, onClose]);
+
   return (
     <BottomSheetContainer
       modalVisible={modalVisible}
       overlayOpacity={overlayOpacity}
       sheetTranslateY={sheetTranslateY}
       contentBottomPadding={contentBottomPadding}
-      onClose={onClose}
+      onClose={handleDismiss}
     >
       <View style={[styles.content, { padding: spacing.md }]}>
         {/* Input row */}

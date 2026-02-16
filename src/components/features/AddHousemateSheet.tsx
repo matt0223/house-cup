@@ -105,13 +105,18 @@ export function AddHousemateSheet({
 
   const canSubmit = name.trim().length > 0 && color.length > 0;
 
+  // Silent discard on dismiss: one-time action, user knows if they didn't finish
+  const handleDismiss = useCallback(() => {
+    onClose();
+  }, [onClose]);
+
   return (
     <BottomSheetContainer
       modalVisible={modalVisible}
       overlayOpacity={overlayOpacity}
       sheetTranslateY={sheetTranslateY}
       contentBottomPadding={contentBottomPadding}
-      onClose={onClose}
+      onClose={handleDismiss}
     >
       <View style={[styles.content, { padding: spacing.md }]}>
         {/* Name input row */}
