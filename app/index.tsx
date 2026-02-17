@@ -4,7 +4,8 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter, Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../src/theme/useTheme';
-import { AppHeader, DayStrip, AddTaskButton, TaskAddedToast } from '../src/components/ui';
+import { AppHeader, DayStrip, AddTaskButton, TaskAddedToast, UpdateBanner } from '../src/components/ui';
+import { useUpdateCheck } from '../src/hooks/useUpdateCheck';
 import { CollapsibleScoreboard, TaskList, AddTaskSheet, AddPrizeSheet, AddHousemateSheet, CompetitorSheet, TaskChanges, ChangeScope } from '../src/components/features';
 import { ConfirmationModal } from '../src/components/ui';
 import {
@@ -61,8 +62,8 @@ export default function ChallengeScreen() {
   // Scroll position for collapsible scoreboard animation
   const scrollY = React.useRef(new Animated.Value(0)).current;
 
-  // Header height for scroll-based collapse (paddingVertical 12*2 + title ~24 = ~48)
-  const HEADER_HEIGHT = 48;
+  // Header height for scroll-based collapse (paddingVertical 12*2 + title ~24 = ~48 + 8px bottom gap for banner)
+  const HEADER_HEIGHT = 56;
   const COLLAPSE_THRESHOLD = 110; // matches MorphingScoreboard threshold
 
   // Animate header container height from full to 0 as user scrolls
@@ -88,6 +89,9 @@ export default function ChallengeScreen() {
 
   // Firebase context for onboarding redirect and housemate invite
   const { isConfigured, isAuthLoading, userId, householdId, addHousemate, markInviteSent } = useFirebase();
+
+  // Update check for TestFlight version nudge
+  const { showBanner: showUpdateBanner, onDismiss: dismissUpdate, onUpdate: openUpdate } = useUpdateCheck();
 
   // Household store
   const household = useHouseholdStore((s) => s.household);
@@ -674,7 +678,7 @@ export default function ChallengeScreen() {
       edges={['top', 'left', 'right']}
     >
       {/* Header — clips and collapses as user scrolls */}
-      <Animated.View style={{ height: headerHeight, overflow: 'hidden', opacity: headerOpacity }}>
+      <Animated.View style={{ height: headerHeight, overflow: 'hidden', opacity: headerOpacity, paddingBottom: 8 }}>
         <AppHeader
           title={dateRange || 'This Week'}
           rightActions={[
@@ -683,6 +687,15 @@ export default function ChallengeScreen() {
           ]}
         />
       </Animated.View>
+
+      {/* Update nudge banner — fixed above scoreboard, does not scroll */}
+      {isConfigured && (
+        <UpdateBanner
+          visible={showUpdateBanner}
+          onDismiss={dismissUpdate}
+          onUpdate={openUpdate}
+        />
+      )}
 
       {/* Collapsible scoreboard: morphs from expanded to collapsed as user scrolls */}
       <View

@@ -29,3 +29,4 @@ export { OptionPickerModal, type OptionPickerModalProps, type OptionPickerOption
 export { AppleSignInButton, type AppleSignInButtonProps } from './AppleSignInButton';
 export { BottomSheetContainer, type BottomSheetContainerProps } from './BottomSheetContainer';
 export { UnsavedChangesModal, type UnsavedChangesModalProps } from './UnsavedChangesModal';
+export { UpdateBanner, type UpdateBannerProps } from './UpdateBanner';

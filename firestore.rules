@@ -30,5 +30,12 @@ service cloud.firestore {
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
+
+    // App config (version info, feature flags). Public read; admin-only writes.
+    // No sensitive data — just build numbers and feature flags.
+    match /config/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
   }
 }
