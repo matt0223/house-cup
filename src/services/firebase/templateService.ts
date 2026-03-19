@@ -62,8 +62,9 @@ function docToTemplate(
     householdId: data.householdId,
     name: data.name,
     repeatDays: data.repeatDays ?? [],
-    createdAt: data.createdAt?.toDate?.()?.toISOString() ?? data.createdAt,
-    updatedAt: data.updatedAt?.toDate?.()?.toISOString() ?? data.updatedAt,
+    sortOrder: data.sortOrder ?? undefined,
+    createdAt: data.createdAt?.toDate?.()?.toISOString() ?? data.createdAt ?? '',
+    updatedAt: data.updatedAt?.toDate?.()?.toISOString() ?? data.updatedAt ?? '',
   };
 }
 
@@ -102,7 +103,7 @@ export async function getTemplate(
  */
 export async function createTemplate(
   householdId: string,
-  template: Pick<RecurringTemplate, 'name' | 'repeatDays'>,
+  template: Pick<RecurringTemplate, 'name' | 'repeatDays'> & { sortOrder?: number },
   templateId?: string
 ): Promise<RecurringTemplate> {
   const ref = getTemplatesRef(householdId);
@@ -114,13 +115,17 @@ export async function createTemplate(
   const newDocRef = templateId ? doc(ref, templateId) : doc(ref);
   const now = serverTimestamp();
 
-  const data = {
+  const data: Record<string, unknown> = {
     householdId,
     name: template.name,
     repeatDays: template.repeatDays,
     createdAt: now,
     updatedAt: now,
   };
+
+  if (template.sortOrder != null) {
+    data.sortOrder = template.sortOrder;
+  }
 
   await setDoc(newDocRef, data);
 
@@ -130,6 +135,7 @@ export async function createTemplate(
     householdId,
     name: template.name,
     repeatDays: template.repeatDays,
+    sortOrder: template.sortOrder,
     createdAt: nowIso,
     updatedAt: nowIso,
   };
@@ -141,7 +147,7 @@ export async function createTemplate(
 export async function updateTemplate(
   householdId: string,
   templateId: string,
-  updates: Partial<Pick<RecurringTemplate, 'name' | 'repeatDays'>>
+  updates: Partial<Pick<RecurringTemplate, 'name' | 'repeatDays' | 'sortOrder'>>
 ): Promise<void> {
   const ref = getTemplateRef(householdId, templateId);
   if (!ref) {
@@ -165,6 +171,31 @@ export async function deleteTemplate(
     throw new Error('Firestore is not configured');
   }
   await deleteDoc(ref);
+}
+
+/**
+ * Batch-update sortOrder for multiple templates (used after drag-to-reorder).
+ */
+export async function updateTemplateSortOrders(
+  householdId: string,
+  updates: { templateId: string; sortOrder: number }[]
+): Promise<void> {
+  if (updates.length === 0) return;
+
+  const db = getDb();
+  if (!db) {
+    throw new Error('Firestore is not configured');
+  }
+
+  const batch = writeBatch(db);
+  const now = serverTimestamp();
+
+  for (const { templateId, sortOrder } of updates) {
+    const ref = doc(db, 'households', householdId, SUBCOLLECTION, templateId);
+    batch.update(ref, { sortOrder, updatedAt: now });
+  }
+
+  await batch.commit();
 }
 
 const BATCH_LIMIT = 500;

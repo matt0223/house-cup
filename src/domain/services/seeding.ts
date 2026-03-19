@@ -71,12 +71,21 @@ export function seedTasks(
     maxSortOrderByDay.set(instance.dayKey, Math.max(cur, instance.sortOrder ?? 0));
   }
 
+  // Sort templates by sortOrder so seeded tasks inherit the user's preferred order.
+  // Falls back to createdAt for templates that haven't been reordered yet.
+  const sortedTemplates = [...templates].sort((a, b) => {
+    const aSort = a.sortOrder ?? Infinity;
+    const bSort = b.sortOrder ?? Infinity;
+    if (aSort !== bSort) return aSort - bSort;
+    return (a.createdAt ?? '').localeCompare(b.createdAt ?? '');
+  });
+
   const now = new Date().toISOString();
 
   for (const dayKey of dayKeys) {
     const dayOfWeek = getDayOfWeek(dayKey);
 
-    for (const template of templates) {
+    for (const template of sortedTemplates) {
       // Check if template repeats on this day
       if (!shouldRepeatOnDay(template, dayOfWeek)) {
         continue;
