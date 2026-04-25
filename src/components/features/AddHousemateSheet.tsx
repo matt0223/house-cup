@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Animated,
   Easing,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
@@ -22,8 +23,11 @@ export interface AddHousemateSheetProps {
   onClose: () => void;
   /** Called when user saves (adds housemate) */
   onSave: (name: string, color: string) => void;
-  /** Called when user taps Invite (add housemate then share) */
-  onInvite: (name: string, color: string) => void;
+  /** Called when user taps Invite (add housemate then share). Returns a
+   * promise that resolves once the share sheet has been dismissed; the
+   * sheet stays open (as a backdrop) until then so iOS can stack the
+   * share sheet on top without a presentation race. */
+  onInvite: (name: string, color: string) => Promise<void>;
   /** Color already used by competitor A (unavailable for picker) */
   competitorAColor?: string;
 }
@@ -51,6 +55,7 @@ export function AddHousemateSheet({
   const [name, setName] = useState('');
   const [color, setColor] = useState(availableCompetitorColors[0].hex);
   const [isColorExpanded, setIsColorExpanded] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Animation values for color picker expand/collapse
   const colorPickerHeight = useRef(new Animated.Value(0)).current;
@@ -61,6 +66,7 @@ export function AddHousemateSheet({
     if (isVisible) {
       setName('');
       setIsColorExpanded(false);
+      setIsSubmitting(false);
       colorPickerHeight.setValue(0);
       colorPickerOpacity.setValue(0);
       const next = competitorAColor
@@ -92,16 +98,27 @@ export function AddHousemateSheet({
   }, [isColorExpanded]);
 
   const handleSave = useCallback(() => {
-    if (!name.trim() || !color) return;
+    if (!name.trim() || !color || isSubmitting) return;
     onSave(name.trim(), color);
     onClose();
-  }, [name, color, onSave, onClose]);
+  }, [name, color, onSave, onClose, isSubmitting]);
 
-  const handleInvite = useCallback(() => {
-    if (!name.trim() || !color) return;
-    onInvite(name.trim(), color);
-    onClose();
-  }, [name, color, onInvite, onClose]);
+  // Await the parent's onInvite — which adds the housemate and presents
+  // the iOS share sheet — before closing this bottom sheet. Closing first
+  // races with Share.share() and causes iOS to flash and dismiss the
+  // share sheet (the freeze symptom).
+  const handleInvite = useCallback(async () => {
+    if (!name.trim() || !color || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      await onInvite(name.trim(), color);
+    } catch (err) {
+      console.error('Invite failed:', err);
+    } finally {
+      setIsSubmitting(false);
+      onClose();
+    }
+  }, [name, color, onInvite, onClose, isSubmitting]);
 
   const canSubmit = name.trim().length > 0 && color.length > 0;
 
@@ -164,23 +181,28 @@ export function AddHousemateSheet({
             <TouchableOpacity
               style={[styles.button, { backgroundColor: colors.primary + '15', marginRight: spacing.xs }]}
               onPress={handleInvite}
+              disabled={isSubmitting}
               activeOpacity={0.7}
             >
               <Text style={[typography.callout, { color: colors.primary }]}>Invite</Text>
-              <Ionicons name="paper-plane-outline" size={18} color={colors.primary} />
+              {isSubmitting ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <Ionicons name="paper-plane-outline" size={18} color={colors.primary} />
+              )}
             </TouchableOpacity>
           )}
 
           {/* Save / checkmark button */}
           <TouchableOpacity
-            style={[styles.saveButton, { backgroundColor: canSubmit ? colors.primary : colors.border }]}
+            style={[styles.saveButton, { backgroundColor: canSubmit && !isSubmitting ? colors.primary : colors.border }]}
             onPress={handleSave}
-            disabled={!canSubmit}
+            disabled={!canSubmit || isSubmitting}
             activeOpacity={0.8}
             accessibilityLabel="Save"
             accessibilityRole="button"
           >
-            <Ionicons name="checkmark" size={20} color={canSubmit ? '#FFFFFF' : colors.textSecondary} />
+            <Ionicons name="checkmark" size={20} color={canSubmit && !isSubmitting ? '#FFFFFF' : colors.textSecondary} />
           </TouchableOpacity>
         </View>
 
