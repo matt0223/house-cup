@@ -45,7 +45,7 @@ export default function OnboardingSetupScreen() {
   const { colors, spacing, typography, radius } = useTheme();
   const router = useRouter();
   const params = useLocalSearchParams<{ givenName?: string }>();
-  const { createHousehold, joinHousehold } = useFirebase();
+  const { createHousehold, joinHousehold, userId } = useFirebase();
 
   const givenName = params.givenName || '';
 
@@ -95,14 +95,20 @@ export default function OnboardingSetupScreen() {
     setError(null);
 
     try {
-      const name = givenName || 'You';
-      const defaultColor = availableCompetitorColors[0].hex;
-      await joinHousehold(codeToJoin, name, defaultColor);
+      // Pass empty strings for name/color we don't want to override.
+      // claimCompetitorSlot (householdService.ts:273-274) only writes
+      // truthy values, so this preserves whatever the inviter pre-filled
+      // on the pending slot. We only override the name when Apple Sign-In
+      // actually surfaced a given name — otherwise the slot keeps the
+      // placeholder (e.g., "Pri") that the inviter typed. The color is
+      // never overridden on the join path; the inviter's choice wins.
+      await joinHousehold(codeToJoin, givenName || '', '');
       const joined = useHouseholdStore.getState().household;
+      const myCompetitor = joined?.competitors.find((c) => c.userId === userId);
       trackHouseholdJoined({
         'household id': joined?.id ?? '',
-        'competitor name': name,
-        'competitor color': defaultColor,
+        'competitor name': myCompetitor?.name ?? '',
+        'competitor color': myCompetitor?.color ?? '',
       });
       router.replace('/');
     } catch (err) {
