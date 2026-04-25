@@ -112,7 +112,6 @@ export default function OnboardingSetupScreen() {
       });
       router.replace('/');
     } catch (err) {
-      console.error('Failed to join household:', err);
       const message = err instanceof Error ? err.message : '';
       let reason: 'invalid code' | 'household full' | 'no pending invite' | 'exception' = 'exception';
       let display = "That code didn't work. Double-check with your housemate.";
@@ -124,6 +123,12 @@ export default function OnboardingSetupScreen() {
       } else if (/no pending invite/i.test(message)) {
         reason = 'no pending invite';
         display = 'No pending invite found for this code.';
+      } else {
+        // Only log truly unexpected errors. User-input failures (wrong
+        // code, full household, etc.) are surfaced through the inline
+        // error UI; logging them at error severity triggers the dev
+        // LogBox banner for what is normal user behavior.
+        console.error('Failed to join household:', err);
       }
       trackJoinCodeFailed({ 'error reason': reason });
       setError(display);
