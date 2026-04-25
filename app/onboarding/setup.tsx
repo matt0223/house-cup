@@ -26,6 +26,7 @@ import {
   trackHouseholdCreated,
   trackHouseholdJoined,
   trackJoinCodeFailed,
+  trackJoinCodeEntered,
 } from '../../src/services/analytics';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -153,6 +154,10 @@ export default function OnboardingSetupScreen() {
   };
 
   const handleRevealCodeField = () => {
+    // Marks user intent to join via code — restores the funnel signal
+    // that previously fired when "Have a join code?" was tapped on the
+    // welcome screen.
+    trackJoinCodeEntered();
     // Match the layout animation duration to iOS's keyboard slide (~250ms)
     // so the content reflow and keyboard appearance feel like one motion.
     LayoutAnimation.configureNext({

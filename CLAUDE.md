@@ -71,10 +71,10 @@ The app uses Amplitude for product analytics with Session Replay and Experiment 
 | App Opened | `src/providers/FirebaseProvider.tsx` |
 | Screen Viewed | `app/index.tsx`, `app/settings.tsx`, `app/history.tsx`, onboarding screens |
 | Onboarding Started | `app/onboarding/index.tsx` |
-| Apple Sign In Started/Completed/Failed | `app/onboarding/index.tsx`, `app/onboarding/join.tsx` |
-| Join Code Entered | `app/onboarding/index.tsx` |
-| Household Created/Joined | `app/onboarding/index.tsx`, `app/onboarding/join.tsx` |
-| Join Code Failed | `app/onboarding/join.tsx` |
+| Apple Sign In Started/Completed/Failed | `app/onboarding/index.tsx` |
+| Join Code Entered | `app/onboarding/setup.tsx` (fired when user taps "Enter invite code" to reveal the code field) |
+| Household Created/Joined | `app/onboarding/setup.tsx` |
+| Join Code Failed | `app/onboarding/setup.tsx` |
 | Task Created | `app/index.tsx` |
 | Task Name Changed | `app/index.tsx` |
 | Task Deleted | `app/index.tsx` |

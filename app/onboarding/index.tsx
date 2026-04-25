@@ -62,12 +62,23 @@ export default function OnboardingWelcomeScreen() {
       return;
     }
 
+    const givenNameSurfaced = Boolean(appleGivenName);
     const recovered = await recoverHousehold();
     if (recovered) {
-      trackAppleSignInCompleted({ flow: 'create', 'is returning user': true, 'had existing household': true });
+      trackAppleSignInCompleted({
+        flow: 'create',
+        'is returning user': true,
+        'had existing household': true,
+        'apple given name surfaced': givenNameSurfaced,
+      });
       router.replace('/');
     } else {
-      trackAppleSignInCompleted({ flow: 'create', 'is returning user': false, 'had existing household': false });
+      trackAppleSignInCompleted({
+        flow: 'create',
+        'is returning user': false,
+        'had existing household': false,
+        'apple given name surfaced': givenNameSurfaced,
+      });
       router.replace({
         pathname: '/onboarding/setup',
         params: { givenName: appleGivenName || '' },
