@@ -263,12 +263,18 @@ Then approve in App Store Connect TestFlight tab.
 5. **Competitor colors are user-chosen** - Orange is reserved for app accent
 6. **Typography: 6 variants only** - title, display, headline, body, callout, caption
 
-## Current State (February 2026)
+## Current State (April 2026)
 
 ### Auth & Onboarding
-- **Sign in with Apple only** - No guest mode, no "Link Apple Account" in Settings. User must sign in with Apple before seeing the household (onboarding and join flow both require Apple Sign-In). Keeps identity simple and avoids orphaned anonymous users.
-- Onboarding: Welcome screen → Apple Sign-In → auto-create household → main app. Or: "Have a join code?" → enter code → Apple Sign-In → auto-join household.
-- The old 3-step create wizard (`app/onboarding/create.tsx`) has been **removed** — it was dead code, never navigated to.
+- **Sign in with Apple only** - No guest mode, no "Link Apple Account" in Settings. User must sign in with Apple before seeing the household. Keeps identity simple and avoids orphaned anonymous users.
+- **Welcome screen** (`app/onboarding/index.tsx`) shows a single `[Continue with Apple]` CTA — no secondary join link. After successful sign-in, `recoverHousehold()` looks up any household where the user's UID is in `memberIds`. If found → main app. If not → routes to the new setup fork screen.
+- **Setup fork screen** (`app/onboarding/setup.tsx`) is shown when a fresh Apple ID has no household to recover. Primary `[Create new household]` button up top, secondary outlined `[Enter invite code]` button below an "or" divider. Tapping the secondary button progressively discloses a 6-digit numeric code field (LayoutAnimation + `autoFocus`, single 300ms easeOut motion alongside the keyboard slide) that auto-submits when 6 digits are entered (Apple 2FA pattern; double-fire-guarded by status + `lastSubmittedCode` ref).
+- **Numeric 6-digit join codes** — `generateJoinCode` in `FirebaseProvider.tsx` produces digits-only so iOS's `textContentType="oneTimeCode"` autofill reliably surfaces codes from a recent iMessage. `createHousehold` runs a uniqueness check + retry (up to 10 times) since the 1M code space is smaller than the prior alphanumeric ~1B.
+- **Inviter's name/color is preserved on the join path** — `setup.tsx:handleJoin` passes empty strings for name/color when Apple didn't surface a given name. `claimCompetitorSlot` only writes truthy overrides ([householdService.ts:273-274](src/services/firebase/householdService.ts:273)), so the inviter's "Pri" + chosen color stays. Earlier regression: a unconditional `'You'` + purple fallback wrote over the inviter's choices.
+- **Add Housemate → Invite is no-freeze** — `AddHousemateSheet.handleInvite` awaits the parent's async invite handler before calling `onClose()`. Previously, closing the bottom sheet while `Share.share()` tried to present caused iOS to flash + dismiss the share sheet (modal presentation race). The share sheet now stacks on top of the still-open bottom sheet; the sheet only dismisses after the share completes. `isSubmitting` guard prevents double-fires; paper-plane icon swaps to `ActivityIndicator` during the Firestore write.
+- **Removed**: `app/onboarding/join.tsx` (subsumed by setup.tsx); `app/onboarding/create.tsx` (was dead code).
+- **Recovery scripts** for invite-acceptance bugs live in `scripts/`: `diagnose-invite.mjs` (lists all prod households + dumps deployed Firestore rules); `recover-invite.mjs` (claims a pending competitor slot for a UID + recursively deletes the orphan household, dry-run by default; requires `--commit`). Both use the firebase-tools refresh token + Firestore REST API.
+- **Updated share-invite text** — three-step numbered flow ("Get the app → Sign in with Apple → Enter your code: XXXXXX"); replaces the prior "Your join code: XXXXXX" copy that gave users no instructions on what to do with it (the bug Janelle hit).
 - Sign out in Settings clears local household and navigates to onboarding.
 
 ### Recurring Tasks (Important for UX and Bugs)
@@ -307,6 +313,8 @@ Then approve in App Store Connect TestFlight tab.
 - **Smooth prize circle morph** - Prize circle collapses/expands without text shuffling. Text has a fixed width (`PRIZE_CIRCLE_EXPANDED - PRIZE_BORDER_EXPANDED * 2`), no `numberOfLines` limit, and the circle has `overflow: 'hidden'`. Text fades with opacity only (no `maxHeight` animation). A `translateY` shift on the content group (trophy + text) moves it down as text fades so the trophy stays centered in the collapsed circle.
 
 - **Amplitude Analytics** — Full event instrumentation with Session Replay. Events, user properties, and group properties are tracked via a centralized service (`src/services/analytics.ts`). Initialized in `FirebaseProvider` on mount; identity set when auth/household resolve.
+- **Onboarding redesign + invite-bug-fix** (April 2026) — single-CTA welcome + setup fork screen, numeric codes, autofill, no-freeze invite, inviter values preserved on join. Shipped via PR #2.
+- **In-app TestFlight update banner** — `useUpdateCheck` hook reads `config/appVersion.latestBuildNumber` from Firestore and shows a dismissable banner when the running build is behind. **Manual sync step:** after each TestFlight publish (and ideally only once the build is approved + live to testers, so the banner's "Update" tap actually finds something newer), run `node scripts/update-app-version.mjs --project prod <build>` and `node scripts/update-app-version.mjs <build>` (default project = dev). Skipping this means users on older builds won't get nudged — has been forgotten before.
 
 ### Planned
 - Push notifications for reminders
