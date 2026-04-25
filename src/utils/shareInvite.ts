@@ -19,14 +19,14 @@ export async function shareHouseholdInvite(
   joinCode: string
 ): Promise<boolean> {
   const greeting = inviteeName ? `Hi ${inviteeName}, ` : '';
-  
+
   const testFlightLink = 'https://testflight.apple.com/join/N8gV6Gcs';
-  
-  const message = `${greeting}${inviterName} invited you to join their household on House Cup!
 
-Get the app: ${testFlightLink}
+  const message = `${greeting}${inviterName} invited you to House Cup, where you compete on chores together.
 
-Your join code: ${joinCode}`;
+1. Get the app: ${testFlightLink}
+2. Open it and sign in with Apple
+3. Enter your code: ${joinCode}`;
 
   try {
     const result = await Share.share(

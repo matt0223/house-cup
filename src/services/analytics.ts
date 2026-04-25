@@ -140,6 +140,11 @@ export function trackAppleSignInCompleted(props: {
   flow: string;
   'is returning user': boolean;
   'had existing household': boolean;
+  /** Did Apple Sign-In return a non-empty givenName? Apple only includes
+   * this on the very first authorization for an app — useful for
+   * understanding how often the join-side name fallback (placeholder
+   * name from inviter) needs to kick in. */
+  'apple given name surfaced': boolean;
 }) {
   amplitude.track('Apple Sign In Completed', props);
 }
