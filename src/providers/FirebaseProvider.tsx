@@ -46,15 +46,29 @@ import {
 const HOUSEHOLD_ID_KEY = '@housecup/householdId';
 
 /**
- * Generate a random 6-character join code
+ * Generate a random 6-digit numeric join code.
+ * Numeric helps iOS detect the code via textContentType="oneTimeCode" autofill.
  */
 function generateJoinCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Removed confusing chars
+  const chars = '0123456789';
   let code = '';
   for (let i = 0; i < 6; i++) {
     code += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return code;
+}
+
+/**
+ * Generate a unique join code, retrying on collision.
+ * 10^6 = 1M code space; collision check + retry handles the long tail.
+ */
+async function generateUniqueJoinCode(): Promise<string> {
+  for (let i = 0; i < 10; i++) {
+    const code = generateJoinCode();
+    const existing = await findHouseholdByJoinCode(code);
+    if (!existing) return code;
+  }
+  throw new Error('Failed to generate unique join code after 10 attempts');
 }
 
 interface FirebaseContextValue {
@@ -404,7 +418,7 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
         throw new Error('Must be authenticated to create household');
       }
 
-      const joinCode = generateJoinCode();
+      const joinCode = await generateUniqueJoinCode();
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       const timestamp = Date.now();
 
