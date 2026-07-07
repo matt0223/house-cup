@@ -62,21 +62,3 @@ export function isValidCompetitorColor(hex: string): boolean {
   );
 }
 
-// Sample data for development and previews
-export const sampleCompetitors: Competitor[] = [
-  {
-    id: 'competitor-a',
-    name: 'Pri',
-    color: '#9B7FD1', // Purple chip color
-    userId: 'user-1',
-  },
-  {
-    id: 'competitor-b',
-    name: 'Matt',
-    color: '#5B9BD5', // Blue chip color
-    userId: 'user-2',
-  },
-];
-
-export const sampleCompetitorA = sampleCompetitors[0];
-export const sampleCompetitorB = sampleCompetitors[1];

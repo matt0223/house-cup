@@ -139,5 +139,3 @@ const styles = StyleSheet.create({
     zIndex: 1000,
   },
 });
-
-export default TaskAddedToast;

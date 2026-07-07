@@ -130,5 +130,3 @@ const styles = StyleSheet.create({
     marginVertical: 2,
   },
 });
-
-export default OptionPickerModal;

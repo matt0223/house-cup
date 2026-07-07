@@ -129,5 +129,3 @@ export function Button({
     </TouchableOpacity>
   );
 }
-
-export default Button;

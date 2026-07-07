@@ -204,5 +204,3 @@ const styles = StyleSheet.create({
   },
   colorPickerContainer: {},
 });
-
-export default CompetitorRow;

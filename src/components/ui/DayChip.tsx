@@ -66,5 +66,3 @@ export function DayChip({
     </TouchableOpacity>
   );
 }
-
-export default DayChip;

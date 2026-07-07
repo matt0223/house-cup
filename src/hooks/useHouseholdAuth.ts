@@ -127,5 +127,3 @@ export function useHouseholdAuth(): UseHouseholdAuthResult {
     setHouseholdId,
   };
 }
-
-export default useHouseholdAuth;

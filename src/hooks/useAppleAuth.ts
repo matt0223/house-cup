@@ -77,5 +77,3 @@ export function useAppleAuth(): UseAppleAuthResult {
     clearError,
   };
 }
-
-export default useAppleAuth;

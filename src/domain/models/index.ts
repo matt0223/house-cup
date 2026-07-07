@@ -9,9 +9,6 @@ export {
   getCompetitorInitial,
   isPendingCompetitor,
   hasBeenInvited,
-  sampleCompetitors,
-  sampleCompetitorA,
-  sampleCompetitorB,
 } from './Competitor';
 
 export { type Household, type WeekStartDay } from './Household';

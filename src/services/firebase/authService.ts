@@ -7,7 +7,6 @@
 
 import {
   User,
-  signInAnonymously as firebaseSignInAnonymously,
   signOut as firebaseSignOut,
   onAuthStateChanged,
   OAuthProvider,
@@ -38,19 +37,6 @@ export function getCurrentUserId(): string | null {
 }
 
 /**
- * Sign in anonymously
- * Creates a new anonymous account if not already signed in
- */
-export async function signInAnonymously(): Promise<User> {
-  const auth = getFirebaseAuth();
-  if (!auth) {
-    throw new Error('Firebase Auth is not configured');
-  }
-  const { user } = await firebaseSignInAnonymously(auth);
-  return user;
-}
-
-/**
  * Sign out the current user
  */
 export async function signOut(): Promise<void> {
@@ -73,17 +59,6 @@ export function subscribeToAuthState(
     return () => {};
   }
   return onAuthStateChanged(auth, onStateChanged);
-}
-
-/**
- * Ensure user is authenticated (sign in anonymously if not)
- */
-export async function ensureAuthenticated(): Promise<User> {
-  const currentUser = getCurrentUser();
-  if (currentUser) {
-    return currentUser;
-  }
-  return signInAnonymously();
 }
 
 /**
@@ -177,13 +152,3 @@ export async function signInWithApple(): Promise<AppleSignInResult> {
   const result = await signInWithCredential(auth, credential);
   return { user: result.user, givenName };
 }
-
-export default {
-  getCurrentUser,
-  getCurrentUserId,
-  signInAnonymously,
-  signOut,
-  subscribeToAuthState,
-  ensureAuthenticated,
-  signInWithApple,
-};

@@ -45,5 +45,3 @@ export async function shareHouseholdInvite(
     return false;
   }
 }
-
-export default shareHouseholdInvite;

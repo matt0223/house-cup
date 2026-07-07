@@ -225,5 +225,3 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
 });
-
-export default AddPrizeSheet;

@@ -37,5 +37,3 @@ export function useStepAnimation() {
     animateStepChange,
   };
 }
-
-export default useStepAnimation;

@@ -60,5 +60,3 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
 });
-
-export default RepeatPill;

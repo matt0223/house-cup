@@ -653,5 +653,3 @@ export function useFirebase(): FirebaseContextValue {
   }
   return context;
 }
-
-export default FirebaseProvider;

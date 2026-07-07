@@ -82,5 +82,3 @@ const styles = StyleSheet.create({
     bottom: 0,
   },
 });
-
-export default BottomSheetContainer;

@@ -158,5 +158,3 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
 });
-
-export default PointsChip;

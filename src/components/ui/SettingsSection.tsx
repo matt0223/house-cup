@@ -54,5 +54,3 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
 });
-
-export default SettingsSection;

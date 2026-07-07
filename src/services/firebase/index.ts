@@ -5,12 +5,7 @@
  */
 
 // Config and initialization
-export {
-  db,
-  firebaseAuth,
-  isFirebaseConfigured,
-  enableOfflinePersistence,
-} from './firebaseConfig';
+export { isFirebaseConfigured } from './firebaseConfig';
 
 // Authentication
 export * from './authService';

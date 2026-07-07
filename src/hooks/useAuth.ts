@@ -97,5 +97,3 @@ export function useAuth(): UseAuthResult {
     signOut,
   };
 }
-
-export default useAuth;

@@ -197,5 +197,3 @@ export function useFirestoreSync({
     error,
   };
 }
-
-export default useFirestoreSync;

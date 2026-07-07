@@ -11,8 +11,6 @@ import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
 import {
   getFirestore,
   Firestore,
-  enableIndexedDbPersistence,
-  connectFirestoreEmulator,
   collection,
   doc,
 } from 'firebase/firestore';
@@ -23,7 +21,6 @@ import {
   // runtime; the web typings that tsc resolves omit it.
   getReactNativePersistence,
   Auth,
-  connectAuthEmulator,
 } from 'firebase/auth';
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -102,12 +99,6 @@ export function getDb(): Firestore | null {
 }
 
 /**
- * Firestore database instance (for backward compatibility)
- * Returns null if Firebase is not configured
- */
-export const db: Firestore | null = null; // Will be initialized lazily
-
-/**
  * Get Firebase Auth instance
  * Uses AsyncStorage for persistence so auth state survives app restarts
  */
@@ -141,58 +132,6 @@ export function getFirebaseAuth(): Auth | null {
 }
 
 /**
- * Firebase Auth instance (for backward compatibility)
- */
-export const firebaseAuth: Auth | null = null; // Will be initialized lazily
-
-/**
- * Enable Firestore offline persistence
- * This allows the app to work offline and sync when back online
- */
-export async function enableOfflinePersistence(): Promise<void> {
-  const database = getDb();
-  if (!database) {
-    return;
-  }
-
-  try {
-    await enableIndexedDbPersistence(database);
-    console.log('Firestore offline persistence enabled');
-  } catch (error: unknown) {
-    const err = error as { code?: string };
-    if (err.code === 'failed-precondition') {
-      // Multiple tabs open, persistence can only be enabled in one tab at a time
-      console.warn('Firestore persistence failed: Multiple tabs open');
-    } else if (err.code === 'unimplemented') {
-      // Browser doesn't support persistence
-      console.warn('Firestore persistence not supported in this browser');
-    } else {
-      console.warn('Firestore persistence setup:', error);
-    }
-  }
-}
-
-/**
- * Connect to local emulators (for development)
- */
-export function connectToEmulators(
-  firestoreHost = 'localhost',
-  firestorePort = 8080,
-  authHost = 'localhost',
-  authPort = 9099
-): void {
-  const database = getDb();
-  const auth = getFirebaseAuth();
-
-  if (database) {
-    connectFirestoreEmulator(database, firestoreHost, firestorePort);
-  }
-  if (auth) {
-    connectAuthEmulator(auth, `http://${authHost}:${authPort}`);
-  }
-}
-
-/**
  * Generate a Firestore-compatible document ID.
  * This can be used to pre-generate IDs for optimistic updates
  * so the local and Firestore IDs match.
@@ -206,12 +145,3 @@ export function generateFirestoreId(): string {
   // Create a reference to a temp collection and get its auto-generated ID
   return doc(collection(db, '_temp')).id;
 }
-
-export default {
-  getDb,
-  getFirebaseAuth,
-  isFirebaseConfigured,
-  enableOfflinePersistence,
-  connectToEmulators,
-  generateFirestoreId,
-};

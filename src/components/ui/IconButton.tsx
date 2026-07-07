@@ -75,5 +75,3 @@ export function IconButton({
     </TouchableOpacity>
   );
 }
-
-export default IconButton;
