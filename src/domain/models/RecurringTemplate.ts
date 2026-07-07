@@ -18,6 +18,9 @@ export interface RecurringTemplate {
    */
   repeatDays: number[];
 
+  /** Position in task list (lower = higher). Mirrors TaskInstance.sortOrder. */
+  sortOrder?: number;
+
   /** When the template was created */
   createdAt: string;
 

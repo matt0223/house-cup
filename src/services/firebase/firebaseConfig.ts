@@ -19,6 +19,8 @@ import {
 import {
   getAuth,
   initializeAuth,
+  // @ts-expect-error — exported by firebase/auth's React Native entry point at
+  // runtime; the web typings that tsc resolves omit it.
   getReactNativePersistence,
   Auth,
   connectAuthEmulator,

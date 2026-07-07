@@ -53,7 +53,7 @@ export function AddHousemateSheet({
 
   // Form state
   const [name, setName] = useState('');
-  const [color, setColor] = useState(availableCompetitorColors[0].hex);
+  const [color, setColor] = useState<string>(availableCompetitorColors[0].hex);
   const [isColorExpanded, setIsColorExpanded] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 

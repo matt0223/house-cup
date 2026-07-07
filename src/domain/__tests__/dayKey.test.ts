@@ -112,7 +112,7 @@ describe('dayKey utilities', () => {
   describe('formatDayKeyRange', () => {
     it('formats a date range for display', () => {
       const result = formatDayKeyRange('2026-01-24', '2026-01-30');
-      expect(result).toBe('Jan 24 - Jan 30');
+      expect(result).toBe('Jan 24 – Jan 30');
     });
   });
 });

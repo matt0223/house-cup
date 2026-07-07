@@ -2,6 +2,7 @@ import React, { useCallback, useRef, useState } from 'react';
 import { View, StyleSheet, LayoutChangeEvent } from 'react-native';
 import { GestureHandlerRootView, Gesture } from 'react-native-gesture-handler';
 import Animated, {
+  type SharedValue,
   useSharedValue,
   useAnimatedStyle,
   useAnimatedReaction,
@@ -202,11 +203,11 @@ interface SortableRowProps {
   task: TaskInstance;
   taskId: string;
   arrayIndex: number;
-  positions: Animated.SharedValue<Record<string, number>>;
-  ROW_HEIGHT: Animated.SharedValue<number>;
-  draggedId: Animated.SharedValue<string | null>;
-  isDragMovable: Animated.SharedValue<boolean>;
-  currentSlot: Animated.SharedValue<number>;
+  positions: SharedValue<Record<string, number>>;
+  ROW_HEIGHT: SharedValue<number>;
+  draggedId: SharedValue<string | null>;
+  isDragMovable: SharedValue<boolean>;
+  currentSlot: SharedValue<number>;
   tasksCount: number;
   competitors: Competitor[];
   templates: RecurringTemplate[];

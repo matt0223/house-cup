@@ -22,7 +22,7 @@ export interface UseBottomSheetReturn {
   /** Bottom padding: keyboard height when open, safe area bottom when closed */
   contentBottomPadding: number;
   /** Ref to attach to the primary TextInput for auto-focus */
-  inputRef: React.RefObject<TextInput>;
+  inputRef: React.RefObject<TextInput | null>;
 }
 
 /**

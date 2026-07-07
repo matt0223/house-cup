@@ -68,7 +68,9 @@ export function AppleSignInButton({
           }
           cornerRadius={radius.pill}
           style={[styles.button, { opacity: disabled ? 0.5 : 1 }]}
-          onPress={disabled ? undefined : onPress}
+          onPress={() => {
+            if (!disabled) onPress();
+          }}
         />
       </View>
     );
@@ -82,7 +84,7 @@ export function AppleSignInButton({
       style={[
         styles.fallbackButton,
         {
-          backgroundColor: colors.text,
+          backgroundColor: colors.textPrimary,
           borderRadius: radius.pill,
           paddingVertical: spacing.md,
           opacity: disabled ? 0.5 : 1,
