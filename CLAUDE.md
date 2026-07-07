@@ -49,12 +49,11 @@ The empty competitor score sitting at 0 next to their 1 creates an implicit ques
 
 ## Amplitude Analytics
 
-The app uses Amplitude for product analytics with Session Replay and Experiment SDKs.
+The app uses Amplitude for product analytics with Session Replay.
 
 ### SDKs
 - `@amplitude/analytics-react-native` — Core event tracking
 - `@amplitude/plugin-session-replay-react-native` — Session Replay
-- `@amplitude/experiment-react-native-client` — Feature flags / A/B tests
 
 ### Architecture
 - **Centralized service:** `src/services/analytics.ts` — All event definitions with typed helpers. Never call `amplitude.track()` directly; use typed wrappers like `trackTaskCreated()`.
