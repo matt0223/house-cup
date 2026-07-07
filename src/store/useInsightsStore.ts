@@ -13,6 +13,7 @@ import { WeekNarrative, generateWeekNarrative } from '../domain/services/narrati
 import { calculateCompetitorTotal } from '../domain/services/scoring';
 import * as challengeService from '../services/firebase/challengeService';
 import * as taskService from '../services/firebase/taskService';
+import { logger } from '../utils/logger';
 
 /**
  * Enriched challenge data with scores and narrative for display.
@@ -134,7 +135,7 @@ export const useInsightsStore = create<InsightsStore>((set, get) => ({
         isLoading: false,
       });
     } catch (error) {
-      console.error('Failed to load insights:', error);
+      logger.error('Failed to load insights:', error);
       set({
         isLoading: false,
         error: error instanceof Error ? error.message : 'Failed to load insights',

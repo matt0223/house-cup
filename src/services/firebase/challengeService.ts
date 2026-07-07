@@ -29,6 +29,7 @@ import { getTasksForChallenge } from './taskService';
 import { calculateChallengeScores } from '../../domain/services/scoring';
 import { getCurrentWeekWindow } from '../../domain/services/weekWindow';
 import { trackWeekCompleted } from '../analytics';
+import { logger } from '../../utils/logger';
 
 const SUBCOLLECTION = 'challenges';
 
@@ -297,7 +298,7 @@ export async function completeExpiredChallenge(
     'tasks with points': tasksWithPoints,
   });
 
-  console.log(
+  logger.log(
     `Completed expired challenge ${expiredChallenge.id}, winner: ${winnerId ?? 'tie'}`
   );
 }
@@ -332,7 +333,7 @@ export function subscribeToCurrentChallenge(
       }
     },
     (error) => {
-      console.error('Challenge subscription error:', error);
+      logger.error('Challenge subscription error:', error);
       onError?.(error);
     }
   );

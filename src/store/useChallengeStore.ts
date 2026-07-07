@@ -22,6 +22,7 @@ import * as skipRecordService from '../services/firebase/skipRecordService';
 import { generateFirestoreId } from '../services/firebase/firebaseConfig';
 import { useRecurringStore } from './useRecurringStore';
 import { useHouseholdStore } from './useHouseholdStore';
+import { logger } from '../utils/logger';
 
 /**
  * Challenge store state
@@ -263,7 +264,7 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
           taskId // Pass the pre-generated ID
         )
         .catch((error) => {
-          console.error('Failed to sync task creation:', error);
+          logger.error('Failed to sync task creation:', error);
           set({ error: `Sync failed: ${error.message}` });
         });
     }
@@ -310,12 +311,12 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
         taskService
           .updateTask(householdId, taskId, { templateId: null, name })
           .catch((error) => {
-            console.error('Failed to sync task detach/rename:', error);
+            logger.error('Failed to sync task detach/rename:', error);
             set({ error: `Sync failed: ${error.message}` });
           });
         if (newSkipRecord) {
           skipRecordService.addSkipRecord(householdId, newSkipRecord).catch((error) => {
-            console.error('Failed to sync skip record:', error);
+            logger.error('Failed to sync skip record:', error);
           });
         }
       }
@@ -344,7 +345,7 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
       taskService
         .updateTaskPoints(householdId, taskId, competitorId, clampedPoints)
         .catch((error) => {
-          console.error('Failed to sync points update:', error);
+          logger.error('Failed to sync points update:', error);
           set({ error: `Sync failed: ${error.message}` });
         });
     }
@@ -370,7 +371,7 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
     if (syncEnabled && householdId) {
       // Delete task
       taskService.deleteTask(householdId, taskId).catch((error) => {
-        console.error('Failed to sync task deletion:', error);
+        logger.error('Failed to sync task deletion:', error);
         set({ error: `Sync failed: ${error.message}` });
       });
 
@@ -379,7 +380,7 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
         skipRecordService
           .addSkipRecord(householdId, newSkipRecord)
           .catch((error) => {
-            console.error('Failed to sync skip record:', error);
+            logger.error('Failed to sync skip record:', error);
           });
       }
     }
@@ -428,14 +429,14 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
           fromDayKey
         )
         .catch((error) => {
-          console.error('Failed to sync task deletions:', error);
+          logger.error('Failed to sync task deletions:', error);
           set({ error: `Sync failed: ${error.message}` });
         });
       if (uniqueNewSkipRecords.length > 0) {
         skipRecordService
           .addSkipRecordsBatch(householdId, uniqueNewSkipRecords)
           .catch((error) => {
-            console.error('Failed to sync skip records:', error);
+            logger.error('Failed to sync skip records:', error);
           });
       }
     }
@@ -475,7 +476,7 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
         taskService
           .updateTask(householdId, task.id, { templateId: null })
           .catch((error) => {
-            console.error('Failed to sync task detach:', error);
+            logger.error('Failed to sync task detach:', error);
           });
       }
     }
@@ -512,7 +513,7 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
           originalName: task.name,
         })
         .catch((error) => {
-          console.error('Failed to sync task link to template:', error);
+          logger.error('Failed to sync task link to template:', error);
           set({ error: `Sync failed: ${error.message}` });
         });
     }
@@ -591,7 +592,7 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
               task.id
             )
             .catch((error) => {
-              console.error('Failed to sync seeded task:', error);
+              logger.error('Failed to sync seeded task:', error);
             });
         }
       }
@@ -641,7 +642,7 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
           endDayKey: weekWindow.endDayKey,
         })
         .catch((error) => {
-          console.error('Failed to sync challenge boundary update:', error);
+          logger.error('Failed to sync challenge boundary update:', error);
           set({ error: `Sync failed: ${error.message}` });
         });
     }
@@ -721,7 +722,7 @@ export const useChallengeStore = create<ChallengeStore>((set, get) => ({
         sortOrder: t.sortOrder!,
       }));
       taskService.updateTaskSortOrders(householdId, updates).catch((error) => {
-        console.error('Failed to sync reorder:', error);
+        logger.error('Failed to sync reorder:', error);
       });
     }
   },

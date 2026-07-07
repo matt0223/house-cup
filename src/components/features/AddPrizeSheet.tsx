@@ -184,7 +184,7 @@ export function AddPrizeSheet({
             <Ionicons
               name="checkmark"
               size={20}
-              color={isSubmitEnabled ? '#FFFFFF' : colors.textSecondary}
+              color={isSubmitEnabled ? colors.onAccent : colors.textSecondary}
             />
           </TouchableOpacity>
         </View>

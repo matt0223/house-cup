@@ -20,6 +20,7 @@ import {
 } from 'firebase/firestore';
 import { getDb } from './firebaseConfig';
 import { SkipRecord, getSkipRecordKey } from '../../domain/models/SkipRecord';
+import { logger } from '../../utils/logger';
 
 const SUBCOLLECTION = 'skipRecords';
 
@@ -247,7 +248,7 @@ export function subscribeToSkipRecords(
       onData(skipRecords);
     },
     (error) => {
-      console.error('SkipRecords subscription error:', error);
+      logger.error('SkipRecords subscription error:', error);
       onError?.(error);
     }
   );

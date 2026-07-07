@@ -42,6 +42,7 @@ import {
   identifyUserOnce,
   trackAppOpened,
 } from '../services/analytics';
+import { logger } from '../utils/logger';
 
 const HOUSEHOLD_ID_KEY = '@housecup/householdId';
 
@@ -146,7 +147,7 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
         }
       })
       .catch((err) => {
-        console.error('Failed to load householdId:', err);
+        logger.error('Failed to load householdId:', err);
       })
       .finally(() => {
         setIsLoadingHouseholdId(false);
@@ -158,18 +159,18 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
     setHouseholdIdState(id);
     if (id) {
       AsyncStorage.setItem(HOUSEHOLD_ID_KEY, id).catch((err) => {
-        console.error('Failed to save householdId:', err);
+        logger.error('Failed to save householdId:', err);
       });
     } else {
       AsyncStorage.removeItem(HOUSEHOLD_ID_KEY).catch((err) => {
-        console.error('Failed to remove householdId:', err);
+        logger.error('Failed to remove householdId:', err);
       });
     }
   }, []);
 
   // Handle household not found (deleted from Firestore)
   const handleHouseholdNotFound = useCallback(() => {
-    console.log('Household not found, clearing local state');
+    logger.log('Household not found, clearing local state');
     setHouseholdId(null);
   }, [setHouseholdId]);
 
@@ -341,7 +342,7 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
           'total active days': activeDayKeys.size,
         });
       } catch (err) {
-        console.warn('Failed to compute competition stats for Amplitude:', err);
+        logger.warn('Failed to compute competition stats for Amplitude:', err);
       }
     })();
   }, [household?.id, userId, isConfigured]);
@@ -383,18 +384,18 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
       const currentHousehold = useHouseholdStore.getState().household;
       if (currentHousehold) return;
 
-      console.log('Safety net: householdId cached but no data received, attempting recovery...');
+      logger.log('Safety net: householdId cached but no data received, attempting recovery...');
       try {
         const found = await findHouseholdByUserId(userId);
         if (found) {
           setHouseholdInStore(found);
           setHouseholdId(found.id);
         } else {
-          console.log('Safety net: household not found, clearing stale householdId');
+          logger.log('Safety net: household not found, clearing stale householdId');
           setHouseholdId(null);
         }
       } catch (err) {
-        console.error('Safety net recovery failed:', err);
+        logger.error('Safety net recovery failed:', err);
         setHouseholdId(null);
       }
     }, 5000);
@@ -543,7 +544,7 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
       // Then persist to Firestore in background
       if (householdId) {
         markCompetitorInvited(householdId, competitorId).catch((error) => {
-          console.error('Failed to persist invite status:', error);
+          logger.error('Failed to persist invite status:', error);
         });
       }
     },
@@ -582,24 +583,24 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
     // This ensures we have the correct ID immediately after sign-in
     const currentUserId = getCurrentUserId();
     if (!currentUserId) {
-      console.log('recoverHousehold: No current user');
+      logger.log('recoverHousehold: No current user');
       return false;
     }
 
-    console.log('recoverHousehold: Looking for household with userId:', currentUserId);
+    logger.log('recoverHousehold: Looking for household with userId:', currentUserId);
 
     try {
       const foundHousehold = await findHouseholdByUserId(currentUserId);
       if (foundHousehold) {
-        console.log('recoverHousehold: Found household:', foundHousehold.id);
+        logger.log('recoverHousehold: Found household:', foundHousehold.id);
         setHouseholdInStore(foundHousehold);
         setHouseholdId(foundHousehold.id);
         return true;
       }
-      console.log('recoverHousehold: No household found for user');
+      logger.log('recoverHousehold: No household found for user');
       return false;
     } catch (error) {
-      console.error('Failed to recover household:', error);
+      logger.error('Failed to recover household:', error);
       return false;
     }
   }, [setHouseholdInStore, setHouseholdId]);
@@ -614,7 +615,7 @@ export function FirebaseProvider({ children }: FirebaseProviderProps) {
       useChallengeStore.getState().reset();
       useRecurringStore.getState().reset();
     } catch (error) {
-      console.error('Failed to clear household task data:', error);
+      logger.error('Failed to clear household task data:', error);
       throw error;
     }
   }, [householdId]);

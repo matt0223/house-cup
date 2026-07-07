@@ -6,6 +6,7 @@
 import { doc, getDoc, setDoc, updateDoc, onSnapshot, Unsubscribe } from 'firebase/firestore';
 import { getDb } from './firebaseConfig';
 import { ThemePreference } from '../../domain/models/Household';
+import { logger } from '../../utils/logger';
 
 const COLLECTION = 'users';
 
@@ -72,7 +73,7 @@ export function subscribeToUserProfile(
       });
     },
     (err) => {
-      console.error('User profile subscription error:', err);
+      logger.error('User profile subscription error:', err);
       onError?.(err);
     }
   );

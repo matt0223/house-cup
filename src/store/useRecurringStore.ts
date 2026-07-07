@@ -4,6 +4,7 @@ import { SkipRecord } from '../domain/models/SkipRecord';
 import * as templateService from '../services/firebase/templateService';
 import * as skipRecordService from '../services/firebase/skipRecordService';
 import { generateFirestoreId } from '../services/firebase/firebaseConfig';
+import { logger } from '../utils/logger';
 
 /**
  * Recurring store state
@@ -120,7 +121,7 @@ export const useRecurringStore = create<RecurringStore>((set, get) => ({
       templateService
         .createTemplate(householdId, { name, repeatDays }, templateId)
         .catch((error) => {
-          console.error('Failed to sync template creation:', error);
+          logger.error('Failed to sync template creation:', error);
           set({ error: `Sync failed: ${error.message}` });
         });
     }
@@ -145,7 +146,7 @@ export const useRecurringStore = create<RecurringStore>((set, get) => ({
       templateService
         .updateTemplate(householdId, templateId, updates)
         .catch((error) => {
-          console.error('Failed to sync template update:', error);
+          logger.error('Failed to sync template update:', error);
           set({ error: `Sync failed: ${error.message}` });
         });
     }
@@ -165,13 +166,13 @@ export const useRecurringStore = create<RecurringStore>((set, get) => ({
       templateService
         .deleteTemplate(householdId, templateId)
         .catch((error) => {
-          console.error('Failed to sync template deletion:', error);
+          logger.error('Failed to sync template deletion:', error);
           set({ error: `Sync failed: ${error.message}` });
         });
       skipRecordService
         .removeSkipRecordsForTemplate(householdId, templateId)
         .catch((error) => {
-          console.error('Failed to sync skip records removal:', error);
+          logger.error('Failed to sync skip records removal:', error);
         });
     }
   },
@@ -194,7 +195,7 @@ export const useRecurringStore = create<RecurringStore>((set, get) => ({
         skipRecordService
           .addSkipRecord(householdId, skipRecord)
           .catch((error) => {
-            console.error('Failed to sync skip record:', error);
+            logger.error('Failed to sync skip record:', error);
           });
       }
     }
@@ -219,7 +220,7 @@ export const useRecurringStore = create<RecurringStore>((set, get) => ({
         skipRecordService
           .addSkipRecordsBatch(householdId, uniqueNew)
           .catch((error) => {
-            console.error('Failed to sync skip records:', error);
+            logger.error('Failed to sync skip records:', error);
           });
       }
     }
@@ -240,7 +241,7 @@ export const useRecurringStore = create<RecurringStore>((set, get) => ({
       skipRecordService
         .removeSkipRecordsForTemplate(householdId, templateId)
         .catch((error) => {
-          console.error('Failed to sync skip records removal:', error);
+          logger.error('Failed to sync skip records removal:', error);
         });
     }
   },

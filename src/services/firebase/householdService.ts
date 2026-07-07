@@ -22,6 +22,7 @@ import {
 import { getDb } from './firebaseConfig';
 import { Household, WeekStartDay } from '../../domain/models/Household';
 import { Competitor } from '../../domain/models/Competitor';
+import { logger } from '../../utils/logger';
 
 const COLLECTION = 'households';
 
@@ -353,7 +354,7 @@ export function subscribeToHousehold(
       onData(docToHousehold(docSnap));
     },
     (error) => {
-      console.error('Household subscription error:', error);
+      logger.error('Household subscription error:', error);
       onError?.(error);
     }
   );

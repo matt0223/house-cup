@@ -7,6 +7,7 @@
 
 import { useState, useCallback, useRef } from 'react';
 import { signInWithApple } from '../services/firebase';
+import { logger } from '../utils/logger';
 
 interface UseAppleAuthResult {
   /** Whether a sign-in operation is in progress */
@@ -31,7 +32,7 @@ interface UseAppleAuthResult {
  * const result = await signIn();
  * // result is givenName on success, null on failure/cancel
  * if (result !== null) {
- *   console.log('Name from Apple:', result); // string | undefined
+ *   logger.log('Name from Apple:', result); // string | undefined
  * }
  * ```
  */

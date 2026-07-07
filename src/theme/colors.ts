@@ -16,6 +16,7 @@ export const lightColors = {
   // Accent colors
   primary: '#E8836D', // Coral/orange - app accent (reserved, not for competitors)
   prize: '#E9B44C', // Gold/amber for trophy
+  onAccent: '#FFFFFF', // Text/icons on primary or competitor-colored backgrounds
 
   // Text colors
   textPrimary: '#1A1A1A',
@@ -44,6 +45,7 @@ export const darkColors = {
   // Accent colors
   primary: '#E8836D', // Coral/orange - app accent
   prize: '#E9B44C',
+  onAccent: '#FFFFFF', // Text/icons on primary or competitor-colored backgrounds
 
   // Text colors
   textPrimary: '#FAFAFA',
@@ -71,6 +73,7 @@ export interface ColorScheme {
   surface: string;
   primary: string;
   prize: string;
+  onAccent: string;
   textPrimary: string;
   textSecondary: string;
   border: string;

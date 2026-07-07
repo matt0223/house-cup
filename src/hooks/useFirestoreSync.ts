@@ -23,6 +23,7 @@ import { TaskInstance } from '../domain/models/TaskInstance';
 import { RecurringTemplate } from '../domain/models/RecurringTemplate';
 import { SkipRecord } from '../domain/models/SkipRecord';
 import { getTodayDayKey } from '../domain/services/dayKey';
+import { logger } from '../utils/logger';
 
 interface UseFirestoreSyncOptions {
   /** Household ID to sync */
@@ -87,7 +88,7 @@ export function useFirestoreSync({
 
     // Handle errors consistently
     const handleError = (context: string) => (err: Error) => {
-      console.error(`${context} error:`, err);
+      logger.error(`${context} error:`, err);
       setError(`${context}: ${err.message}`);
     };
 
@@ -133,7 +134,7 @@ export function useFirestoreSync({
               household!.weekStartDay,
               household!.prize ?? 'Winner picks!'
             ).catch((err) =>
-              console.error('Failed to complete expired challenge:', err)
+              logger.error('Failed to complete expired challenge:', err)
             );
             // Don't subscribe to tasks — subscription will re-fire with new challenge
           } else {

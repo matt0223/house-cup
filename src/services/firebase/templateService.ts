@@ -20,6 +20,7 @@ import {
 } from 'firebase/firestore';
 import { getDb } from './firebaseConfig';
 import { RecurringTemplate } from '../../domain/models/RecurringTemplate';
+import { logger } from '../../utils/logger';
 
 const SUBCOLLECTION = 'templates';
 
@@ -245,7 +246,7 @@ export function subscribeToTemplates(
       onData(templates);
     },
     (error) => {
-      console.error('Templates subscription error:', error);
+      logger.error('Templates subscription error:', error);
       onError?.(error);
     }
   );

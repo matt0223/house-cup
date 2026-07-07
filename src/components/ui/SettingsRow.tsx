@@ -48,7 +48,7 @@ export function SettingsRow({
   showDivider = true,
   icon,
   iconColor,
-  iconTint = '#FFFFFF',
+  iconTint,
   labelColor,
 }: SettingsRowProps) {
   const { colors, typography, spacing } = useTheme();
@@ -74,7 +74,7 @@ export function SettingsRow({
               },
             ]}
           >
-            <Ionicons name={icon} size={18} color={iconTint} />
+            <Ionicons name={icon} size={18} color={iconTint ?? colors.onAccent} />
           </View>
         )}
         <View style={styles.labelContainer}>
@@ -119,7 +119,7 @@ export function SettingsRow({
             onValueChange={onToggleChange}
             disabled={disabled}
             trackColor={{ false: colors.border, true: colors.primary }}
-            thumbColor="#FFFFFF"
+            thumbColor={colors.onAccent}
           />
         )}
         {isTappable && !isToggle && !rightElement && (

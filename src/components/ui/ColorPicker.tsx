@@ -21,7 +21,7 @@ export function ColorPicker({
   onColorSelect,
   unavailableColors = [],
 }: ColorPickerProps) {
-  const { spacing } = useTheme();
+  const { colors, spacing } = useTheme();
 
   return (
     <View style={[styles.container, { paddingTop: spacing.xs }]}>
@@ -47,7 +47,7 @@ export function ColorPicker({
             accessibilityLabel={`${color.name}${isSelected ? ', selected' : ''}${isUnavailable ? ', unavailable' : ''}`}
           >
             {isSelected && (
-              <Ionicons name="checkmark" size={20} color="#FFFFFF" />
+              <Ionicons name="checkmark" size={20} color={colors.onAccent} />
             )}
           </TouchableOpacity>
         );

@@ -28,6 +28,7 @@ import {
   trackJoinCodeFailed,
   trackJoinCodeEntered,
 } from '../../src/services/analytics';
+import { logger } from '../../src/utils/logger';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -79,7 +80,7 @@ export default function OnboardingSetupScreen() {
       });
       router.replace('/');
     } catch (err) {
-      console.error('Failed to create household:', err);
+      logger.error('Failed to create household:', err);
       setError('Could not create household. Try again.');
       setStatus('error');
     }
@@ -129,7 +130,7 @@ export default function OnboardingSetupScreen() {
         // code, full household, etc.) are surfaced through the inline
         // error UI; logging them at error severity triggers the dev
         // LogBox banner for what is normal user behavior.
-        console.error('Failed to join household:', err);
+        logger.error('Failed to join household:', err);
       }
       trackJoinCodeFailed({ 'error reason': reason });
       setError(display);

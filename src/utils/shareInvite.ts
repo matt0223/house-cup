@@ -5,6 +5,7 @@
  */
 
 import { Share, Platform } from 'react-native';
+import { logger } from './logger';
 
 /**
  * Share a household invite via the native share sheet.
@@ -41,7 +42,7 @@ export async function shareHouseholdInvite(
 
     return result.action === Share.sharedAction;
   } catch (error) {
-    console.error('Failed to share invite:', error);
+    logger.error('Failed to share invite:', error);
     return false;
   }
 }

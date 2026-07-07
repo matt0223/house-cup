@@ -47,7 +47,7 @@ export function PointsChip({
   isDisabled = false,
   showNudge = false,
 }: PointsChipProps) {
-  const { typography } = useTheme();
+  const { colors, typography } = useTheme();
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   // Pulse animation when nudge is active
@@ -78,7 +78,7 @@ export function PointsChip({
 
   const backgroundColor = hasPoints ? competitor.color : 'transparent';
   const borderColor = competitor.color;
-  const textColor = hasPoints ? '#FFFFFF' : competitor.color;
+  const textColor = hasPoints ? colors.onAccent : competitor.color;
 
   const containerStyle: ViewStyle = {
     width: config.chip,
@@ -122,7 +122,7 @@ export function PointsChip({
                     height: config.dot,
                     backgroundColor:
                       index < normalizedPoints
-                        ? '#FFFFFF'
+                        ? colors.onAccent
                         : 'rgba(255, 255, 255, 0.4)',
                   },
                 ]}

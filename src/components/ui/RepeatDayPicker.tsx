@@ -69,7 +69,7 @@ export function RepeatDayPicker({
             <Text
               style={[
                 typography.callout,
-                { color: isSelected ? '#FFFFFF' : colors.textPrimary, fontWeight: '500' },
+                { color: isSelected ? colors.onAccent : colors.textPrimary, fontWeight: '500' },
               ]}
             >
               {label}

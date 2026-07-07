@@ -135,7 +135,7 @@ export function UnsavedChangesModal({
                   style={[
                     typography.body,
                     {
-                      color: '#FFFFFF',
+                      color: colors.onAccent,
                       textAlign: 'center',
                       fontWeight: '600',
                     },

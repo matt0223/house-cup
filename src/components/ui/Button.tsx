@@ -66,11 +66,11 @@ export function Button({
 
   const getTextColor = () => {
     if (disabled) {
-      return variant === 'primary' ? '#FFFFFF' : colors.textSecondary;
+      return variant === 'primary' ? colors.onAccent : colors.textSecondary;
     }
     switch (variant) {
       case 'primary':
-        return '#FFFFFF';
+        return colors.onAccent;
       case 'secondary':
       case 'ghost':
         return colors.primary;

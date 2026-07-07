@@ -13,6 +13,7 @@ import * as amplitude from '@amplitude/analytics-react-native';
 import { SessionReplayPlugin } from '@amplitude/plugin-session-replay-react-native';
 import { Identify } from '@amplitude/analytics-react-native';
 import Constants from 'expo-constants';
+import { logger } from '../utils/logger';
 
 const AMPLITUDE_API_KEY = process.env.EXPO_PUBLIC_AMPLITUDE_API_KEY ?? '';
 
@@ -39,7 +40,7 @@ export async function initAnalytics() {
       enableRemoteConfig: true,
     })).promise;
   } catch (e) {
-    console.warn('Session Replay plugin failed to initialize (native module not linked):', e);
+    logger.warn('Session Replay plugin failed to initialize (native module not linked):', e);
   }
 
   initialized = true;

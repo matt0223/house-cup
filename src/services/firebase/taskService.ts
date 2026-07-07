@@ -22,6 +22,7 @@ import {
 } from 'firebase/firestore';
 import { getDb } from './firebaseConfig';
 import { TaskInstance } from '../../domain/models/TaskInstance';
+import { logger } from '../../utils/logger';
 
 const SUBCOLLECTION = 'tasks';
 
@@ -358,7 +359,7 @@ export function subscribeToTasks(
       onData(tasks);
     },
     (error) => {
-      console.error('Tasks subscription error:', error);
+      logger.error('Tasks subscription error:', error);
       onError?.(error);
     }
   );

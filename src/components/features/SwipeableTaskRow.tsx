@@ -54,7 +54,7 @@ export function SwipeableTaskRow({
         onPress={handleDelete}
         activeOpacity={0.8}
       >
-        <Text style={[typography.callout, styles.deleteText]}>Delete</Text>
+        <Text style={[typography.callout, styles.deleteText, { color: colors.onAccent }]}>Delete</Text>
       </TouchableOpacity>
     </View>
   );
@@ -84,7 +84,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   deleteText: {
-    color: '#FFFFFF',
     fontWeight: '600',
   },
 });

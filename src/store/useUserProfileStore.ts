@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { ThemePreference } from '../domain/models/Household';
 import * as userService from '../services/firebase/userService';
+import { logger } from '../utils/logger';
 
 interface UserProfileState {
   themePreference: ThemePreference;
@@ -25,7 +26,7 @@ export const useUserProfileStore = create<UserProfileStore>((set, get) => ({
     set({ themePreference: preference });
     if (userId) {
       userService.updateUserProfile(userId, { themePreference: preference }).catch((err) => {
-        console.error('Failed to sync theme preference:', err);
+        logger.error('Failed to sync theme preference:', err);
       });
     }
   },

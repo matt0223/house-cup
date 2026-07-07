@@ -44,6 +44,7 @@ import {
   trackInviteShared,
   resetAnalytics,
 } from '../src/services/analytics';
+import { logger } from '../src/utils/logger';
 
 /** Day options for picker */
 const DAY_OPTIONS: { id: string; label: string }[] = [
@@ -149,7 +150,7 @@ export default function SettingsScreen() {
               // Navigate to onboarding
               router.replace('/onboarding');
             } catch (error) {
-              console.error('Sign out error:', error);
+              logger.error('Sign out error:', error);
               Alert.alert('Error', 'Failed to sign out. Please try again.');
             } finally {
               setIsSigningOut(false);
@@ -177,7 +178,7 @@ export default function SettingsScreen() {
               trackDataCleared({ 'household id': household?.id ?? '' });
               Alert.alert('Done', 'All task data has been cleared.');
             } catch (error) {
-              console.error('Clear task data error:', error);
+              logger.error('Clear task data error:', error);
               Alert.alert('Error', 'Failed to clear data. Please try again.');
             } finally {
               setIsClearingData(false);
@@ -259,7 +260,7 @@ export default function SettingsScreen() {
 
       showInviteToast();
     } catch (err) {
-      console.error('Failed to send invite:', err);
+      logger.error('Failed to send invite:', err);
     } finally {
       setIsSendingInvite(false);
     }
@@ -279,7 +280,7 @@ export default function SettingsScreen() {
       // Clear the input since competitor now exists
       setNewHousemateName('');
     } catch (err) {
-      console.error('Failed to save housemate:', err);
+      logger.error('Failed to save housemate:', err);
     }
   }, [household, newHousemateName, newHousemateColor, isSendingInvite, addHousemate]);
 

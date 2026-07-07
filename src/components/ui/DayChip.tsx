@@ -39,7 +39,7 @@ export function DayChip({
 
   const backgroundColor = isSelected ? colors.primary : 'transparent';
   // Text is white when selected, otherwise always dark (even for today with ring)
-  const textColor = isSelected ? '#FFFFFF' : colors.textPrimary;
+  const textColor = isSelected ? colors.onAccent : colors.textPrimary;
 
   const containerStyle: ViewStyle = {
     width: CHIP_SIZE,

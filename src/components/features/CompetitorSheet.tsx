@@ -196,7 +196,7 @@ export function CompetitorSheet({
             accessibilityLabel="Save"
             accessibilityRole="button"
           >
-            <Ionicons name="checkmark" size={20} color={canSubmit ? '#FFFFFF' : colors.textSecondary} />
+            <Ionicons name="checkmark" size={20} color={canSubmit ? colors.onAccent : colors.textSecondary} />
           </TouchableOpacity>
         </View>
 

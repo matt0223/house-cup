@@ -549,7 +549,7 @@ export function AddTaskSheet({
                   <Ionicons
                     name={isEditMode ? 'checkmark' : 'arrow-up'}
                     size={20}
-                    color={isSubmitEnabled ? '#FFFFFF' : colors.textSecondary}
+                    color={isSubmitEnabled ? colors.onAccent : colors.textSecondary}
                   />
                 </TouchableOpacity>
               </View>

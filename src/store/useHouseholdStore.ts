@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { Competitor } from '../domain/models/Competitor';
 import { Household, WeekStartDay, sampleHousehold } from '../domain/models/Household';
 import * as householdService from '../services/firebase/householdService';
+import { logger } from '../utils/logger';
 
 /**
  * Household store state
@@ -85,7 +86,7 @@ export const useHouseholdStore = create<HouseholdStore>((set, get) => ({
     // Persist to Firestore
     if (syncEnabled) {
       householdService.updateHousehold(household.id, updates).catch((error) => {
-        console.error('Failed to sync settings update:', error);
+        logger.error('Failed to sync settings update:', error);
         set({ error: `Sync failed: ${error.message}` });
       });
     }
@@ -117,7 +118,7 @@ export const useHouseholdStore = create<HouseholdStore>((set, get) => ({
       householdService
         .updateCompetitor(household.id, competitorIndex, updates)
         .catch((error) => {
-          console.error('Failed to sync competitor update:', error);
+          logger.error('Failed to sync competitor update:', error);
           set({ error: `Sync failed: ${error.message}` });
         });
     }

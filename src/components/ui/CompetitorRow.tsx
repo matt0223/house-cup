@@ -79,11 +79,11 @@ export function CompetitorRow({
           accessibilityHint="Tap to open color picker"
         >
           {initial ? (
-            <Text style={[styles.avatarText, typography.headline]}>
+            <Text style={[styles.avatarText, typography.headline, { color: colors.onAccent }]}>
               {initial}
             </Text>
           ) : (
-            <Ionicons name="person" size={20} color="#FFFFFF" />
+            <Ionicons name="person" size={20} color={colors.onAccent} />
           )}
           {/* Small edit indicator */}
           <View
@@ -181,7 +181,6 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   avatarText: {
-    color: '#FFFFFF',
     fontWeight: '600',
   },
   editBadge: {

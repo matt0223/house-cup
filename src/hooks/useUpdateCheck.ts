@@ -13,6 +13,7 @@ import { getLatestBuildNumber } from '../services/firebase/configService';
 import { isFirebaseConfigured } from '../services/firebase/firebaseConfig';
 import { getTodayDayKey } from '../domain/services';
 import { useHouseholdStore } from '../store/useHouseholdStore';
+import { logger } from '../utils/logger';
 
 const DISMISS_KEY = '@housecup/updateDismissedDate';
 const TESTFLIGHT_URL = 'itms-beta://beta.itunes.apple.com/v1/app/6743387881';
@@ -63,7 +64,7 @@ export function useUpdateCheck(): UseUpdateCheckResult {
           setShowBanner(true);
         }
       } catch (error) {
-        console.warn('Update check failed:', error);
+        logger.warn('Update check failed:', error);
       }
     }
 
@@ -82,7 +83,7 @@ export function useUpdateCheck(): UseUpdateCheckResult {
 
   const onUpdate = useCallback(() => {
     Linking.openURL(TESTFLIGHT_URL).catch((error) => {
-      console.warn('Failed to open TestFlight:', error);
+      logger.warn('Failed to open TestFlight:', error);
     });
   }, []);
 

@@ -44,11 +44,12 @@ export function AddTaskButton({
       accessibilityLabel="Add task"
       accessibilityRole="button"
     >
-      <Ionicons name="add" size={20} color="#FFFFFF" />
+      <Ionicons name="add" size={20} color={colors.onAccent} />
       <Text
         style={[
           typography.callout,
           styles.label,
+          { color: colors.onAccent },
         ]}
       >
         Add task
@@ -59,7 +60,6 @@ export function AddTaskButton({
 
 const styles = StyleSheet.create({
   label: {
-    color: '#FFFFFF',
     marginLeft: 4,
     fontWeight: '600',
   },

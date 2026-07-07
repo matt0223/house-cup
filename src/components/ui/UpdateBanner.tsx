@@ -134,7 +134,7 @@ export function UpdateBanner({ visible, onDismiss, onUpdate }: UpdateBannerProps
         <Text
           style={[
             typography.caption,
-            { color: '#FFFFFF', fontWeight: '600' },
+            { color: colors.onAccent, fontWeight: '600' },
           ]}
         >
           Update

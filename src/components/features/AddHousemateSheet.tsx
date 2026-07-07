@@ -15,6 +15,7 @@ import { useBottomSheet } from '../../hooks/useBottomSheet';
 import { BottomSheetContainer } from '../ui/BottomSheetContainer';
 import { ColorPicker } from '../ui/ColorPicker';
 import { availableCompetitorColors } from '../../domain/models/Competitor';
+import { logger } from '../../utils/logger';
 
 export interface AddHousemateSheetProps {
   /** Whether the sheet is visible */
@@ -113,7 +114,7 @@ export function AddHousemateSheet({
     try {
       await onInvite(name.trim(), color);
     } catch (err) {
-      console.error('Invite failed:', err);
+      logger.error('Invite failed:', err);
     } finally {
       setIsSubmitting(false);
       onClose();
@@ -202,7 +203,7 @@ export function AddHousemateSheet({
             accessibilityLabel="Save"
             accessibilityRole="button"
           >
-            <Ionicons name="checkmark" size={20} color={canSubmit && !isSubmitting ? '#FFFFFF' : colors.textSecondary} />
+            <Ionicons name="checkmark" size={20} color={canSubmit && !isSubmitting ? colors.onAccent : colors.textSecondary} />
           </TouchableOpacity>
         </View>
 

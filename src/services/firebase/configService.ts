@@ -8,6 +8,7 @@
 
 import { doc, getDoc } from 'firebase/firestore';
 import { getDb } from './firebaseConfig';
+import { logger } from '../../utils/logger';
 
 const COLLECTION = 'config';
 const APP_VERSION_DOC = 'appVersion';
@@ -29,7 +30,7 @@ export async function getLatestBuildNumber(): Promise<string | null> {
     const data = snapshot.data();
     return data?.latestBuildNumber ?? null;
   } catch (error) {
-    console.warn('Failed to fetch latest build number:', error);
+    logger.warn('Failed to fetch latest build number:', error);
     return null;
   }
 }
