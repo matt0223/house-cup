@@ -124,6 +124,19 @@ export function formatDayKeyRange(
   return `${formatter.format(start)} \u2013 ${formatter.format(end)}`;
 }
 
+/**
+ * Get the ISO 8601 week number for a dayKey (weeks start Monday; week 1
+ * contains the year's first Thursday).
+ */
+export function getWeekNumber(dayKey: DayKey): number {
+  const [year, month, day] = dayKey.split('-').map(Number);
+  const target = new Date(Date.UTC(year, month - 1, day));
+  const dayNum = target.getUTCDay() || 7;
+  target.setUTCDate(target.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(target.getUTCFullYear(), 0, 1));
+  return Math.ceil(((target.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+}
+
 /** Single-letter labels for each day of week (0=Sunday, 6=Saturday) */
 const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'] as const;
 

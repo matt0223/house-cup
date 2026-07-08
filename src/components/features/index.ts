@@ -7,7 +7,7 @@
 export { TaskRow, type TaskRowProps } from './TaskRow';
 export { SwipeableTaskRow, type SwipeableTaskRowProps } from './SwipeableTaskRow';
 export { TaskList, type TaskListProps } from './TaskList';
-export { CollapsibleScoreboard, type CollapsibleScoreboardProps } from './CollapsibleScoreboard';
+export { ScoreHeadline, type ScoreHeadlineProps } from './ScoreHeadline';
 export { AddTaskSheet, type AddTaskSheetProps, type TaskChanges, type ChangeScope } from './AddTaskSheet';
 export { WeekStoryCard, type WeekStoryCardProps } from './WeekStoryCard';
 export { AddPrizeSheet, type AddPrizeSheetProps } from './AddPrizeSheet';

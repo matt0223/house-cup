@@ -1,5 +1,5 @@
 import React from 'react';
-import { TouchableOpacity, Text, StyleSheet, ViewStyle } from 'react-native';
+import { TouchableOpacity, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
 
@@ -12,27 +12,30 @@ export interface AddTaskButtonProps {
   right?: number;
 }
 
+/** Diameter of the floating action button */
+const FAB_SIZE = 56;
+
 /**
- * Floating pill-shaped "Add task" button.
- * Positioned in bottom-right corner above the tab bar.
+ * Floating circular add-task button (Todoist-style FAB).
+ * Positioned in the bottom-right corner.
  */
 export function AddTaskButton({
   onPress,
   bottom = 100,
   right = 16,
 }: AddTaskButtonProps) {
-  const { colors, typography, spacing, radius, shadows } = useTheme();
+  const { colors, shadows } = useTheme();
 
   const containerStyle: ViewStyle = {
     position: 'absolute',
     bottom,
     right,
-    flexDirection: 'row',
+    width: FAB_SIZE,
+    height: FAB_SIZE,
+    borderRadius: FAB_SIZE / 2,
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: colors.primary,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
     ...shadows.medium,
   };
 
@@ -44,23 +47,7 @@ export function AddTaskButton({
       accessibilityLabel="Add task"
       accessibilityRole="button"
     >
-      <Ionicons name="add" size={20} color={colors.onAccent} />
-      <Text
-        style={[
-          typography.callout,
-          styles.label,
-          { color: colors.onAccent },
-        ]}
-      >
-        Add task
-      </Text>
+      <Ionicons name="add" size={28} color={colors.onAccent} />
     </TouchableOpacity>
   );
 }
-
-const styles = StyleSheet.create({
-  label: {
-    marginLeft: 4,
-    fontWeight: '600',
-  },
-});

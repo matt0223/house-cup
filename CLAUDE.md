@@ -191,7 +191,8 @@ export { MyNewComponent } from './MyNewComponent';
 | Purpose | File |
 |---------|------|
 | Main screen | `app/index.tsx` |
-| Scoreboard / Prize circle | `src/components/features/MorphingScoreboard.tsx` |
+| Score headline (header) | `src/components/features/ScoreHeadline.tsx` |
+| Headline copy templates | `src/domain/services/scoreHeadline.ts` |
 | Theme colors | `src/theme/colors.ts` |
 | Task model | `src/domain/models/TaskInstance.ts` |
 | Competitor model | `src/domain/models/Competitor.ts` |
@@ -432,33 +433,34 @@ The task list uses an **absolute-positioning + shared-value positions map** patt
 
 ## Challenge Screen Layout (Important — Regressions Happen Here)
 
-The main screen (`app/index.tsx`) has a specific scroll-linked layout that must be preserved:
+The main screen (`app/index.tsx`) uses a left-aligned "document grammar" layout (July 2026 redesign — Todoist/Notion reference): the score is a headline sentence, the task list is flat on the cream canvas, and everything hangs off one left axis.
 
 ```
 SafeAreaView
-  ├── Header (Animated.View, height 48→0, opacity 1→0 on scroll)
-  ├── CollapsibleScoreboard (MorphingScoreboard, morphs expanded→collapsed)
+  ├── UpdateBanner (fixed, does not scroll)
+  ├── ScoreHeadline
+  │     ├── Micro-label row ("WEEK 27 · JUL 4 – JUL 10" + history/settings icons) — never collapses
+  │     ├── Headline sentence ("Pri leads, 35–33") — fontSize 28→17 on scroll
+  │     └── Support lines (prize, invite/resend) — fade + maxHeight→0 on scroll
   ├── DayStrip (Animated.View, always visible, OUTSIDE ScrollView)
-  └── Rounded scroll window (View, overflow:hidden, borderTopRadius:16, surface bg)
-        └── Animated.ScrollView (tasks only)
+  └── Animated.ScrollView (flat: section header "Tuesday · 8" + task rows with hairline dividers)
 ```
 
 ### Key behaviors:
-1. **Header** fades out (opacity → 0 over first 25% of scroll) and its container collapses (height → 0 over first 60%). This is faster than the scoreboard collapse so the header is gone before the scoreboard finishes.
-2. **Scoreboard** morphs from expanded to collapsed over 110px of scroll (COLLAPSE_THRESHOLD in MorphingScoreboard.tsx). Prize circle shrinks, scores rearrange, names transition.
-3. **DayStrip** is a sibling element between the scoreboard and the scroll window — NOT inside the ScrollView. It stays visible at all times so users can switch days while scrolling.
-4. **Gap between DayStrip and tasks** is persistent (paddingBottom: 16 on DayStrip container). The gap between the scoreboard and DayStrip animates from 16→8px when collapsed.
-5. **Rounded scroll window** has `overflow: 'hidden'`, `borderTopLeftRadius` + `borderTopRightRadius` matching `radius.large` (16px), `marginHorizontal: spacing.sm`, and `backgroundColor: colors.surface`. This creates visible rounded corners where tasks scroll into view.
-6. **Task list wrapper** inside the ScrollView has NO `paddingHorizontal` or `marginTop` — the rounded window container handles the horizontal inset and the DayStrip handles the vertical gap.
+1. **Headline copy is generated** by `buildScoreHeadline()` in `src/domain/services/scoreHeadline.ts` (pure, tested): leader name is the only colored segment (their competitor color); ties and 0–0 are all-ink; solo mode counts ("12 points this week") instead of comparing. Score pairs are glued with word joiners (`⁠`) so "35–33" can never wrap mid-score. `numberOfLines={2}`.
+2. **Collapse** happens over 110px of scroll (COLLAPSE_THRESHOLD in ScoreHeadline.tsx): headline fontSize/lineHeight interpolate (28→17), support lines fade out by 50% scroll then close via measured maxHeight. Safe against the maxHeight-text rule because support rows are single-line at fixed width (no reflow possible). The scroll event uses `useNativeDriver: false` because fontSize is a non-native animated prop.
+3. **Micro-label row** (week label + trending-up/settings icons) never collapses — navigation stays reachable while scrolled.
+4. **DayStrip** is a sibling element between the headline and the ScrollView — NOT inside it. Gap to tasks is persistent (paddingBottom: 16); gap from headline animates 16→8 when collapsed.
+5. **Flat task list**: no Card, no rounded scroll window. ScrollView content has `paddingHorizontal: spacing.md`; rows sit on `colors.background` with `colors.divider` hairlines. The section header shows the selected day name + task count.
+6. **SwipeableTaskRow row background must be `colors.background`** (not surface) — it covers the delete action during swipe on the cream canvas.
+7. **Header interactions**: leader/competitor name taps → CompetitorSheet (fires Scoreboard Tapped); prize line → AddPrizeSheet ("Set this week's prize" when empty); solo mode shows "Add your housemate" (coral); pending housemate shows "Waiting for X — tap to resend invite".
 
 ### Common regressions to watch for:
 - **DayStrip inside ScrollView** — If DayStrip is placed inside the ScrollView, it scrolls away and users can't switch days. It must be a sibling ABOVE the ScrollView.
 - **Missing persistent gap** — If the gap between DayStrip and tasks is inside the ScrollView (as marginTop or paddingTop on content), it scrolls away. The gap must be on the DayStrip's paddingBottom (outside scroll).
-- **Invisible rounded corners** — The scroll window needs `backgroundColor: colors.surface` and `marginHorizontal: spacing.sm` to match the Card's inset. Without these, rounded corners clip transparent space and are invisible.
-- **Header icons clipping** — The header container uses both height collapse AND opacity fade. Without the opacity fade, the settings/insights icons get visually clipped in half as the container shrinks.
-- **Scroll-linked animations not firing** — If the task list is wrapped in a third-party container (e.g., `NestableScrollContainer`) that overwrites the `onScroll` prop, the `scrollY` Animated.Value won't update and all header/scoreboard collapse animations break. The scroll handler must remain the one wired to `scrollY.setValue()`.
+- **Scroll-linked animations not firing** — If the task list is wrapped in a third-party container (e.g., `NestableScrollContainer`) that overwrites the `onScroll` prop, the `scrollY` Animated.Value won't update and the headline collapse breaks. The scroll handler must remain the one wired to `scrollY`.
 - **Drag-to-reorder breaking other gestures** — The pan gesture for reordering must be scoped to the grip icon only (via long-press activation on that specific row). If the pan gesture is enabled on the whole row, it will block swipe-to-delete and parent scroll.
-- **Prize circle text shuffling** — The prize text must have a fixed width and NO `numberOfLines` prop. If `maxHeight` is animated on the text container, the text will reflow/shuffle at intermediate heights. Only use opacity to fade the text and `translateY` on the content group to keep the trophy centered. The circle itself handles clipping via `overflow: 'hidden'`.
+- **Headline wrap breakage** — Never build score strings by hand in components; always use `buildScoreHeadline()` so word joiners and the 2-line budget stay intact.
 - **Empty-state flash on app load** — The task list content must be wrapped in a fade animation gated by `tasksReady`. Without this, the "What needs doing today?" empty state flashes before Firestore tasks arrive.
 
 ## Gotchas

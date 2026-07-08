@@ -4,9 +4,9 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter, Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../src/theme/useTheme';
-import { AppHeader, DayStrip, AddTaskButton, TaskAddedToast, UpdateBanner } from '../src/components/ui';
+import { DayStrip, AddTaskButton, TaskAddedToast, UpdateBanner } from '../src/components/ui';
 import { useUpdateCheck } from '../src/hooks/useUpdateCheck';
-import { CollapsibleScoreboard, TaskList, AddTaskSheet, AddPrizeSheet, AddHousemateSheet, CompetitorSheet, TaskChanges, ChangeScope } from '../src/components/features';
+import { ScoreHeadline, TaskList, AddTaskSheet, AddPrizeSheet, AddHousemateSheet, CompetitorSheet, TaskChanges, ChangeScope } from '../src/components/features';
 import { ConfirmationModal } from '../src/components/ui';
 import {
   useHouseholdStore,
@@ -14,7 +14,7 @@ import {
   useRecurringStore,
 } from '../src/store';
 import { useFirebase } from '../src/providers/FirebaseProvider';
-import { formatDayKeyRange, getTodayDayKey, getCurrentWeekWindow } from '../src/domain/services';
+import { getTodayDayKey, getCurrentWeekWindow, parseDayKey } from '../src/domain/services';
 import { TaskInstance } from '../src/domain/models/TaskInstance';
 import { shareHouseholdInvite } from '../src/utils/shareInvite';
 import {
@@ -45,7 +45,7 @@ import { PRIZE_SUGGESTIONS } from '../src/components/features/AddPrizeSheet';
  * Challenge screen - Main tab showing scoreboard, day strip, and task list.
  */
 export default function ChallengeScreen() {
-  const { colors, spacing, typography, radius } = useTheme();
+  const { colors, spacing, typography } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [isAddSheetVisible, setIsAddSheetVisible] = React.useState(false);
@@ -59,28 +59,12 @@ export default function ChallengeScreen() {
   // Track the weekStartDay used to create the current challenge
   const [challengeWeekStartDay, setChallengeWeekStartDay] = React.useState<number | null>(null);
 
-  // Scroll position for collapsible scoreboard animation
+  // Scroll position for the collapsing score headline
   const scrollY = React.useRef(new Animated.Value(0)).current;
 
-  // Header height for scroll-based collapse (paddingVertical 12*2 + title ~24 = ~48 + 8px bottom gap for banner)
-  const HEADER_HEIGHT = 56;
-  const COLLAPSE_THRESHOLD = 110; // matches MorphingScoreboard threshold
+  const COLLAPSE_THRESHOLD = 110; // matches ScoreHeadline threshold
 
-  // Animate header container height from full to 0 as user scrolls
-  const headerHeight = scrollY.interpolate({
-    inputRange: [0, COLLAPSE_THRESHOLD * 0.6],
-    outputRange: [HEADER_HEIGHT, 0],
-    extrapolate: 'clamp',
-  });
-
-  // Fade header content out quickly so icons don't visually clip
-  const headerOpacity = scrollY.interpolate({
-    inputRange: [0, COLLAPSE_THRESHOLD * 0.25],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
-
-  // Reduce gap between prize circle and day strip when collapsed
+  // Reduce gap between headline and day strip when collapsed
   const dayStripMarginTop = scrollY.interpolate({
     inputRange: [0, COLLAPSE_THRESHOLD],
     outputRange: [16, 8], // 16 expanded, 8 collapsed (8px reduction when collapsed)
@@ -668,27 +652,17 @@ export default function ChallengeScreen() {
     );
   }
 
-  const dateRange = challenge
-    ? formatDayKeyRange(challenge.startDayKey, challenge.endDayKey)
-    : '';
+  // Full weekday name for the task section header ("Tuesday")
+  const selectedDayName = parseDayKey(selectedDayKey).toLocaleDateString('en-US', {
+    weekday: 'long',
+  });
 
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: colors.background }]}
       edges={['top', 'left', 'right']}
     >
-      {/* Header — clips and collapses as user scrolls */}
-      <Animated.View style={{ height: headerHeight, overflow: 'hidden', opacity: headerOpacity, paddingBottom: 8 }}>
-        <AppHeader
-          title={dateRange || 'This Week'}
-          rightActions={[
-            { icon: 'trending-up-outline', onPress: () => router.push('/history') },
-            { icon: 'settings-outline', onPress: () => router.push('/settings') },
-          ]}
-        />
-      </Animated.View>
-
-      {/* Update nudge banner — fixed above scoreboard, does not scroll */}
+      {/* Update nudge banner — fixed above header, does not scroll */}
       {isConfigured && (
         <UpdateBanner
           visible={showUpdateBanner}
@@ -697,27 +671,23 @@ export default function ChallengeScreen() {
         />
       )}
 
-      {/* Collapsible scoreboard: morphs from expanded to collapsed as user scrolls */}
-      <View
-        style={{
-          marginTop: 0,
-          zIndex: 10,
-          elevation: 10,
-        }}
-      >
-        <CollapsibleScoreboard
-          scrollY={scrollY}
-          competitorA={competitorA}
-          competitorB={competitorB}
-          scoreA={scoreA}
-          scoreB={scoreB}
-          prize={household?.prize ?? ''}
-          onPrizePress={() => setIsPrizeSheetVisible(true)}
-          onInvitePress={() => setIsHousemateSheetVisible(true)}
-          onShareInvitePress={handleShareInvitePress}
-          onCompetitorPress={handleCompetitorPress}
-        />
-      </View>
+      {/* Score headline: the week's state as a sentence; shrinks as user scrolls */}
+      <ScoreHeadline
+        scrollY={scrollY}
+        competitorA={competitorA}
+        competitorB={competitorB}
+        scoreA={scoreA}
+        scoreB={scoreB}
+        prize={household?.prize ?? ''}
+        startDayKey={challenge?.startDayKey}
+        endDayKey={challenge?.endDayKey}
+        onPrizePress={() => setIsPrizeSheetVisible(true)}
+        onInvitePress={() => setIsHousemateSheetVisible(true)}
+        onShareInvitePress={handleShareInvitePress}
+        onCompetitorPress={handleCompetitorPress}
+        onHistoryPress={() => router.push('/history')}
+        onSettingsPress={() => router.push('/settings')}
+      />
 
       {/* Day Strip — always visible, outside ScrollView */}
       <Animated.View style={{ marginTop: dayStripMarginTop, paddingBottom: 16 }}>
@@ -744,16 +714,13 @@ export default function ChallengeScreen() {
         />
       </Animated.View>
 
-      <View style={{
-        flex: 1,
-        overflow: 'hidden',
-        borderTopLeftRadius: radius.large,
-        borderTopRightRadius: radius.large,
-        marginHorizontal: spacing.sm,
-      }}>
+      <View style={{ flex: 1 }}>
       <Animated.ScrollView
         style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 100 + insets.bottom, flexGrow: 1 }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: 100 + insets.bottom, paddingHorizontal: spacing.md, flexGrow: 1 },
+        ]}
         showsVerticalScrollIndicator={false}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
@@ -765,6 +732,15 @@ export default function ChallengeScreen() {
         <Animated.View style={{ opacity: contentFade, transform: [{ translateY: contentSlide }], flex: 1 }}>
           {tasksForDay.length > 0 ? (
             <View>
+              {/* Section header: day name + task count, Todoist-style */}
+              <View style={[styles.sectionHeader, { borderBottomColor: colors.divider }]}>
+                <Text style={[typography.caption, styles.sectionTitle, { color: colors.textPrimary }]}>
+                  {selectedDayName}
+                </Text>
+                <Text style={[typography.caption, { color: colors.textSecondary }]}>
+                  {tasksForDay.length}
+                </Text>
+              </View>
               <TaskList
                 tasks={tasksForDay}
                 competitors={competitors}
@@ -911,7 +887,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    // paddingBottom is set dynamically via inline style (100 + bottom safe area)
+    // paddingBottom/paddingHorizontal set dynamically via inline style
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    paddingBottom: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  sectionTitle: {
+    fontWeight: '700',
   },
   emptyState: {
     flex: 1,

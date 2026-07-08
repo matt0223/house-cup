@@ -20,7 +20,16 @@ export {
   getDayOfWeekLabel,
   formatRepeatDays,
   getOrderedDays,
+  getWeekNumber,
 } from './dayKey';
+
+// Score headline sentence (home screen)
+export {
+  type HeadlineSegment,
+  type HeadlineInput,
+  buildScoreHeadline,
+  prizeLineLabel,
+} from './scoreHeadline';
 
 // Week window calculations
 export {

@@ -67,7 +67,7 @@ export function SwipeableTaskRow({
       friction={2}
       rightThreshold={40}
     >
-      <View style={{ backgroundColor: colors.surface }}>
+      <View style={{ backgroundColor: colors.background }}>
         <TaskRow task={task} gripGesture={gripGesture} isActive={isActive} {...taskRowProps} />
       </View>
     </Swipeable>

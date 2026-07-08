@@ -12,7 +12,6 @@ import Animated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { useTheme } from '../../theme/useTheme';
-import { Card } from '../ui/Card';
 import { SwipeableTaskRow } from './SwipeableTaskRow';
 import { TaskInstance } from '../../domain/models/TaskInstance';
 import { RecurringTemplate } from '../../domain/models/RecurringTemplate';
@@ -158,7 +157,7 @@ export function TaskList({
 
   return (
     <GestureHandlerRootView style={styles.gestureRoot}>
-      <Card padding="none" style={containerHeight ? { height: containerHeight } : undefined}>
+      <View style={containerHeight ? { height: containerHeight } : undefined}>
         {tasks.map((task, arrayIndex) => (
           <SortableRow
             key={task.id}
@@ -190,7 +189,7 @@ export function TaskList({
             insertionLineColor={colors.primary}
           />
         ))}
-      </Card>
+      </View>
     </GestureHandlerRootView>
   );
 }
