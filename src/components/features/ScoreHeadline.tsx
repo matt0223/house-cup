@@ -214,12 +214,21 @@ export function ScoreHeadline({
               style={[
                 typography.callout,
                 styles.subText,
+                styles.subTextShrink,
                 { color: hasPrize ? colors.textSecondary : colors.prizeDeep },
               ]}
               numberOfLines={1}
             >
               {prizeLabel}
             </Text>
+            {onPrizePress && (
+              <Ionicons
+                name="chevron-forward"
+                size={13}
+                color={colors.textSecondary}
+                style={styles.subChevron}
+              />
+            )}
           </TouchableOpacity>
 
           {showInviteLine && (
@@ -292,6 +301,12 @@ const styles = StyleSheet.create({
   subText: {
     marginLeft: 7,
     fontWeight: '500',
+  },
+  subTextShrink: {
+    flexShrink: 1,
+  },
+  subChevron: {
+    marginLeft: 2,
   },
   subEmphasis: {
     fontWeight: '600',

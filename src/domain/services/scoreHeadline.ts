@@ -26,13 +26,30 @@ export interface HeadlineInput {
 }
 
 /**
+ * Rough visible-character budget for the two-line headline at its expanded
+ * size (~19 characters per line). Name-bearing templates that exceed this
+ * fall back to their nameless form; numberOfLines={2} is the hard backstop.
+ */
+const NAME_TEMPLATE_BUDGET = 34;
+
+function visibleLength(segments: HeadlineSegment[]): number {
+  return segments
+    .map((s) => s.text)
+    .join('')
+    .replace(/\u2060/g, '').length;
+}
+
+/**
  * Build the home-screen headline sentence for the current scores.
  *
  * - Solo (no housemate yet): counts instead of compares ("12 points this week").
- * - Both at zero: "New week, 0–0".
- * - Tied: "Tied, 33–33".
- * - Otherwise: "<Leader> leads, 35–33" with the leader's score first and the
- *   leader's name tinted in their color.
+ * - Both at zero: "Matt vs Pri, 0–0" — introduces the matchup.
+ * - Tied: "Matt & Pri tied, 33–33".
+ * - Otherwise: "<Leader> leads, 35–33" with the leader's score first.
+ *
+ * Names always render in their owner's color (they're the tap targets for
+ * the competitor sheet), so every two-player state keeps both names on
+ * screen unless length forces the nameless fallback.
  */
 export function buildScoreHeadline(
   a: HeadlineInput,
@@ -46,10 +63,26 @@ export function buildScoreHeadline(
   }
 
   if (a.score === b.score) {
-    if (a.score === 0) {
-      return [{ text: `New week, ${scorePair(0, 0)}` }];
+    const withNames: HeadlineSegment[] =
+      a.score === 0
+        ? [
+            { text: a.competitor.name, competitorId: a.competitor.id },
+            { text: ' vs ' },
+            { text: b.competitor.name, competitorId: b.competitor.id },
+            { text: `, ${scorePair(0, 0)}` },
+          ]
+        : [
+            { text: a.competitor.name, competitorId: a.competitor.id },
+            { text: ' & ' },
+            { text: b.competitor.name, competitorId: b.competitor.id },
+            { text: ` tied, ${scorePair(a.score, b.score)}` },
+          ];
+    if (visibleLength(withNames) <= NAME_TEMPLATE_BUDGET) {
+      return withNames;
     }
-    return [{ text: `Tied, ${scorePair(a.score, b.score)}` }];
+    return a.score === 0
+      ? [{ text: `New week, ${scorePair(0, 0)}` }]
+      : [{ text: `Tied, ${scorePair(a.score, b.score)}` }];
   }
 
   const leader = a.score > b.score ? a : b;

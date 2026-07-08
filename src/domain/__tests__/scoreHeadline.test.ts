@@ -29,21 +29,46 @@ describe('buildScoreHeadline', () => {
   });
 
   describe('head to head', () => {
-    it('shows new week at 0-0', () => {
+    it('introduces the matchup with both names at 0-0', () => {
       const segments = buildScoreHeadline(
         { competitor: matt, score: 0 },
         { competitor: pri, score: 0 }
       );
-      expect(segments).toEqual([{ text: `New week, 0${WJ}–${WJ}0` }]);
+      expect(segments).toEqual([
+        { text: 'Matt', competitorId: 'comp-a' },
+        { text: ' vs ' },
+        { text: 'Pri', competitorId: 'comp-b' },
+        { text: `, 0${WJ}–${WJ}0` },
+      ]);
     });
 
-    it('shows tie without any competitor color', () => {
+    it('keeps both names on a tie', () => {
       const segments = buildScoreHeadline(
         { competitor: matt, score: 33 },
         { competitor: pri, score: 33 }
       );
-      expect(segments).toEqual([{ text: `Tied, 33${WJ}–${WJ}33` }]);
-      expect(segments.some((s) => s.competitorId)).toBe(false);
+      expect(segments).toEqual([
+        { text: 'Matt', competitorId: 'comp-a' },
+        { text: ' & ' },
+        { text: 'Pri', competitorId: 'comp-b' },
+        { text: ` tied, 33${WJ}–${WJ}33` },
+      ]);
+    });
+
+    it('drops names from the tie when they blow the two-line budget', () => {
+      const longA: Competitor = { ...matt, name: 'Alexandrina-Maria' };
+      const longB: Competitor = { ...pri, name: 'Christopher-John' };
+      const tied = buildScoreHeadline(
+        { competitor: longA, score: 33 },
+        { competitor: longB, score: 33 }
+      );
+      expect(tied).toEqual([{ text: `Tied, 33${WJ}–${WJ}33` }]);
+
+      const fresh = buildScoreHeadline(
+        { competitor: longA, score: 0 },
+        { competitor: longB, score: 0 }
+      );
+      expect(fresh).toEqual([{ text: `New week, 0${WJ}–${WJ}0` }]);
     });
 
     it('names the leader with their color and their score first', () => {
